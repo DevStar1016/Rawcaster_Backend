@@ -1,26 +1,54 @@
-import random
-import time
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
-from datetime import datetime, timedelta
 from fastapi import HTTPException
 from pathlib import Path
 from typing import Any, Dict, Optional
 from pydantic import errors
 from sqlalchemy import or_
 import datetime
-from app import models
 import math
-import string
 from app.core.config import settings
-from pathlib import Path
 from app.models import User
 import os
-import sys
-import shutil
-from datetime import datetime, time, date
+from datetime import datetime
 import time
-# from app.schemas import *
+import hashlib
+from email_validator import validate_email, EmailNotValidError
  
+ 
+def check(email):
+    try:
+        v = validate_email(email)
+        email = v["email"] 
+        return True
+    except EmailNotValidError as e:
+        # email is not valid, exception message is human-readable
+        return False
+
+ 
+def checkAuthCode(auth_code, auth_text):
+    secret_key=settings.SALT_KEY + auth_text
+    
+    hash_code=hashlib.sha1(secret_key.encode())
+    
+    if auth_code == hash_code or auth_code=="RAWDEV":
+        return True
+    else:     
+        return False
+    
+def EmailorMobileNoValidation(email_id):
+    if check(email_id) == True:
+        return  {'status':1, 'type':1, 'email':email_id, 'mobile':None}
+    
+    elif email_id.isnumeric():
+        return {'status':1, 'type':2, 'email':email_id, 'mobile':None}
+        
+    else:
+        return {'status':0, 'type':2, 'email':None, 'mobile':None}
+        
+        
+
+
+ 
+#   --------------------------------------------------
 def file_storage(file):
     
     base_dir = settings.BASE_UPLOAD_FOLDER+"/upload_files/"

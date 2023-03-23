@@ -1,13 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, Form,File,UploadFile
-from typing import Optional,List
-from fastapi.encoders import jsonable_encoder
+from fastapi import APIRouter, Depends, Form,File,UploadFile
 from app.models import *
 from app.core.security import *
-from app.utils import common_date,file_storage,paginate,pagination
+from app.utils import *
 from app.api import deps
 from sqlalchemy.orm import Session
-from app.core.security import settings
 from datetime import datetime,date
+import re
+
 
 router = APIRouter()
 
@@ -22,7 +21,59 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:int=Form(...,descri
                     device_id:str=Form(None),push_id:str=Form(None),device_type:int=Form(None),auth_code1:str=Form(...,description="SALT +username"),
                     voip_token:str=Form(None),app_type:int=Form(...,description="1-Android,2-IOS",ge=1,le=2)):
 
-    return "done"
+    
+    if auth_code.strip() == "":    
+        return {"status":0,"msg":"Auth Code is missing"}
+    
+    elif first_name == "":
+        return {"status":0,"msg":"Please provide your first name"}
+    
+    elif re.search("/[^A-Za-z0-9]/", first_name):
+        return {"status":0,"msg":"Please provide valid name"}
+    
+    elif email_id and email_id.strip() == "":
+        return {"status":0,"msg":"Please provide your valid email or phone number"}
+    
+    elif password.strip() == "":
+        return {"status":0,"msg":"Password is missing"}
+    
+    else:
+        auth_text=email_id.strip()
+        
+        
+        
+        if checkAuthCode(auth_code,auth_text) == False:
+            return {"status":0,"msg":"Authentication failed!"}
+        
+        else:
+            check_email_or_mobile=EmailorMobileNoValidation(email_id.strip())
+            
+            if check_email_or_mobile['status'] == 1:
+                if check_email_or_mobile['type'] == signup_type:
+                    if signup_type == 1:
+                        email_id=check_email_or_mobile['email']
+                        mobile_no=None
+                    elif signup_type == 2:
+                        email_id=None
+                        mobile_no=check_email_or_mobile['mobile']
+                else:
+                    if signup_type == 1:
+                        return {"status":0,"msg":"Email address is not valid"}
+                        
+                    elif signup_type == 2:
+                        return {"status":0,"msg":"Phone number is not valid"}
+                     
+            else:
+                if signup_type == 1:
+                    return {"status":0,"msg":"Email ID is not valid"}
+                if signup_type == 2:
+                    return {"status":0,"msg":"Phone number is not valid"}
+                
+            check_email_id=0
+            check_phone=0
+            # if email_id != "":
+                # check_email_id=
+        
 
 
 # 2 - Signup Verification by OTP
@@ -137,8 +188,8 @@ async def invitetorawcaster(db:Session=Depends(deps.get_db),token:str=Form(...),
 
 
 # 15 Invite to Rawcaster
-@router.post("/invitetorawcaster")
-async def invitetorawcaster(db:Session=Depends(deps.get_db),token:str=Form(...),email_id:list=Form(...,description="email ids"),
+@router.post("/sendfriendrequests")
+async def sendfriendrequests(db:Session=Depends(deps.get_db),token:str=Form(...),email_id:list=Form(...,description="email ids"),
                                auth_code:int=Form(None,description="SALT + token")):
                          
     return "done"
@@ -232,6 +283,107 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(...),content
                      nuggets_media:UploadFile=File(...),poll_option:str=Form(None),poll_duration:str=Form(None)):
                          
     return "done"
+
+
+
+
+# 26. List Nuggets
+@router.post("/listnuggets")
+async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(...),my_nuggets:int=Form(None),filter_type:int=Form(None),user_id:int=Form(None),
+                     saved:int=Form(None),search_key:str=Form(None),page_number:int=Form(None),nugget_type:int=Form(None,description="1-video,2-Other than video,0-all",ge=0,le=2)):
+                         
+    return "done"
+
+
+
+
+# 27. Like And Unlike Nugget
+@router.post("/likeandunlikenugget")
+async def likeandunlikenugget(db:Session=Depends(deps.get_db),token:str=Form(...),nugget_id:int=Form(...),like:int=Form(...,description="1-like,2-unlike")):
+                         
+    return "done"
+
+
+
+
+# 28. Delete Nugget
+@router.post("/deletenugget")
+async def deletenugget(db:Session=Depends(deps.get_db),token:str=Form(...),nugget_id:int=Form(...)):
+                         
+    return "done"
+
+
+
+
+# 29. Nugget Comment List
+@router.post("/nuggetcommentlist")
+async def nuggetcommentlist(db:Session=Depends(deps.get_db),token:str=Form(...),nugget_id:int=Form(...)):
+                         
+    return "done"
+
+
+
+
+# 30. Add or Reply Nugget Comment
+@router.post("/addnuggetcomment")
+async def addnuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(...),type:int=Form(None,description="1-comment,2-reply"),nugget_id:int=Form(...),
+                           comment_id:int=Form(None),comment:str=Form(...)):
+    
+    if type == 2 and not comment_id:
+        return {"status":0,"msg":"comment id required"}
+        
+                         
+    return "done"
+
+
+# 31. Edit Nugget Comment
+@router.post("/editnuggetcomment")
+async def editnuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(...),comment_id:int=Form(...),comment:str=Form(...)):
+                         
+    return "done"
+
+
+
+# 32. Delete Nugget Comment
+@router.post("/deletenuggetcomment")
+async def deletenuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(...),comment_id:int=Form(...)):
+                         
+    return "done"
+
+
+
+
+
+
+# 33. Like And Unlike Nugget Comment
+@router.post("/likeandunlikenuggetcomment")
+async def likeandunlikenuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(...),comment_id:int=Form(...),like:int=Form(...,description="1-Like,2-Unlike",ge=1,le=2)):
+                         
+    return "done"
+
+
+
+
+# 34. Nugget and Comment liked User List
+@router.post("/nuggetandcommentlikeeduserlist")
+async def nuggetandcommentlikeeduserlist(db:Session=Depends(deps.get_db),token:str=Form(...),id:int=Form(...,description="Nugget id or Comment id"),type:int=Form(...,description="1-Nugget,2-Comment",ge=1,le=2)):
+                         
+    return "done"
+
+
+
+
+# 35. Edit Nugget
+@router.post("/editnugget")
+async def editnugget(db:Session=Depends(deps.get_db),token:str=Form(...),nugget_id:int=Form(...),content:str=Form(None),share_type:int=Form(...,description="1-public,2-only me,3-groups,4-individual,5-both group & individual ,6-all my friends"),
+                     share_with:str=Form(None,description='{"friends":[1,2,3],"groups":[1,2,3]}')):
+    
+    if share_type == 3 or share_type == 4 :
+        if not share_with:
+            return {"status":0,"msg":"share with required"}
+        
+    return "done"
+
 
 
 # # Change password 
