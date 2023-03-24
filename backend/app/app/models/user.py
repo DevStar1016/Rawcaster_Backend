@@ -4,6 +4,7 @@ from sqlalchemy.dialects.mysql import TINYINT,TINYTEXT
 from app.db.base_class import Base
 
 class User(Base):
+    
     id=Column(Integer,primary_key=True)
     user_ref_id=Column(String(25))
     email_id=Column(String(100))
