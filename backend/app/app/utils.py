@@ -1,17 +1,17 @@
 from sqlalchemy import or_
 import datetime
 import math
-from app.core.config import settings
-import os
-from datetime import datetime
+from app.core.config import settings as st
+from datetime import datetime,timedelta
+from app.models import *
 import random
-from models import *
 import hashlib
 from email_validator import validate_email, EmailNotValidError
 import socket
 import math
 import requests
 import string
+from dateutil.relativedelta import relativedelta
 from jose import jwt
 
 def check_mail(email):
@@ -23,32 +23,37 @@ def check_mail(email):
         # email is not valid, exception message is human-readable
         return False
 
- 
-def checkAuthCode(auth_code, auth_text):
-    secret_key=settings.SALT_KEY + auth_text
-    
-    hash_code=hashlib.sha1(secret_key.encode())
-    
-    if auth_code == hash_code or auth_code=="RAWDEV":
+
+def checkAuthCode(authcode, auth_text):
+    salt=st.SALT_KEY
+    auth_text=salt+auth_text
+    result = hashlib.sha1(auth_text.encode())
+    if authcode == result.hexdigest():
         return True
-    else:     
-        return False
+    else:
+        return None
+    
     
 def EmailorMobileNoValidation(email_id):
+    email_id=email_id.strip()
+    
     if check_mail(email_id) == True:
         return  {'status':1, 'type':1, 'email':email_id, 'mobile':None}
     
-    elif email_id.isnumeric():
-        return {'status':1, 'type':2, 'email':email_id, 'mobile':None}
+    elif email_id:
         
+        return {'status':1, 'type':2, 'email':None, 'mobile':email_id}
     else:
         return {'status':0, 'type':2, 'email':None, 'mobile':None}
-        
+       
+       
+ 
+def get_ip():
+    response = requests.get('https://api64.ipify.org?format=json').json()
+    return response["ip"]
         
 def FindLocationbyIP(userIP):
-    hostname = socket.gethostname()
-    userIP = socket.gethostbyname(hostname)
-    
+    userIP = get_ip()
     response = requests.get(f'https://ipwhois.app/json/{userIP}/').json()
     
     if response['success'] == True:
@@ -67,19 +72,25 @@ def FindLocationbyIP(userIP):
 def CheckMobileNumber(db,mobile_no,geo_location):
     result= {'status':0,'msg':'Please enter a valid phone number.'}
     if geo_location != "" and geo_location != None:
-        country=str(geo_location).split()
-        if (country == "" or country == []) and mobile_no != "":
+        country=geo_location.split(',')
+        
+        if (country != "") and mobile_no != "":
             found=0
+            
             for place in country:
+                
                 cty=place.strip()
                 user_country=db.query(Country).filter(Country.name == cty).first()
                 if user_country and user_country.mobile_no_length != "":
-                    mobileno=str(geo_location).replace("+" ,"")
-                    mobileno=str(geo_location).replace("-" ,"")
-                    if user_country.id == 156 and geo_location[0:1]:
-                        mobileno=geo_location[1]
-                        
+                    mobileno=str(mobile_no).replace("+" ,"")
+                    mobileno=str(mobile_no).replace("-" ,"")
+                    
+                    if user_country.id == 156 and geo_location[0:1] == 0:
+                        mobileno=geo_location[1:]
+                    
+                    # When Country name & State Name Same
                     if user_country.mobile_no_length == len(mobile_no):
+                        
                         found = 1
                         result={
                                 'status':1,
@@ -88,8 +99,11 @@ def CheckMobileNumber(db,mobile_no,geo_location):
                                 'mobile_no':mobileno
                             }
                     else:
-                        formated_mobileno=mobileno[len(user_country.country_code - 1)]
-                        if user_country.mobile_no_length == len(formated_mobileno):
+                        
+                        country_code = len(user_country.country_code) - 1
+                        formated_mobileno=mobileno[country_code:]
+                        if int(user_country.mobile_no_length) == len(formated_mobileno):
+                            
                             found = 1
                             result={
                                     'status':1,
@@ -128,35 +142,42 @@ def GetRawcasterUserID(db,type):
     
     
     
-def login(db,username, password, device_type, device_id, push_id,login_from,voip_token,app_type,socual=0):
+def logins(db,username, password, device_type, device_id, push_id,login_from,voip_token,app_type,socual=0):
     username=username.strip()
-    get_user=db.query(User).filter(User.email_id == username,User.email_id != None,or_(User.mobile_no == username,User.mobile_no != None)).first()
+    
+    get_user=db.query(User).filter(or_(User.email_id == username,User.mobile_no == username),or_(User.email_id != None,User.mobile_no != None)).first()
+    
     if get_user == None or not get_user:
+        
         type=EmailorMobileNoValidation(username)
+        
         if type['status'] and type['status'] == 1:
             return {"status":2,'type':type['type'],"msg" : "Login Failed. invalid email id or password"}
         else:
             return {"status":0,"msg" : "Login Failed. invalid email id or password"}
             
     elif get_user.password != password and socual != 1:
+        
         if get_user.status == 2:
             return {"status":0,"msg" : "Your account is currently blocked!"}
         else:
-            hostname = socket.gethostname()
-            userIP = socket.gethostbyname(hostname)
-            add_failure_login=LoginFailureLog(user_id=get_user.id,ip=userIP,create_at=datetime.now())
+           
+            userIP = get_ip()
+            add_failure_login=LoginFailureLog(user_id=get_user.id,ip=userIP,created_at=datetime.now())
             db.add(add_failure_login)
             db.commit()
             
             get_settings=db.query(Settings).filter(Settings.settings_topic == 'login_block_time').first()
             if get_settings:
                 total_block_dur=get_settings.settings_value
-                curretTime=datetime.now() 
+                
+                curretTime=datetime.now() - timedelta(minutes=total_block_dur)
             else:
                 total_block_dur=30
-                curretTime=datetime.now()
+                curretTime=datetime.now() - timedelta(minutes=30)
             
             failure_count=db.query(LoginFailureLog).filter(LoginFailureLog.user_id == get_user.id,LoginFailureLog.created_at > curretTime).count()
+            
             if failure_count > 2:
                 msg=""
                 if total_block_dur < 60:
@@ -168,7 +189,7 @@ def login(db,username, password, device_type, device_id, push_id,login_from,voip
                 
                 return {"status":0, "msg" :f'Your account is currently blocked. Please try again after {msg}'}
                 
-        return {"status":0, "msg" :'Login Failed. invalid email id or password'}
+            return {"status":0, "msg" :'Login Failed. invalid email id or password'}
     
     elif get_user.status == 4: # Account deleted
         return {"status":0, "msg" :'Your account has been removed'}
@@ -182,7 +203,8 @@ def login(db,username, password, device_type, device_id, push_id,login_from,voip
     elif get_user.admin_verified_status != 1: # Admin has to verify!
         return {"status":0, "msg" :'This is a beta version of Rawcaster. We are allowing limited number of users at the moment. Your account is currently undergoing an approval process by the administrator. Try to logon again later or contact the Rawcaster personnel that requested your participation in the beta program.'}
     else:
-        get_failur_login=db.quer(LoginFailureLog).filter(LoginFailureLog.user_id == get_user.id)
+        get_failur_login=db.query(LoginFailureLog).filter(LoginFailureLog.user_id == get_user.id).delete()
+        db.commit()
         user_id=get_user.id
         characters=''.join(random.choices(string.ascii_letters+string.digits, k=8))
         token_text=""
@@ -198,8 +220,7 @@ def login(db,username, password, device_type, device_id, push_id,login_from,voip
             db.commit()
         
         salt_token=token_text
-        hostname = socket.gethostname()
-        userIP = socket.gethostbyname(hostname)
+        userIP = get_ip()
         
         add_token=ApiTokens(user_id=user_id,token=token_text,created_at=datetime.now(),renewed_at=datetime.now(),validity=1,
                             device_type=login_from,app_type=app_type,device_id=device_id,push_device_id=push_id,voip_token=voip_token,
@@ -208,11 +229,15 @@ def login(db,username, password, device_type, device_id, push_id,login_from,voip
         db.commit()
         
         if add_token:
-            exptime=dt+dt
+            exptime=int(dt)+int(dt)
+          
             name=get_user.display_name
             profile_image=get_user.profile_img
-            salt=settings.SALT_KEY
-            new_auth_code=hashlib.sha1(str(token_text)+str(salt))
+            salt=st.SALT_KEY
+            hash_code=str(token_text)+str(salt)
+            
+            new_auth_code=hashlib.sha1(hash_code.encode()).hexdigest()
+            
             user_id=get_user.id
             paylod={ 'iat': dt,
                     'iss' : 1,
@@ -222,8 +247,9 @@ def login(db,username, password, device_type, device_id, push_id,login_from,voip
             
             ALGORITHM = "HS256"
             
-            token_text = jwt.encode(paylod, settings.SECRET_KEY, algorithm=ALGORITHM) 
-            exptime= datetime.fromtimestamp(exptime)
+            token_text = jwt.encode(paylod, st.SECRET_KEY, algorithm=ALGORITHM) 
+            
+            exptime= datetime.fromtimestamp(int(exptime))
             if login_from == 2:
                 # Update Sender
                 update_sender=db.query(FriendsChat).filter(FriendsChat.sender_id == user_id).update({"sender_delete":1,"sender_deleted_datetime":datetime.now()}).all()
@@ -233,7 +259,7 @@ def login(db,username, password, device_type, device_id, push_id,login_from,voip
             if get_user.referral_expiry_date != None and get_user.user_status_id == 3:
                 if dt >= get_user.referral_expiry_date:
                     update_user=db.query(User).filter(User.id == get_user.id).update({'user_status_id':1,'referral_expiry_date':None})
-            
+                    db.commit()
             return {"status":1,"msg":"Success","salt_token":salt_token,"token":token_text,"email":username,"expirytime":exptime,"profile_image":profile_image,"name":name,"user_id":user_id,"authcode":new_auth_code,"acc_verify_status":get_user.is_email_id_verified}
         else:
             return {"status":0,"msg" : "Failed to Generate Access Token. try again"}
@@ -248,94 +274,146 @@ def getModelError(errors):
         
         return reply
             
+
+def ChangeReferralExpiryDate(db,referrerid):
+    referrer=db.qurey(User).filter(User.id == referrerid).first()
+    if referrer:
+        expiry_date=referrer.referral_expiry_date
+        user_status_id=referrer.user_status_id
+        if referrer.user_status_id == 1:
+            user_status=db.query(UserStatusMaster).filter(UserStatusMaster.id == 3).first()
+            if user_status:
+                total_referral_point=int(referrer.total_referral_point)+ 1
+                if user_status.referral_needed <= total_referral_point:
+                    expiry_date=datetime.now()
+                    if referrer.referral_expiry_date != None:
+                        expiry_date=referrer.referral_expiry_date
+                    expiry_date=datetime.now() + relativedelta(months = 1)
+                  
+                    total_referral_point=total_referral_point - user_status.referral_needed
+                    user_status_id=3
             
-            
-            
-
-#   --------------------------------------------------
-def file_storage(file):
-    
-    base_dir = settings.BASE_UPLOAD_FOLDER+"/upload_files/"
-
-    dt = str(int(datetime.utcnow().timestamp()))
-   
-    try:
-        os.makedirs(base_dir, mode=0o777, exist_ok=True)
-    except OSError as e:
-        sys.exit("Can't create {dir}: {err}".format(
-            dir=base_dir, err=e))
-    
-    filename=file.filename
-
-    file_properties = filename.split(".")
-
-    file_extension = file_properties[-1]
-
-    file_properties.pop()
-    file_splitted_name = file_properties[0]
-    
-
-    write_path = f"{base_dir}{file_splitted_name}{dt}.{file_extension}"
-    db_path = f"/upload_files/{file_splitted_name}{dt}.{file_extension}"
-   
-    with open(write_path, "wb") as new_file:
-        shutil.copyfileobj(file.file, new_file)
+        else:
+            total_referral_point=referrer+total_referral_point + 1
         
-    return db_path
+        update_user=db.query(User).filter(User.id == referrer.id).update({"user_status_id":user_status_id,"referral_expiry_date":expiry_date,"total_referral_point":total_referral_point})
+        db.commit()
+        
+        
+def checkToken(db,access_token):
+    try:
+        payload = jwt.decode(access_token, settings.SECRET_KEY, algorithms=['HS256'])
+        if payload != "":
+            access_token=payload.token
+            get_token_details=db.query(ApiTokens).filter(ApiTokens.status == 1,ApiTokens.token == access_token.strip()).first()
+            if not get_token_details:
+                return False
+            current_time=int(datetime.utcnow().timestamp())
 
-
-
-def pagination(row_count=0, page = 1, size=10):
-    current_page_no = page if page >= 1 else 1
-
-    total_pages = math.ceil(row_count / size)
-
-    if current_page_no > total_pages:
-        current_page_no = total_pages
+            last_request_time= int(round((get_token_details.renewed_at).timestamp()))
+            if last_request_time + 604800 < current_time:
+                get_token_details.status = -1
+                db.commit()
+                return False
+            else:
+                get_token_details.renewed_at =datetime.now()
+                db.commit()
+                return access_token
+                
+        else:
+            return False
+    except:
+        return False   
     
-    limit =  current_page_no * size
-    offset = limit - size
 
-    if limit > row_count:
-        limit = offset + (row_count % size)
+def generateOTP():
+    return random.randint( 100000,999999)
+      
+        
+#   --------------------------------------------------
+# def file_storage(file):
     
-    limit = limit - offset
+#     base_dir = st.BASE_UPLOAD_FOLDER+"/upload_files/"
 
-    if offset < 0:
-        offset = 0
+#     dt = str(int(datetime.utcnow().timestamp()))
+   
+#     try:
+#         os.makedirs(base_dir, mode=0o777, exist_ok=True)
+#     except OSError as e:
+#         sys.exit("Can't create {dir}: {err}".format(
+#             dir=base_dir, err=e))
     
-    return [limit, offset]
+#     filename=file.filename
+
+#     file_properties = filename.split(".")
+
+#     file_extension = file_properties[-1]
+
+#     file_properties.pop()
+#     file_splitted_name = file_properties[0]
+    
+
+#     write_path = f"{base_dir}{file_splitted_name}{dt}.{file_extension}"
+#     db_path = f"/upload_files/{file_splitted_name}{dt}.{file_extension}"
+   
+#     with open(write_path, "wb") as new_file:
+#         shutil.copyfileobj(file.file, new_file)
+        
+#     return db_path
 
 
-def paginate(page, size, data, total):
-    reply = {"items": data, "total":total, "page": page, "size":size}
-    return reply
+
+# def pagination(row_count=0, page = 1, size=10):
+#     current_page_no = page if page >= 1 else 1
+
+#     total_pages = math.ceil(row_count / size)
+
+#     if current_page_no > total_pages:
+#         current_page_no = total_pages
+    
+#     limit =  current_page_no * size
+#     offset = limit - size
+
+#     if limit > row_count:
+#         limit = offset + (row_count % size)
+    
+#     limit = limit - offset
+
+#     if offset < 0:
+#         offset = 0
+    
+#     return [limit, offset]
+
+
+# def paginate(page, size, data, total):
+#     reply = {"items": data, "total":total, "page": page, "size":size}
+#     return reply
 
 
 
     
-def common_date(date, without_time=None):
+# def common_date(date, without_time=None):
 
-    datetime = date.strftime("%d-%m-%Y %I:%M:%S %p")
+#     datetime = date.strftime("%d-%m-%Y %I:%M:%S %p")
 
-    if without_time == 1:
-        datetime = date.strftime("%d-%m-%Y")
+#     if without_time == 1:
+#         datetime = date.strftime("%d-%m-%Y")
 
-    return datetime
+#     return datetime
 
-def common_date_only(date, without_time=None):
+# def common_date_only(date, without_time=None):
 
-    datetime = date.strftime("%d-%m-%y")
+#     datetime = date.strftime("%d-%m-%y")
 
-    if without_time == 1:
-        datetime = date.strftime("%d-%m-%y")
+#     if without_time == 1:
+#         datetime = date.strftime("%d-%m-%y")
 
-    return datetime
-def common_time_only(date, without_time=None):
+#     return datetime
+# def common_time_only(date, without_time=None):
 
-    datetime = date.strftime("%H:%M:%S")
+#     datetime = date.strftime("%H:%M:%S")
 
-    return datetime
+#     return datetime
 
 
 

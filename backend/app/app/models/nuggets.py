@@ -20,7 +20,7 @@ class Nuggets(Base):
     
     user=relationship("User",back_populates="nuggets")
     nuggets_master=relationship("NuggetsMaster",back_populates="nuggets")
-    nuggets_share_with=relationship("nuggets_share_with",back_populates="nuggets")
+    nuggets_share_with=relationship("NuggetsShareWith",back_populates="nuggets")
     nugget_hash_tags=relationship("NuggetHashTags",back_populates="nuggets")
     nugget_poll_voted=relationship("NuggetPollVoted",back_populates="nuggets")
     nugget_report=relationship("NuggetReport",back_populates="nuggets")

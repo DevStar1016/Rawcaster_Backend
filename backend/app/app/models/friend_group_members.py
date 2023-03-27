@@ -4,6 +4,7 @@ from sqlalchemy.dialects.mysql import TINYINT
 from app.db.base_class import Base
 
 class FriendGroupMembers(Base):
+    #__table_args__ = {'extend_existing': True}
     __tablename__="friend_group_members"
     id=Column(Integer,primary_key=True)
     group_id=Column(Integer,ForeignKey("friend_groups.id"),comment=" friend_groups table ref id ")

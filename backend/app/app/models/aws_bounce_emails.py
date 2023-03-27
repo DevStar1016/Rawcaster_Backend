@@ -4,6 +4,7 @@ from sqlalchemy.dialects.mysql import TINYINT,LONGTEXT
 from app.db.base_class import Base
 
 class AwsBounceEmails(Base):
+    #__table_args__ = {'extend_existing': True}
     __tablename__="aws_bounce_emails"
     id=Column(Integer,primary_key=True)
     user_id=Column(Integer,ForeignKey("user.id"),comment=" user table ref id ")

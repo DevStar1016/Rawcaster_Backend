@@ -5,6 +5,7 @@ from app.db.base_class import Base
 
 class UserStatusMaster(Base):
     __tablename__="user_status_master"
+    #__table_args__ = {'extend_existing': True}
     id=Column(Integer,primary_key=True)
     name=Column(String(100))
     description=Column(String(255))

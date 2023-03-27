@@ -4,7 +4,8 @@ from sqlalchemy.dialects.mysql import TINYINT,LONGTEXT
 from app.db.base_class import Base
 
 class ApiTokens(Base):
-    __tablename__="app_version"
+    __tablename__="api_tokens"
+    #__table_args__ = {'extend_existing': True}
     id=Column(Integer,primary_key=True)
     user_id=Column(Integer,ForeignKey("user.id"),comment=" user table ref id ")
     token=Column(String(100))
@@ -19,4 +20,4 @@ class ApiTokens(Base):
     device_ip=Column(String(255))
     status=Column(TINYINT,nullable=False,default=1,comment=" -1->Deleted, 0->inactive, 1->active ")
     
-    user=relationship("User",back_populates="app_version")
+    user=relationship("User",back_populates="api_tokens")

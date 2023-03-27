@@ -4,6 +4,7 @@ from sqlalchemy.dialects.mysql import TINYINT
 from app.db.base_class import Base
 
 class Faq(Base):
+    #__table_args__ = {'extend_existing': True}
     id=Column(Integer,primary_key=True)
     question=Column(String(1250))
     answer=Column(Text)

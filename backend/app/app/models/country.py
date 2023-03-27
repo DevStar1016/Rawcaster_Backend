@@ -4,6 +4,7 @@ from sqlalchemy.dialects.mysql import TINYINT,LONGTEXT
 from app.db.base_class import Base
 
 class Country(Base):
+    #__table_args__ = {'extend_existing': True}
     id=Column(Integer,primary_key=True)
     country_code=Column(String(10),comment=" phone code ")
     mobile_no_length=Column(String(50))

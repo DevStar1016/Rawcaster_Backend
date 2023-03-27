@@ -5,6 +5,7 @@ from app.db.base_class import Base
 
 class NotificationSmsEmail(Base):
     __tablename__="notification_sms_email"
+    #__table_args__ = {'extend_existing': True}
     id=Column(Integer,primary_key=True)
     user_id=Column(Integer,ForeignKey("user.id"))
     type=Column(TINYINT,default=1,comment=" 1-sms,2-email ")
@@ -14,4 +15,4 @@ class NotificationSmsEmail(Base):
     created_at=Column(DateTime)
     status=Column(TINYINT,default=0,comment="  1- active, 0-deleted  ")
     
-    user1=relationship("User",foreign_keys=[user_id])
+    user=relationship("User",back_populates="notification_sms_email")

@@ -4,6 +4,7 @@ from sqlalchemy.dialects.mysql import TINYINT
 from app.db.base_class import Base
 
 class Settings(Base):
+    #__table_args__ = {'extend_existing': True}
     id=Column(Integer,primary_key=True)
     settings_topic=Column(String(100))
     settings_value=Column(String(250))

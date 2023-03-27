@@ -5,6 +5,7 @@ from sqlalchemy.dialects.mysql import TINYINT
 from app.db.base_class import Base
 
 class MyFriends(Base):
+    #__table_args__ = {'extend_existing': True}
     __tablename__="my_friends"
     id=Column(Integer,primary_key=True)
     sender_id=Column(Integer,ForeignKey("user.id"),comment=" user table ref id ")

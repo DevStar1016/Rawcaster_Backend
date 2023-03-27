@@ -4,7 +4,7 @@ from sqlalchemy.dialects.mysql import TINYINT
 from app.db.base_class import Base
 
 class Admin(Base):
-    
+    #__table_args__ = {'extend_existing': True}
     __tablename__="admin"
     id=Column(Integer,primary_key=True)
     admin_type=Column(TINYINT,comment="1->Super Admin, 2->Admin")

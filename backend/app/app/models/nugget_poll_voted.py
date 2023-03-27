@@ -9,7 +9,7 @@ class NuggetPollVoted(Base):
     nugget_master_id=Column(Integer,ForeignKey("nuggets_master.id")) 
     nugget_id=Column(Integer,ForeignKey("nuggets.id"))
     user_id=Column(Integer,ForeignKey("user.id"))
-    poll_option_id=Column(BigInteger,ForeignKey("nugget_poll_option.id"))
+    poll_option_id=Column(Integer,ForeignKey("nugget_poll_option.id"))
     created_date=Column(DateTime)
     status=Column(TINYINT,default=1)
     

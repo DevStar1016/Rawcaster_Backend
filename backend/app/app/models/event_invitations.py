@@ -7,7 +7,7 @@ class EventInvitations(Base):
     __tablename__="event_invitations"
     id=Column(Integer,primary_key=True)
     type=Column(TINYINT(4),comment=" 1- Friend, 2- Group, 3-Custom ")
-    event_id=Column(Integer,comment=" events table ID ")
+    event_id=Column(Integer,ForeignKey("events.id"),comment=" events table ID ")
     user_id=Column(Integer,ForeignKey("user.id"),comment=" user table ID ")
     group_id=Column(Integer,ForeignKey("friend_groups.id"),comment=" friend_groups table ID ")
     invite_mail=Column(String(255))

@@ -11,7 +11,7 @@ class OtpLog(Base):
     otp_type=Column(TINYINT,comment=" 1->Signup, 2->Login, 3->Forgot password ")
     created_date=Column(DateTime)
     status=Column(TINYINT,default=1,comment=" 0->Inactive, 1->Active ")
-    nugget_poll_voted=relationship("NuggetPollVoted",back_populates="nugget_poll_option")
-    
+        
     
     user=relationship("User",back_populates="otp_log")
+    

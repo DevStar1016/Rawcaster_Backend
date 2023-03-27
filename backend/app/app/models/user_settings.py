@@ -4,6 +4,7 @@ from sqlalchemy.dialects.mysql import TINYINT
 from app.db.base_class import Base
 
 class UserSettings(Base):
+    #__table_args__ = {'extend_existing': True}
     __tablename__="user_settings"
     id=Column(Integer,primary_key=True)
     user_id=Column(Integer,ForeignKey("user.id"))

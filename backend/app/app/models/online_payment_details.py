@@ -22,7 +22,7 @@ class OnlinePaymentDetails(Base):
     
     user=relationship("User",back_populates="online_payment_details")
     events=relationship("Events",back_populates="online_payment_details")
-    payment_gatways=relationship("PaymentGatways",back_populates="online_payment_details")
+    payment_gateways=relationship("PaymentGateways",back_populates="online_payment_details")
     
 
 

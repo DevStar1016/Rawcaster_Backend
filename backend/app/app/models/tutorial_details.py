@@ -4,6 +4,7 @@ from sqlalchemy.dialects.mysql import TINYINT
 from app.db.base_class import Base
 
 class TutorialDetails(Base):
+    #__table_args__ = {'extend_existing': True}
     __tablename__="tutorial_details"
     id=Column(Integer,primary_key=True)
     title=Column(String(255)) 

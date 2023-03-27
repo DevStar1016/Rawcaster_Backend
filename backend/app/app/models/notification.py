@@ -5,6 +5,7 @@ from sqlalchemy.dialects.mysql import TINYINT
 from app.db.base_class import Base
 
 class Notification(Base):
+    #__table_args__ = {'extend_existing': True}
     id=Column(Integer,primary_key=True)
     user_id=Column(Integer,ForeignKey("user.id"),comment="  user table ref id - who receive this notification  ")
     notification_origin_id=Column(Integer,ForeignKey("user.id"),comment="  user table ref id - who send this notification  ")

@@ -4,6 +4,7 @@ from sqlalchemy.dialects.mysql import TINYINT,LONGTEXT
 from app.db.base_class import Base
 
 class Events(Base):
+    #__table_args__ = {'extend_existing': True}
     id=Column(Integer,primary_key=True)
     title=Column(String(255))
     ref_id=Column(String(255),comment=" Reference ID ")

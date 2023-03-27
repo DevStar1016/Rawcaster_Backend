@@ -1,8 +1,8 @@
-"""tables creation
+"""table update
 
-Revision ID: 73dbeeb6fe68
+Revision ID: ef6d26b1303f
 Revises: 
-Create Date: 2023-03-23 16:59:49.777115
+Create Date: 2023-03-25 10:33:18.520380
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import mysql
 
 # revision identifiers, used by Alembic.
-revision = '73dbeeb6fe68'
+revision = 'ef6d26b1303f'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -220,7 +220,7 @@ def upgrade():
     sa.Column('status', mysql.TINYINT(), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_table('app_version',
+    op.create_table('api_tokens',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=True, comment=' user table ref id '),
     sa.Column('token', sa.String(length=100), nullable=True),
@@ -674,7 +674,7 @@ def upgrade():
     sa.Column('nugget_master_id', sa.Integer(), nullable=True),
     sa.Column('nugget_id', sa.Integer(), nullable=True),
     sa.Column('user_id', sa.Integer(), nullable=True),
-    sa.Column('poll_option_id', sa.BigInteger(), nullable=True),
+    sa.Column('poll_option_id', sa.Integer(), nullable=True),
     sa.Column('created_date', sa.DateTime(), nullable=True),
     sa.Column('status', mysql.TINYINT(), nullable=True),
     sa.ForeignKeyConstraint(['nugget_id'], ['nuggets.id'], ),
@@ -797,7 +797,7 @@ def downgrade():
     op.drop_table('friend_groups')
     op.drop_table('event_types')
     op.drop_table('aws_bounce_emails')
-    op.drop_table('app_version')
+    op.drop_table('api_tokens')
     op.drop_table('user_type_master')
     op.drop_table('user_status_master')
     op.drop_table('user_status_change_log')

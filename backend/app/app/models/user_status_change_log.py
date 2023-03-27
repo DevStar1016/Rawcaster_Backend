@@ -4,6 +4,7 @@ from sqlalchemy.dialects.mysql import TINYINT
 from app.db.base_class import Base
 
 class UserStatusChangeLog(Base):
+    #__table_args__ = {'extend_existing': True}
     __tablename__="user_status_change_log"
     id=Column(Integer,primary_key=True)
     user_id=Column(Integer,comment=" user table ref id ")

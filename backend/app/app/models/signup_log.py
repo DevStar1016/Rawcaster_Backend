@@ -4,6 +4,7 @@ from sqlalchemy.dialects.mysql import TINYINT
 from app.db.base_class import Base
 
 class SignupLog(Base):
+    #__table_args__ = {'extend_existing': True}
     __tablename__="signup_log"
     id=Column(BigInteger,primary_key=True)
     user_id=Column(Integer,ForeignKey("user.id"),comment=" user table ref id ") 

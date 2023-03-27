@@ -4,7 +4,7 @@ from sqlalchemy.dialects.mysql import TINYINT,TINYTEXT
 from app.db.base_class import Base
 
 class User(Base):
-    
+    #__table_args__ = {'extend_existing': True}
     id=Column(Integer,primary_key=True)
     user_ref_id=Column(String(25))
     email_id=Column(String(100))
@@ -47,7 +47,7 @@ class User(Base):
     status=Column(TINYINT(1),comment=" 0->verification pending, 1->Active, 2->Suspended, 3->Blocked, 4->Deleted ")
     
     
-    app_version=relationship("AppVersion",back_populates="user")
+    api_tokens=relationship("ApiTokens",back_populates="user")
     aws_bounce_emails=relationship("AwsBounceEmails",back_populates="user")
     events=relationship("Events",back_populates="user")
     friend_groups=relationship("FriendGroups",back_populates="user")
@@ -74,3 +74,5 @@ class User(Base):
     nuggets_comments=relationship("NuggetsComments",back_populates="user")
     nuggets_comments_likes=relationship("NuggetsCommentsLikes",back_populates="user")
     nuggets_likes=relationship("NuggetsLikes",back_populates="user")
+    notification_sms_email=relationship("NotificationSmsEmail",back_populates="user")
+    
