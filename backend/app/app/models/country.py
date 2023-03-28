@@ -4,7 +4,6 @@ from sqlalchemy.dialects.mysql import TINYINT,LONGTEXT
 from app.db.base_class import Base
 
 class Country(Base):
-    #__table_args__ = {'extend_existing': True}
     id=Column(Integer,primary_key=True)
     country_code=Column(String(10),comment=" phone code ")
     mobile_no_length=Column(String(50))
@@ -15,4 +14,5 @@ class Country(Base):
     status=Column(TINYINT,nullable=False,default=1,comment="0->Inactive, 1->Active")
     
     nugget_hash_tags=relationship("NuggetHashTags",back_populates="country")
+    user=relationship("User",back_populates="country")
     

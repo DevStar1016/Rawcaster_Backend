@@ -21,8 +21,6 @@ router = APIRouter()
 #     return s
                          
 
-
-
 # 1 Signup User
 @router.post("/signup")
 async def signup(db:Session=Depends(deps.get_db),signup_type:int=Form(...,description="1-Email,2-Phone Number",ge=1,le=2),first_name:str=Form(...,max_length=100),
@@ -91,7 +89,12 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:int=Form(...,descri
             if mobile_no != '' and mobile_no != None:
                 
                 check_phone=db.query(User).filter(User.mobile_no == mobile_no,User.status != 4).count()
+            
+            check_user=db.query(User).filter(or_(User.email_id == email_id,User.mobile_no == mobile_no),or_(User.is_mobile_no_verified == 0,User.is_email_id_verified == 0)).first()
+            if check_user:
+                send_otp=SendOtp(db,check_user.id,signup_type)
                 
+                return {"status" : 2,"otp_ref_id":send_otp, "msg" : "Verification Pending, Redirect to OTP Verify Page"}
             
             if check_email_id > 0:
                 
@@ -100,7 +103,7 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:int=Form(...,descri
             if check_phone > 0:
                
                 return {"status" : 2, "msg" : "You are already registered with this phone number. Please login"}
-                
+            
             else:
                 userIP = get_ip()
                 location="India" if not geo_location else geo_location
@@ -204,10 +207,20 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:int=Form(...,descri
                     
                     if email_id == "" or email_id == None:
                         email_id=mobile_no
+                        
+                    # Send OTP for Email or MObile number Verification
+                    
+                    send_otp=SendOtp(db,add_user.id,signup_type)
+                    
+                    if send_otp:
+                        otp_ref_id=send_otp
+                    else:
+                        return {"status":0,"msg":"Failed to send OTP"}
+                        
                     
                     # reply=logins(db,email_id,password,device_type,device_id,push_id,login_from,voip_token,app_type)
                     
-                    return {"status":1, "msg": "Success", "email": email_id,"user_id":add_user.id,"acc_verify_status": 0}
+                    return {"status":1, "msg": "Success", "email": email_id,"otp_ref_id":otp_ref_id,"user_id":add_user.id,"acc_verify_status": 0}
                     
                 else:
                     msg=await getModelError()  # Pending
@@ -234,55 +247,63 @@ async def signupverify(db:Session=Depends(deps.get_db),auth_code:str=Form(...,de
             return {"status":0,"msg":"Authentication failed!"}
     
         else:
+            
             get_otp_log=db.query(OtpLog).filter(OtpLog.id == otp_ref_id,OtpLog.otp == otp,OtpLog.status == 1).first()
             if not get_otp_log:
                 return {"status":0,"msg":"OTP is invalid"}
             else:
+                get_otp_log.status = 0
+                db.commit()
                 user_update=0
                 if otp_flag =="sms":
                     update_user=db.query(User).filter(User.id == get_otp_log.user_id).update({"is_mobile_no_verified":1,"status":1})
-                    user_update=update_user.id
+                    user_update=get_otp_log.user_id
                     db.commit()
                 else:
                     update_user=db.query(User).filter(User.id == get_otp_log.user_id).update({"is_email_id_verified":1,"status":1})
-                    user_update=update_user.id
                     db.commit()
+                    
+                    user_update=get_otp_log.user_id
                 if update_user:
                     get_user=db.query(User).filter(User.id == get_otp_log.user_id).first()
                     if get_user:
-                        if get_user.referrer_id != None:
+                        if get_user.referrer_id != None or get_user.referrer_id != "":
                             change_referral_date=ChangeReferralExpiryDate(db,get_user.referrer_id)
                             
                         if get_user.is_email_id_verified == 1:
-                            print("Mail Pending")
-                    else:
-                        return {"status" :1, "msg" :"Your account has been verified successfully."}
+                            to_mail=get_user.email_id
+                            subject="Welcome to Rawcaster"
+                            message=f"Done"
+                            # mail_send=await send_email(to_mail,subject,message)
+                            
+                            # return {"status":1,"msg":"Verified Successfully."}
+                            
+                    return {"status" :1, "msg" :"Your account has been verified successfully."}
                         
                 else:
                     return {"status" :0, "msg" :"Account verification failed. Please try again"}
-                    
-
-
+    
+    
 
 # 3 - Resend OTP
 
 @router.post("/resendotp")
-async def resendotp(db:Session=Depends(deps.get_db),auth_code:str=Form(...,description="SALT + otp_ref_id"),otp_ref_id:int=Form(None),token:str=Form(...),otp_flag:str=Form(None)):
+async def resendotp(db:Session=Depends(deps.get_db),auth_code:str=Form(...,description="SALT + otp_ref_id"),otp_ref_id:str=Form(None),token:str=Form(None),otp_flag:str=Form(None)):
     if otp_flag and otp_flag.strip() == "" or otp_flag== None:
         otp_flag='email'
     
-    
-    auth_text="Rawcaster" if otp_ref_id and otp_ref_id == 0 or otp_ref_id == None else otp_ref_id
+    auth_text = otp_ref_id if otp_ref_id is not None else "Rawcaster"
     if checkAuthCode(auth_code,auth_text) == False:
         return {"status":0,"msg": "Authentication failed!"}
     else:
     
         if otp_ref_id == None:
-            if token.strip():
+            if not token and token.strip() == "":
                 return {"status":0,"msg":"Sorry! your login session expired. please login again."}
+            
             else:
                 login_user_id=0
-                access_token=checkToken(token)
+                access_token=checkToken(db,token)
                 
                 if access_token == False:
                     return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
@@ -291,44 +312,129 @@ async def resendotp(db:Session=Depends(deps.get_db),auth_code:str=Form(...,descr
                     for token in get_token_details:
                         login_user_id=token.user_id
                 
-                otp=generateOTP()
+                send_otp=SendOtp(db,login_user_id,signup_type=None)
+                otp_ref_id=None
+                if send_otp:
+                    otp_ref_id=send_otp
+                
+                return {"status":1,"otp_ref_id":otp_ref_id,"msg":"Success"}
+        else:  
+            get_otp_log=db.query(OtpLog).filter(OtpLog.id == otp_ref_id,OtpLog.status == 0).first()
+            
+            if not get_otp_log:
+                return {"status":0,"msg":"Invalid request!"}
+            else:
+                
                 otp_time=datetime.now()
-                otp_model=OtpLog(user_id=login_user_id,otp=otp,otp_type=1,created_at=otp_time,status=1)
-                db.add(otp_model)
+                
+                get_otp_log.created_date=otp_time
+                get_otp_log.status=1
                 db.commit()
                 
-                if otp_model:
-                    otp_time=datetime.now()
-                    otp_model.created_at=otp_time
-                    db.commit()
+                otp=get_otp_log.otp
+                
+                if get_otp_log.otp_type == 1:  # if signup
+                    mail_sub="Rawcaster - Account Verification"
+                    mail_msg="Your OTP for Rawcaster account verification is : "
                     
-                    if otp_model.otp_type == 1:  # if signup
-                        mail_sub="Rawcaster - Account Verification"
-                        mail_msg="Your OTP for Rawcaster account verification is : "
-                        
-                    elif  otp_model.otp_type == 3 : # if forgot password
-                        mail_sub="Rawcaster - Password Reset"
-                        mail_msg="Your OTP for Rawcaster account password reset is"
-                    
-                    if otp_flag == "sms":
-                        to=otp_model.user.mobile_no
-                        print("SMS")
-                    else:
-                        to=otp_model.user.email_id
-                        
-                        print("MAIL")
-                    
-                    remaining_seconds=0
-                    target_time= int(round(otp_time.timestamp())) + 300
-                    current_time=datetime.now()
-                    if current_time < target_time:
-                        remaining_seconds=target_time - current_time
-                    
-                    reply_msg=f'Please enter the One Time Password (OTP) sent to {to}'
-                    return {"status":1,"msg":reply_msg,"email":to,"otp_ref_id":otp_ref_id,"remaining_seconds":remaining_seconds}
-                    
+                elif  get_otp_log.otp_type == 3 : # if forgot password
+                    mail_sub="Rawcaster - Password Reset"
+                    mail_msg="Your OTP for Rawcaster account password reset is"
+                
+                if otp_flag == "sms":
+                    to=get_otp_log.user.mobile_no
+                    print("SMS")
                 else:
-                    return {"status" :0, "msg" :"Failed to resend otp, please try again"}
+                    to=get_otp_log.user.email_id
+                    
+                    print("MAIL")
+                
+                remaining_seconds=0
+                target_time= datetime.timestamp(otp_time) + 300
+                current_time=datetime.now().timestamp()
+                
+                if current_time < target_time:
+                    remaining_seconds=int(target_time - current_time)
+
+                reply_msg=f'Please enter the One Time Password (OTP) sent to {to}'
+                return {"status":1,"msg":reply_msg,"email":to,"otp_ref_id":otp_ref_id,"remaining_seconds":remaining_seconds}
+                 
+          
+
+# # 3 - Resend OTP  (PHP Code)
+
+# @router.post("/resendotp")
+# async def resendotp(db:Session=Depends(deps.get_db),auth_code:str=Form(...,description="SALT + otp_ref_id"),otp_ref_id:str=Form(None),token:str=Form(...),otp_flag:str=Form(None)):
+#     if otp_flag and otp_flag.strip() == "" or otp_flag== None:
+#         otp_flag='email'
+    
+#     auth_text = otp_ref_id if otp_ref_id is not None else "Rawcaster"
+#     if checkAuthCode(auth_code,auth_text) == False:
+#         return {"status":0,"msg": "Authentication failed!"}
+#     else:
+    
+#         if otp_ref_id == None:
+#             if token.strip():
+#                 return {"status":0,"msg":"Sorry! your login session expired. please login again."}
+#             else:
+#                 login_user_id=0
+#                 access_token=checkToken(token)
+                
+#                 if access_token == False:
+#                     return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+#                 else:
+#                     get_token_details=db.query(ApiTokens).filter(ApiTokens.token ==access_token).all()
+#                     for token in get_token_details:
+#                         login_user_id=token.user_id
+                
+#                 otp=generateOTP()
+#                 otp_time=datetime.now()
+#                 otp_model=OtpLog(user_id=login_user_id,otp=otp,otp_type=1,created_at=otp_time,status=1)
+#                 db.add(otp_model)
+#                 db.commit()
+                
+#                 if otp_model:
+#                     otp_ref_id=otp_model.id
+#         else:  
+#             get_otp_log=db.query(OtpLog).filter(OtpLog.id == otp_ref_id,OtpLog.status == 1).first()
+            
+#             if not get_otp_log:
+#                 return {"status":0,"msg":"Invalid request!"}
+#             else:
+                
+#                 otp_time=datetime.now()
+#                 otp_model.created_at=otp_time
+#                 db.commit()
+                
+#                 otp=get_otp_log.otp
+                
+#                 if otp_model.otp_type == 1:  # if signup
+#                     mail_sub="Rawcaster - Account Verification"
+#                     mail_msg="Your OTP for Rawcaster account verification is : "
+                    
+#                 elif  otp_model.otp_type == 3 : # if forgot password
+#                     mail_sub="Rawcaster - Password Reset"
+#                     mail_msg="Your OTP for Rawcaster account password reset is"
+                
+#                 if otp_flag == "sms":
+#                     to=otp_model.user.mobile_no
+#                     print("SMS")
+#                 else:
+#                     to=otp_model.user.email_id
+                    
+#                     print("MAIL")
+                
+#                 remaining_seconds=0
+#                 target_time= int(round(otp_time.timestamp())) + 300
+#                 current_time=datetime.now()
+#                 if current_time < target_time:
+#                     remaining_seconds=target_time - current_time
+                
+#                 reply_msg=f'Please enter the One Time Password (OTP) sent to {to}'
+#                 return {"status":1,"msg":reply_msg,"email":to,"otp_ref_id":otp_ref_id,"remaining_seconds":remaining_seconds}
+            
+#             # else:
+#             #     return {"status" :0, "msg" :"Failed to resend otp, please try again"}
                     
                         
 
@@ -359,10 +465,11 @@ async def logout(db:Session=Depends(deps.get_db),token:str=Form(...)):
     if token.strip() == "":
         return {"status":-1,"msg":"Sorry your access token missing!"}
     else:
-        if checkToken(token.strip()) == False:
+        access_token=checkToken(db,token)
+        if access_token == False:
             return {"status":-1,"msg":"Sorry your access token invalid!"}
         else:
-            get_token_details=db.query(ApiTokens).filter(ApiTokens.token == token.strip()).first()
+            get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token.strip()).first()
             if get_token_details:
                 if get_token_details.device_type == 2:
                     user_id=get_token_details.user_id
@@ -372,7 +479,7 @@ async def logout(db:Session=Depends(deps.get_db),token:str=Form(...)):
                     db.commit()
                 
                 # Delete Token
-                delete_token=db.query(ApiTokens).filter(ApiTokens.token == token.strip()).delete()
+                delete_token=db.query(ApiTokens).filter(ApiTokens.token == access_token.strip()).delete()
                 db.commit()
                 if delete_token:
                     return {"status":1,"msg":"Success"}
@@ -421,13 +528,13 @@ async def forgotpassword(db:Session=Depends(deps.get_db),username:str=Form(...,d
                 otp_ref_id=''
                 remaining_seconds=0
                 
-                get_otp=db.query(OtpLog).filter_by(user_id = get_user.id,status=1,otp_type=3).order_by(OtpLog.id.desc()).first()
+                get_otp=db.query(OtpLog).filter_by(user_id = get_user.id,otp_type=3).order_by(OtpLog.id.desc()).first()
                 if get_otp:
-                    update_otp_log=db.query(OtpLog).filter_by(id =get_otp.id).update({"otp":otp,"created_at":otp_time})
+                    update_otp_log=db.query(OtpLog).filter_by(id =get_otp.id).update({"otp":otp,"created_date":otp_time,"status":1})
                     db.commit()
                     otp_ref_id=get_otp.id
                 else:
-                    add_otp_log=OtpLog(user_id = get_user.id,otp=otp,otp_type=3,created_at=otp_time,status=1)
+                    add_otp_log=OtpLog(user_id = get_user.id,otp=otp,otp_type=3,created_date=otp_time,status=1)
                     db.add(add_otp_log)
                     db.commit()
                     
@@ -437,7 +544,7 @@ async def forgotpassword(db:Session=Depends(deps.get_db),username:str=Form(...,d
                 target_time=otp_time.timestamp() + 300
                 if otp_time.timestamp() < target_time:
                     remaining_seconds = target_time - otp_time.timestamp()
-                
+                msg=""
                 if username.isnumeric():
                     to=get_user.mobile_no
                     sms=f"{otp} is your OTP for Rawcaster. PLEASE DO NOT SHARE THE OTP WITH ANYONE."
@@ -487,6 +594,7 @@ async def verifyotpandresetpassword(db:Session=Depends(deps.get_db),otp_ref_id:i
                 return {"status":0,"msg":"OTP is invalid"}
                 
             else:
+                update=False
                 new_password=hashlib.sha1(new_password.encode()).hexdigest()
                 if (get_otp_log.user.password and new_password) == get_otp_log.user.password:
                     update=True
@@ -516,43 +624,48 @@ async def changepassword(db:Session=Depends(deps.get_db),token:str=Form(...),old
 
     else:
         auth_text=token.strip()
-        if checkToken(auth_code,auth_text) == False:
+        access_token=checkToken(db,auth_text)
+        
+        if checkAuthCode(auth_code,auth_text) == False:
             return {"status" : 0, "msg" :"Authentication failed!"}
         else:
-            get_token_details=db.query(ApiTokens).filter(ApiTokens.token == token.strip()).first().first()
-            
-            login_user_id=get_token_details.user_id if get_token_details else None
-            
-            if old_password.strip() == "":
-                return {"status" : 0, "msg" :"Current password can not be empty"}
-                
-            if new_password.strip() == "":
-                return {"status" : 0, "msg" :"New password can not be empty"}
-            
-            if confirm_password.strip() == "":
-                return {"status" : 0, "msg" :"Confirm password can not be empty"}
-            
-            if new_password != confirm_password:
-                return {"status" : 0, "msg" :"New password and Confirm password should be same"}
-            
+            if access_token == False:
+                return {"status" : -1, "msg" :"Sorry! your login session expired. please login again."}
             else:
-                get_user=db.query(User).filter(User.id == login_user_id).first()
-                old_pwd=hashlib.sha1(old_password.encode()).hexdigest()
+                get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
                 
-                if get_user.password != old_pwd:
-                    return {"status" : 0, "msg" :"Current password is wrong"}
+                login_user_id=get_token_details.user_id if get_token_details else None
+                
+                if old_password.strip() == "":
+                    return {"status" : 0, "msg" :"Current password can not be empty"}
                     
-                else:
-                    # Update Password
-                    new_pwd=hashlib.sha1(new_password.encode()).hexdigest()
-                    update_pwd=db.query(User).filter(User.id == login_user_id).update({"password":new_pwd})
-                    db.commit()
-                    if update_pwd:
-                        return {"status" : 1, "msg" :"Successfully updated new password"}
-                    else:
-                        
-                        return {"status" : 0, "msg" :"Failed to update new password. try again"}
+                if new_password.strip() == "":
+                    return {"status" : 0, "msg" :"New password can not be empty"}
                 
+                if confirm_password.strip() == "":
+                    return {"status" : 0, "msg" :"Confirm password can not be empty"}
+                
+                if new_password != confirm_password:
+                    return {"status" : 0, "msg" :"New password and Confirm password should be same"}
+                
+                else:
+                    get_user=db.query(User).filter(User.id == login_user_id).first()
+                    old_pwd=hashlib.sha1(old_password.encode()).hexdigest()
+                    
+                    if get_user.password != old_pwd:
+                        return {"status" : 0, "msg" :"Current password is wrong"}
+                        
+                    else:
+                        # Update Password
+                        new_pwd=hashlib.sha1(new_password.encode()).hexdigest()
+                        update_pwd=db.query(User).filter(User.id == login_user_id).update({"password":new_pwd})
+                        db.commit()
+                        if update_pwd:
+                            return {"status" : 1, "msg" :"Successfully updated new password"}
+                        else:
+                            
+                            return {"status" : 0, "msg" :"Failed to update new password. try again"}
+                    
                 
                 
 # 9 - Get country list
@@ -590,10 +703,10 @@ async def contactus(db:Session=Depends(deps.get_db),name:str=Form(...),email_id:
     elif email_id.strip() == "":
         return {"status" : 0, "msg" :"Email id is missing"}
 
-    elif subject.strip():
+    elif subject.strip() == "":
         return {"status" : 0, "msg" :"Subject is missing"}
     
-    elif message.strip():
+    elif message.strip() == "":
         return {"status" : 0, "msg" :"Message is missing"}
         
     else:
@@ -603,9 +716,11 @@ async def contactus(db:Session=Depends(deps.get_db),name:str=Form(...),email_id:
             return {"status" : 0, "msg" :"Authentication failed!"}
     
         else:
-            to= 'support@rawcaster.com'
-            subject=f"New enquiry received from {name}"
+            to_mail='support@rawcaster.com'
+            subject=f'New enquiry received from {name}'
+            message=f'<table width="600" border="0" align="center" cellpadding="10" cellspacing="0" style="border: 1px solid #e8e8e8;"> <tr><th> Name : </th><td> {name} </td></tr> <tr><th> Email id : </th><td> {email_id} </td></tr> <tr><th> Subject : </th><td> {subject} </td></tr> <tr><th> Message : </th><td> {message} </td></tr> </table>'
             
+            send_mail=await send_email(to_mail,subject,message)
             # Pending
             
             return {"status" : 1, "msg" :"Thank you for contacting us. we will get back to you soon."}
@@ -616,7 +731,7 @@ def user_profile(db,id):
     if get_user:       
         followers_count=db.query(FollowUser).filter_by(following_userid = id).count()
         following_count=db.query(FollowUser).filter_by(follower_userid = id).count()
-        nugget_count=db.query(NuggetsMaster).join(Nuggets).filter(NuggetsMaster.user_id == login_user_id,NuggetsMaster.status == 1,Nuggets.nuggets_id == NuggetsMaster.id).count()
+        nugget_count=db.query(NuggetsMaster).join(Nuggets).filter(NuggetsMaster.user_id == id,NuggetsMaster.status == 1,Nuggets.nuggets_id == NuggetsMaster.id).count()
         event_count=db.query(Events).filter_by(created_by = id,status = 1).count()
         
         friend_count=db.query(MyFriends).filter(MyFriends.status == 1,MyFriends.request_status == 1,or_(MyFriends.sender_id == get_user.id,MyFriends.receiver_id == get_user.id)).count()
@@ -627,9 +742,9 @@ def user_profile(db,id):
                             "user_ref_id":get_user.user_ref_id,
                             "is_email_id_verified":get_user.is_email_id_verified,
                             "is_mobile_no_verified":get_user.is_mobile_no_verified,
-                            "acc_verify_status":get_user.acc_verify_status,
-                            "is_profile_updated":get_user.is_profile_updated,
-                            "name":get_user.name,
+                            "acc_verify_status":1 if get_user.is_email_id_verified == 1 or get_user.is_mobile_no_verified == 1 else 0, 
+                            "is_profile_updated":1 if get_user.dob != "" and get_user.gender != "" else 0,
+                            "name":get_user.display_name if get_user.display_name else "",
                             "email_id":get_user.email_id,
                             "mobile":get_user.mobile_no,
                             "profile_image":get_user.profile_img,
@@ -646,8 +761,8 @@ def user_profile(db,id):
                             "latitude":get_user.latitude,
                             "longitude":get_user.longitude,
                             "date_of_join":get_user.created_at,
-                            "user_type":get_user.userType,  # .....
-                            "user_status":get_user.userStatus, #-----
+                            "user_type":get_user.user_type_master.name if get_user.user_type_id else "",  # .....
+                            "user_status":get_user.user_status_master.name if get_user.user_status_id else "", #-----
                             "user_status_id":get_user.user_status_id,
                             "bio_data":get_user.bio_data,
                             "followers_count":followers_count,
@@ -665,7 +780,7 @@ def user_profile(db,id):
         
         settings=db.query(UserSettings).filter(UserSettings.user_id == get_user.id).first()
         if settings:
-            user_details.update({"language":settings.language.name if settings else None})
+            user_details.update({"language":settings.language.name if settings.language_id else ""})
         else:
             user_details.update({"language":"English"})
         
@@ -687,7 +802,7 @@ async def getmyprofile(db:Session=Depends(deps.get_db),token:str=Form(...),auth_
         return {"status" : -1, "msg" :"Auth Code is missing"}
     
     else:
-        access_token=checkToken(token.strip())
+        access_token=checkToken(db,token.strip())
         auth_text=token.strip()
         
         if checkAuthCode(auth_code,auth_text) == False:
@@ -730,7 +845,7 @@ async def updatemyprofile(db:Session=Depends(deps.get_db),token:str=Form(...),na
         return {"status" : -1, "msg" :"Name is missing"}
 
     else:
-        access_token=checkToken(token)
+        access_token=checkToken(db,token)
         if access_token == False:
             return {"status" : -1, "msg" :"Sorry! your login session expired. please login again."}
         else:
@@ -740,7 +855,7 @@ async def updatemyprofile(db:Session=Depends(deps.get_db),token:str=Form(...),na
             else:
                 get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
                 
-                login_user_id=get_token_details.id if get_token_details else None
+                login_user_id=get_token_details.user_id if get_token_details else None
                 
                 get_user_profile=db.query(User).filter(User.id == login_user_id).first()
                 
@@ -760,25 +875,26 @@ async def updatemyprofile(db:Session=Depends(deps.get_db),token:str=Form(...),na
                    
                 else:
                     # Update User
-                    get_user_profile.display_name=name.strip()
-                    get_user_profile.first_name=first_name.strip()
-                    get_user_profile.last_name=last_name.strip()
-                    get_user_profile.gender=gender
-                    get_user_profile.dob=dob
-                    get_user_profile.country_code=country_code
-                    get_user_profile.mobile_no=mobile_no
-                    get_user_profile.email_id=email_id.strip()
-                    get_user_profile.website=website.strip()
-                    get_user_profile.country_id=country_id
-                    get_user_profile.geo_location=geo_location.strip()
-                    get_user_profile.latitude=latitude.strip()
-                    get_user_profile.longitude=longitude.strip()
+                    get_user_profile.display_name=name.strip() if name else get_user_profile.display_name
+                    get_user_profile.first_name=first_name.strip() if first_name else get_user_profile.first_name
+                    get_user_profile.last_name=last_name.strip() if last_name else get_user_profile.last_name
+                    get_user_profile.gender=gender if gender else get_user_profile.gender
+                    get_user_profile.dob=dob if dob else get_user_profile.dob
+                    get_user_profile.country_code=country_code if country_code else get_user_profile.country_code
+                    get_user_profile.mobile_no=mobile_no if mobile_no else get_user_profile.mobile_no
+                    get_user_profile.email_id=email_id.strip() if email_id else get_user_profile.email_id
+                    get_user_profile.website=website.strip() if website else get_user_profile.website
+                    get_user_profile.country_id=country_id if country_id else get_user_profile.country_id
+                    get_user_profile.geo_location=geo_location.strip() if geo_location else get_user_profile.geo_location
+                    get_user_profile.latitude=latitude.strip() if latitude else get_user_profile.latitude
+                    get_user_profile.longitude=longitude.strip() if longitude else get_user_profile.longitude
                     get_user_profile.bio_data=bio_data.strip() if bio_data else get_user_profile.bio_data
                     db.commit()
                     
                     # Image Part Pending
                     
-                    # Return User Profile
+                    
+                    # Get Updated User Profile
                     get_user=db.query(User).filter(User.id ==login_user_id).first()
                     if get_user:
                         user_details=user_profile(db,get_user.id)
@@ -797,7 +913,7 @@ async def searchrawcasterusers(db:Session=Depends(deps.get_db),token:str=Form(..
     elif auth_code.strip() == "":
         return {"status":-1,"msg":"Auth Code is missing"}
     else:
-        access_token=checkToken(token.strip())
+        access_token=checkToken(db,token.strip())
         auth_text=token.strip()
         if checkAuthCode(auth_code.strip(),auth_text) == False:
             return {"status":0,"msg":"Authentication failed!"}
@@ -806,33 +922,35 @@ async def searchrawcasterusers(db:Session=Depends(deps.get_db),token:str=Form(..
                 return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
             else:
                 login_user_email=''
-                get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token )
+                get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token ).first()
                 
-                login_user_id=get_token_details.user_id
-                login_user_email=get_token_details.user.email_id
+                login_user_id=get_token_details.user_id if get_token_details else None
+                login_user_email=get_token_details.user.email_id if get_token_details else None
                 
                 current_page_no=page_number
-                get_user=db.query(User).join(MyFriends,FollowUser).filter(User.status == 1,User.id != login_user_id,or_(MyFriends.sender_id == User.id,MyFriends.receiver_id == User.id),or_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == login_user_id),FollowUser.following_userid == User.id,FollowUser.follower_userid == login_user_id)
+                get_user=db.query(User.id,User.email_id,User.user_ref_id,User.first_name,User.last_name,User.display_name,User.gender,User.profile_img,User.geo_location,MyFriends.request_status.label("friend_request_status"),FollowUser.id.label("follow_id")).filter(User.status == 1,User.id != login_user_id,or_(MyFriends.sender_id == User.id,MyFriends.receiver_id == User.id),or_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == login_user_id),FollowUser.following_userid == User.id,FollowUser.follower_userid == login_user_id)
                 
                 # Omit blocked users
                 request_status=3
                 response_type=1
-                search_key=None
                 requested_by=None
                 get_all_blocked_users=get_friend_requests(db,login_user_id,requested_by,request_status,response_type,search_key)
-                blocked_users=get_all_blocked_users.blocked
+                blocked_users=get_all_blocked_users['blocked']
                 
                 if blocked_users:
                     get_user=get_user.filter(User.id.not_in(blocked_users))
                 
-                if search_key != "":
+                if search_key and (search_key != None or search_key != ""):
+                    
                     get_user=get_user.filter(or_(User.email_id.like(search_key+"%"),User.mobile_no.like(search_key+"%"),User.display_name.like(search_key+"%"),User.first_name.like(search_key+"%"),User.last_name.like(search_key+"%")))
                 
                 get_row_count=get_user.count()
+                
                 if get_row_count < 1 :
                     if login_user_email == search_key:
                         return {"status":0,"msg":"No Result found","invite_flag":0}
                     else:
+                        
                         return {"status":0,"msg":"No Result found","invite_flag":1}
                 else:
                     default_page_size=25
@@ -850,8 +968,8 @@ async def searchrawcasterusers(db:Session=Depends(deps.get_db),token:str=Form(..
                                             "last_name":user.last_name if user.last_name else "",
                                             "display_name":user.display_name if user.display_name else "",
                                             "gender":user.gender if user.gender else "",
-                                            "profile_img":user.profile_img,
-                                            "friend_request_status":user.friend_request_status,
+                                            "profile_img":user.profile_img if user.profile_img else "",
+                                            "friend_request_status":user.friend_request_status if user.friend_request_status else "",
                                             "follow":user.follow,
                                             "location":user.location,
                                             "mutual_friends":mutual_friends
@@ -872,18 +990,19 @@ async def invitetorawcaster(db:Session=Depends(deps.get_db),token:str=Form(...),
         return {"status":-1,"msg":"Auth Code is missing"}
 
     else:
-        access_token=checkToken(token.strip())
+        access_token=checkToken(db,token.strip())
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         
         else:
-            get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).all()
+            get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
             
             login_user_id=get_token_details.user_id
             login_user_name=get_token_details.user.first_name
             
-            if IsAccountVerified(db,login_user_id):
+            if IsAccountVerified(db,login_user_id) == False:
                 return {"status":0,"msg":"You need to complete your account validation before you can do this"}
+            
             if email_id == "" or email_id == []:
                 return {"status":0,"msg":"Please provide a valid email address"}
                 
@@ -898,17 +1017,19 @@ async def invitetorawcaster(db:Session=Depends(deps.get_db),token:str=Form(...),
                     
                     for mail in email_id:
                         if check_mail(mail) == False:
+                            
                             failed += 1
                         else:
+                           
                             get_user=db.query(User).filter(User.email_id == str(mail).strip()).first()
                             
                             if get_user:
-                                failed +=1
+                                failed += 1
                             
                             else:
+                                # Invites Sents Only for New User (Not a Rawcaster)
                                 get_user=db.query(User).filter(User.id == login_user_id).first()
-                                
-                                token_text=f"{base64.b64decode(get_user.user_ref_id)}//{datetime.now().timestamp()}"
+                                token_text = base64.b64encode(f"{get_user.user_ref_id}//{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}".encode()).decode()
                                 invite_link=inviteBaseurl()
                                 join_link=f"{invite_link}signup?ref={token_text}&mail={mail}"
                 
@@ -951,7 +1072,41 @@ async def sendfriendrequests(db:Session=Depends(deps.get_db),token:str=Form(...)
                 login_user_name=get_token_details.user.first_name
             if user_ids == []:
                 return {"status":-1,"msg":"Users list is missing"}
-            
+            else:
+                
+                del user_ids[login_user_id]
+                
+                if user_ids == "" or user_ids == None:
+                    return {"status":0,"msg":"Please provide a valid users list"}
+                else:
+                    friend_request_ids=[]
+                    get_user=db.query(User).filter(User.id == login_user_id).first()
+                    hostname=get_user.display_name if get_user else None
+                    
+                    for user in user_ids:
+                        users=db.query(User).filter(User.user_ref_id == user).first()
+                        
+                        if users:
+                            user_id=users.id
+                            request_status=[0,1,3]
+                            get_my_friends=db.query(MyFriends).filter(MyFriends.status == 1,MyFriends.request_status.in_(request_status),or_(MyFriends.sender_id == login_user_id,MyFriends.sender_id == user),or_(MyFriends.sender_id == user,MyFriends.receiver_id == login_user_id)).order_by(MyFriends.id.desc())
+                            
+                            get_friend_request=get_my_friends.first()
+                            
+                            if not get_friend_request:
+                                get_user=db.query(User).filter(User.id == user).first()
+                                
+                                if get_user:
+                                    add_my_friends=MyFriends(sender_id=login_user_id,receiver_id=user,request_date=datetime.now(),request_status=0,status_date=None,status=1)
+                                    db.add(add_my_friends)
+                                    db.commit()
+                                    
+                                    if add_my_friends:
+                                        add_notification=Insertnotification(db,user_id,login_user_id,11,login_user_id)
+                                    
+                                    
+                
+                
                 
                 
                 

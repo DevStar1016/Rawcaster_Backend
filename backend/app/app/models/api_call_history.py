@@ -4,7 +4,6 @@ from sqlalchemy.dialects.mysql import TINYINT,LONGTEXT
 from app.db.base_class import Base
 
 class ApiCallHistory(Base):
-    #__table_args__ = {'extend_existing': True}
     __tablename__="api_call_history"
     id=Column(Integer,primary_key=True)
     api=Column(String(2500),comment="url")

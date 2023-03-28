@@ -4,7 +4,6 @@ from sqlalchemy.dialects.mysql import TINYINT,LONGTEXT
 from app.db.base_class import Base
 
 class FriendsChat(Base):
-    #__table_args__ = {'extend_existing': True}
     __tablename__="friends_chat"
     id=Column(Integer,primary_key=True)
     msg_code=Column(String(30),comment=" unique code for each chat set by send device ")

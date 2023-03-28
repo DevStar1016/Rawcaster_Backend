@@ -5,7 +5,6 @@ from app.db.base_class import Base
 
 class GroupChat(Base):
     __tablename__="group_chat"
-    #__table_args__ = {'extend_existing': True}
     id=Column(Integer,primary_key=True)
     msg_code=Column(String(30),comment=" unique code for each chat set by send device ")
     group_id=Column(Integer,ForeignKey("friend_groups.id"))

@@ -4,7 +4,6 @@ from sqlalchemy.dialects.mysql import TINYINT,LONGTEXT
 from app.db.base_class import Base
 
 class EventDefaultAv(Base):
-    #__table_args__ = {'extend_existing': True}
     __tablename__="event_default_av"
     id=Column(Integer,primary_key=True)
     event_id=Column(Integer,ForeignKey("events.id"))

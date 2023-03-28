@@ -1,10 +1,9 @@
-from sqlalchemy import Column, Integer, String,BigInteger, DateTime, Date,Text,DECIMAL
+from sqlalchemy import Column, Integer, String,BigInteger, DateTime, Date,Text,DECIMAL,ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.mysql import TINYINT,TINYTEXT
 from app.db.base_class import Base
 
 class User(Base):
-    #__table_args__ = {'extend_existing': True}
     id=Column(Integer,primary_key=True)
     user_ref_id=Column(String(25))
     email_id=Column(String(100))
@@ -17,8 +16,8 @@ class User(Base):
     dob=Column(Date)
     country_code=Column(String(10))
     mobile_no=Column(BigInteger)
-    is_mobile_no_verified=Column(TINYINT(4),comment=" 0->No, 1->Yes ")
-    country_id=Column(Integer)
+    is_mobile_no_verified=Column(TINYINT(4),comment=" 0->No, 1->Yes")
+    country_id=Column(Integer,ForeignKey("country.id"),comment="country table reference")
     user_code=Column(String(25),comment=" A unique code for users sharing purpose like refrrer ")
     signup_type=Column(TINYINT(1),comment=" 1->Web, 2->Facebook, 3->Google ")
     signup_social_ref_id=Column(String(100),comment=" reference id from facebook or google ")
@@ -28,8 +27,8 @@ class User(Base):
     geo_location=Column(TINYTEXT,default= 1,comment=" from google geo location ")
     latitude=Column(DECIMAL(11,7))
     longitude=Column(DECIMAL(11,7))
-    user_type_id=Column(Integer,nullable=False,default=1,comment=" ref user_type_master ")
-    user_status_id=Column(Integer,nullable=False,default=1,comment=" ref table user_status_master ")
+    user_type_id=Column(Integer,ForeignKey("user_type_master.id"),nullable=False,default=1,comment=" ref user_type_master ")
+    user_status_id=Column(Integer,ForeignKey("user_status_master.id"),nullable=False,default=1,comment=" ref table user_status_master ")
     bio_data=Column(Text)
     created_at=Column(DateTime)
     created_by=Column(Integer)
@@ -75,4 +74,8 @@ class User(Base):
     nuggets_comments_likes=relationship("NuggetsCommentsLikes",back_populates="user")
     nuggets_likes=relationship("NuggetsLikes",back_populates="user")
     notification_sms_email=relationship("NotificationSmsEmail",back_populates="user")
+    user_status_master=relationship("UserStatusMaster",back_populates="user")
+    user_type_master=relationship("UserTypeMaster",back_populates="user")
+    country=relationship("Country",back_populates="user")
+    
     

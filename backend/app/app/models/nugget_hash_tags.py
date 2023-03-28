@@ -4,7 +4,6 @@ from sqlalchemy.dialects.mysql import TINYINT
 from app.db.base_class import Base
 
 class NuggetHashTags(Base):
-    #__table_args__ = {'extend_existing': True}
     __tablename__="nugget_hash_tags"
     id=Column(Integer,primary_key=True)
     nugget_master_id=Column(Integer,ForeignKey("nuggets_master.id"))

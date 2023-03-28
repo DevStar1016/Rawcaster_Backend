@@ -5,7 +5,6 @@ from app.db.base_class import Base
 
 class ApiTokens(Base):
     __tablename__="api_tokens"
-    #__table_args__ = {'extend_existing': True}
     id=Column(Integer,primary_key=True)
     user_id=Column(Integer,ForeignKey("user.id"),comment=" user table ref id ")
     token=Column(String(100))

@@ -1,9 +1,12 @@
 import requests
 
 
-s = "17894561230"
-print(s[0:1])
+login_user_id = 2  # Example login user ID
+user_ids = [1, 2, 3, 4, 5]  # Example list of user IDs
 
+del user_ids[login_user_id]
+
+print(user_ids)
 
 # def get_ip():
 #     response = requests.get('https://api64.ipify.org?format=json').json()

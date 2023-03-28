@@ -4,7 +4,6 @@ from sqlalchemy.dialects.mysql import TINYINT
 from app.db.base_class import Base
 
 class UserSettings(Base):
-    #__table_args__ = {'extend_existing': True}
     __tablename__="user_settings"
     id=Column(Integer,primary_key=True)
     user_id=Column(Integer,ForeignKey("user.id"))
@@ -34,7 +33,7 @@ class UserSettings(Base):
     friend_request=Column(String(5))
     nuggets=Column(String(5))
     events=Column(String(5))
-    language_id=Column(Integer)
+    language_id=Column(Integer,ForeignKey("language.id"),comment="language table reference")
     time_zone=Column(String(25))
     date_format=Column(String(25))
     mobile_default_page=Column(TINYINT)
@@ -43,3 +42,5 @@ class UserSettings(Base):
     status=Column(TINYINT,default=1)
    
     user=relationship("User",back_populates="user_settings")   
+    language=relationship("Language",back_populates="user_settings")   
+    

@@ -5,7 +5,6 @@ from app.db.base_class import Base
 
 class UserStatusMaster(Base):
     __tablename__="user_status_master"
-    #__table_args__ = {'extend_existing': True}
     id=Column(Integer,primary_key=True)
     name=Column(String(100))
     description=Column(String(255))
@@ -14,3 +13,6 @@ class UserStatusMaster(Base):
     max_event_participants_count=Column(Integer,default=2,comment=" Max Participants allowed ")
     created_at=Column(DateTime)
     status=Column(TINYINT,default=1)
+    
+    user=relationship("User",back_populates="user_status_master")
+    

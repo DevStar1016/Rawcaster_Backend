@@ -4,7 +4,6 @@ from sqlalchemy.dialects.mysql import TINYINT
 from app.db.base_class import Base
 
 class NuggetPollOption(Base):
-    #__table_args__ = {'extend_existing': True}
     __tablename__="nugget_poll_option"
     id=Column(Integer,primary_key=True)
     nuggets_master_id=Column(Integer) 
