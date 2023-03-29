@@ -1,4 +1,4 @@
-from sqlalchemy import or_
+from sqlalchemy import or_,and_
 import datetime
 import math
 from app.core.config import settings as st
@@ -15,7 +15,7 @@ from dateutil.relativedelta import relativedelta
 from jose import jwt
 from pyfcm import FCMNotification
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
-
+import base64
 
 
 
@@ -66,13 +66,260 @@ def EmailorMobileNoValidation(email_id):
             
             return {'status': 0, 'type': 0, 'email': None, 'mobile': None}
        
-       
-       
+def pushNotify(db,user_ids,details,login_user_id):
+    api_key="AAAAJndtCwI:APA91bEdwo6X4izLPWkAaoYDIt9zUzrQ8pi_jHUFVne-xMuEDNiqCn1KBSse4TuxRd_5nakioin7l5p8mY7-OhdnXS-SubCqsc-UJS2mDtjJVEY3jq7K9kkE_-3O9LuKJTqPds8Ughi4"
+    title=details.title if details.title else "New notification"
+    type=details.type if details.type else "nuggets"
+    message=details.message if details.message else ""
+    data=details.data if details.data else ""
+    
+    get_user=db.query(User).filter(User.id == login_user_id).first()
+    
+    if get_user and type != "callend":
+        title=get_user.display_name
+    
+    get_api_token=db.query(ApiTokens.user_id,ApiTokens.device_type,ApiTokens.push_device_id,UserSettings.nuggets,UserSettings.events,UserSettings.friend_request)
+    get_api_token=get_api_token.filter(UserSettings.user_id == ApiTokens.user_id,ApiTokens.status == 1,and_(or_(ApiTokens.push_device_id != None,ApiTokens.push_device_id != ""))).group_by(ApiTokens.push_device_id)
+    
+    if (user_ids != None or user_ids != "") and type(user_ids) == list:
+        get_api_token=get_api_token.filter(ApiTokens.user_id.in_(user_ids))
+    elif user_ids != "":
+        get_api_token=get_api_token.filter(ApiTokens.user_id ==user_ids)
+    
+    get_api_token=get_api_token.all()
+    registration_ids=[]
+    
+    if get_api_token:
+        for token in get_api_token:
+            permission_arr = list(str((type == 'callend') and '111' or token[type]))
+            if len(permission_arr) > 2 and permission_arr[0] == '1':
+                push_id=token.push_device_id
+                registration_ids.append(push_id)
+    
+    registration_ids = [registration_ids[i:i+500] for i in range(0, len(registration_ids), 500)]
+    
+    if registration_ids:
+        fcmMsg={}
+        fcmFields=[]
+        fcmMsg.update({"title":title,
+                       "body":message,
+                       "sound":'default'})
+
+        for register_id in registration_ids:
+            if type == 'callend' and message == "Call Ended":
+                fcmFields.append({"registration_ids":register_id,  #  expects an array of ids
+                                  "priority":'high',
+                                  'notification':fcmMsg,
+                                  'data':data})
+            
+            else:
+                fcmFields.append({"registration_ids":register_id,  # expects an array of ids
+                                #   "priority":'high',
+                                  'notification':fcmMsg,
+                                  'data':data})
+            
+            url = 'https://fcm.googleapis.com/fcm/send'
+            headers = {
+                'Authorization': 'key=' + api_key,
+                'Content-Type': 'application/json'
+            }
+            response = requests.post(url, headers=headers, json=fcmFields)
+            result = response.text
+
+            if response.status_code != 200:
+                return False
+                # print('FCM Send Error:', result) 
+            else:
+                pass
+                # do something with result
+                
+    return True
+
+def encryptionString():
+    return 'rawcaster@!@#$QWERTxcvbn'
+
+def friendRequestNotifcationEmail(db,senderId,receiverId,flag):   # flag = 1 Friend Request Received flag = 2 Friend Request Accepted
+    if senderId != "" and receiverId != "":
+        to=''
+        sunject=''
+        body=''
+        phone=''
+        sms_message=''
+        
+        my_friends=db.query(MyFriends).filter(MyFriends.sender_id == senderId,MyFriends.receiver_id == receiverId)
+        if flag == 1:
+            my_friends=my_friends.filter(MyFriends.request_status == 0).first()
+            
+            if my_friends:
+                displayName=my_friends.user1.display_name if my_friends.sender_id else None
+                email_id=my_friends.user1.email_id if my_friends.sender_id else None
+                profile_img=my_friends.user1.profile_img if my_friends.sender_id else None
+                phone=my_friends.user1.mobile_no if my_friends.sender_id else None
+                
+                to=email_id
+                subject="New Connection Request"
+                invite_url=inviteBaseurl()
+                encrypt_string=encryptionString()
+                url_path=base64.b64encode(f"{senderId}{encrypt_string}")
+                url=f"{invite_url}signin/{url_path}/connectionrequest"
+                
+                body=""  # Pending
+                
+                sms_message=f'New Connection Request From {displayName} in rawcaster.com'
+                
+        elif flag == 2:
+            my_friends =my_friends.filter(MyFriends.request_status == 1).first()
+            if my_friends:
+                displayName=my_friends.user2.display_name if my_friends.receiver_id else None
+                email_id=my_friends.user2.email_id if my_friends.receiver_id else None
+                profile_img=my_friends.user2.profile_img if my_friends.receiver_id else None
+                phone=my_friends.user2.mobile_no if my_friends.receiver_id else None
+            
+                to=email_id
+                subject="Connection Accepted Notification"
+                invite_url=inviteBaseurl()
+                encrypt_string=encryptionString()
+                url_path=base64.b64encode(f"{senderId}{encrypt_string}")
+                url=f"{invite_url}signin/{url_path}/connectionrequest"
+                
+                body =''
+                sms_message=f'Connection Accepted From {displayName} You`re now connected with {displayName} Clicks on Facebook. You can see his photos, posts and more on his profile'
+        return sms_message,body  
+    else:
+        print("Invalid Parameters")
+                
+def addNotificationSmsEmail(db,user,email_detail,login_user_id):
+    sms_message = email_detail.sms_message if email_detail.sms_message else ""
+    mail_message = email_detail.mail_message if email_detail.mail_message else ""
+    subject = email_detail.subject if email_detail.subject else ""
+    type_ = email_detail.type if email_detail.type else "nuggets"
+    email = email_detail.email if email_detail.email else ""
+
+    mobile_nos = ""
+    if user:
+        get_user =db.query(User.id,User.country_code,User.email_id,User.mobile_no,UserSettings.nuggets,UserSettings.events,UserSettings.friend_request)
+        get_user=get_user.filter(UserSettings.user_id == User.id,User.status == 1,User.id.in_(user)).all()
+        
+        for user in get_user:
+            permission_arr = list(user[type_])
+            if len(permission_arr) > 2 and permission_arr[1] == "1":
+                email += user["email_id"] + ","
+            elif len(permission_arr) > 2 and permission_arr[2] == "1" and user["mobile_no"]:
+                mobile_nos += user["country_code"] + user["mobile_no"] + ","
+
+    if email:
+        add_notification = NotificationSmsEmail(
+            user_id=login_user_id,
+            type=2,
+            mobile_no_email_id=email,
+            subject=subject,
+            message=mail_message,
+            created_at=datetime.now(),
+            status=0
+        )
+        db.add(add_notification)
+        db.commit()
+
+    if mobile_nos:
+        add_notification = NotificationSmsEmail(
+            user_id=login_user_id,
+            type=1,
+            mobile_no_email_id=mobile_nos,
+            subject="",
+            message=sms_message,
+            created_at=datetime.now(),
+            status=0
+        )
+        db.add(add_notification)
+        db.commit()
+
+    return True
+
+
+def get_friend_requests(db,login_user_id,requested_by,request_status,response_type):
+    pending = []
+    accepted = []
+    rejected = []
+    blocked = []
+
+    my_friends =db.query(MyFriends).filter(MyFriends.status == 1)
+
+    if requested_by == 1:  # Friend request sent from this user to others
+        my_friends = my_friends.filter_by(sender_id = login_user_id)
+        
+    elif requested_by == 2:  # Friend request reveived from other users to this user
+        my_friends = my_friends.filter_by(receiver_id = login_user_id)
+        
+    else:  # Both sent and received requests
+        my_friends = my_friends.filter(or_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == login_user_id))
+
+    if request_status and len(request_status) > 0:
+        my_friends = my_friends.filter_by(MyFriends.request_status.in_(request_status))
+
+    get_friend_requests = my_friends.all()
+    
+    if get_friend_requests:
+        friend_details=[]
+        for friend_requests in get_friend_requests:
+            if friend_requests.sender_id == login_user_id:
+                friend_id=friend_requests.receiver_id
+                
+                friend_details.append({"friend_request_id":friend_requests.id,
+                                        "user_ref_id":friend_requests.user2.user_ref_id if friend_requests.receiver_id else "",
+                                        "user_id":(friend_requests.user2.id if friend_requests.user2.id else "") if friend_requests.receiver_id else "",
+                                        "email_id":(friend_requests.user2.email_id if friend_requests.user2.email_id else "") if friend_requests.receiver_id else "",
+                                        "first_name":(friend_requests.user2.first_name if friend_requests.user2.first_name else "") if friend_requests.receiver_id else "",
+                                        "last_name":(friend_requests.user2.last_name if friend_requests.user2.last_name else "") if friend_requests.receiver_id else "",
+                                        "display_name":(friend_requests.user2.display_name if friend_requests.user2.display_name else "") if friend_requests.receiver_id else "",
+                                        "gender":(friend_requests.user2.gender if friend_requests.user2.gender else "") if friend_requests.receiver_id else "",
+                                        "profile_img":(friend_requests.user2.profile_img if friend_requests.user2.profile_img else "") if friend_requests.receiver_id else ""
+                                    })
+                
+            else:
+                friend_id=friend_requests.sender_id
+                friend_details.append({"friend_request_id":friend_requests.id,
+                                        "user_ref_id":friend_requests.user1.user_ref_id if friend_requests.sender_id else "",
+                                        "user_id":(friend_requests.user1.id if friend_requests.user1.id else "") if friend_requests.sender_id else "",
+                                        "email_id":(friend_requests.user1.email_id if friend_requests.user1.email_id else "") if friend_requests.sender_id else "",
+                                        "first_name":(friend_requests.user1.first_name if friend_requests.user1.first_name else "") if friend_requests.sender_id else "",
+                                        "last_name":(friend_requests.user1.last_name if friend_requests.user1.last_name else "") if friend_requests.sender_id else "",
+                                        "display_name":(friend_requests.user1.display_name if friend_requests.user1.display_name else "") if friend_requests.sender_id else "",
+                                        "gender":(friend_requests.user1.gender if friend_requests.user1.gender else "") if friend_requests.sender_id else "",
+                                        "profile_img":(friend_requests.user1.profile_img if friend_requests.user1.profile_img else "") if friend_requests.sender_id else ""
+                                    })
+            
+            if response_type == 1: # only user ids
+                if friend_requests.request_status == 0:
+                    pending.append(friend_id)  # if pending
+                if friend_requests.request_status == 1:
+                    accepted.append(friend_id)  #if accepted
+                if friend_requests.request_status == 2:
+                    rejected.append(friend_id)  # if rejected
+                if friend_requests.request_status == 3:
+                    blocked.append(friend_id)  # if blocked
+            
+            else:
+                if friend_requests.request_status == 0:
+                    pending.append(friend_details)
+                if friend_requests.request_status == 1:
+                    accepted.append(friend_details)
+                if friend_requests.request_status == 2:
+                    rejected.append(friend_details)
+                if friend_requests.request_status == 3:
+                    blocked.append(friend_details)
+
+    return {"pending":pending,"accepted":accepted,"rejected":rejected,"blocked":blocked}            
+                
+    
+    
+    
+    
 def Insertnotification(db,user_id,notification_origin_id,notification_type,ref_id):
     if user_id != notification_origin_id:
         add_notification=Notification(user_id=user_id,notification_origin_id=notification_origin_id,notification_type=notification_type,ref_id=ref_id,created_datetime=datetime.now())
         db.add(add_notification)
         db.commit()
+        
         
 def get_ip():
     response = requests.get('https://api64.ipify.org?format=json').json()
@@ -170,7 +417,7 @@ def OTPverificationtype(db,get_user):
     return type
 
 
-def get_friend_requests(db,login_user_id,requested_by,request_status,response_type,search_key):
+def get_friend_requests(db,login_user_id,requested_by,request_status,response_type):
     get_my_friends=db.query(MyFriends).filter(MyFriends.status == 1)
     
     pending=[]
@@ -263,28 +510,99 @@ def IsAccountVerified(db,user_id):
     return status
 
 
-def get_pagination(row_count=0, current_page_no = 1, default_page_size=10):
-    current_page_no = current_page_no if current_page_no >= 1 else 1
+    
+def get_pagination(row_count=0, page = 1, size=10):
+    current_page_no = page if page >= 1 else 1
 
-    total_pages = math.ceil(row_count / default_page_size)
+    total_pages = math.ceil(row_count / size)
 
     if current_page_no > total_pages:
         current_page_no = total_pages
     
-    limit =  current_page_no * default_page_size
-    offset = limit - default_page_size
+    limit =  current_page_no * size
+    offset = limit - size
 
     if limit > row_count:
-        limit = offset + (row_count % default_page_size)
+        limit = offset + (row_count % size)
     
     limit = limit - offset
 
     if offset < 0:
         offset = 0
     
-    return [total_pages, offset, limit]
+    return [limit, offset]
 
 
+
+def defaultimage(flag):
+    url=''
+    if flag == 'profile_img':
+        url = ('/uploads/user/default.png', 'https')
+    elif flag == 'cover_img':
+        url = ('/uploads/user/default_cover.png', 'https')
+    elif flag == 'group_icon':
+        url = ('/uploads/group/default.png', 'https')
+    elif flag == 'event_banner':
+        url =('/uploads/eventbanner/eventbanner_default.jpg', 'https')
+    elif flag == 'talkshow':
+        url = ('/uploads/eventbanner/talkshowbanner_default.jpg', 'https')
+    elif flag == 'live':
+        url = ('/uploads/eventbanner/livebanner_default.jpg', 'https')
+    
+    return url
+
+
+def GetGroupDetails(db,id):
+    members=[]
+    memberlist=[]
+    friendGroup=db.query(FriendGroups).filter(FriendGroups.status == 1,FriendGroups.id == id).first()
+    if friendGroup:
+        friendGroupMembers=db.query(FriendGroupMembers).filter(FriendGroupMembers.group_id == friendGroup.id).all()
+        members.append(friendGroup.id)
+        memberlist.append({
+                            "user_id":friendGroup.created_by if friendGroup.created_by else "",
+                            "email_id":friendGroup.user.email_id if friendGroup.created_by else "",
+                            "first_name":friendGroup.user.first_name if friendGroup.created_by else "",
+                            "last_name":friendGroup.user.last_name if friendGroup.created_by else "",
+                            "display_name":friendGroup.user.display_name if friendGroup.created_by else "",
+                            "gender":friendGroup.user.gender if friendGroup.created_by else "",
+                            "profile_img":friendGroup.user.profile_img if friendGroup.created_by else ""
+                        })
+        membercount=1
+        if friendGroupMembers:
+            for frnd_group in friendGroupMembers:
+                members.append(frnd_group.id)
+                memberlist.append({
+                            "user_id":friendGroup.user_id if friendGroup.user_id else "",
+                            "email_id":friendGroup.user.email_id if friendGroup.user_id else "",
+                            "first_name":friendGroup.user.first_name if friendGroup.user_id else "",
+                            "last_name":friendGroup.user.last_name if friendGroup.user_id else "",
+                            "display_name":friendGroup.user.display_name if friendGroup.user_id else "",
+                            "gender":friendGroup.user.gender if friendGroup.user_id else "",
+                            "profile_img":friendGroup.user.profile_img if friendGroup.user_id else "",
+                            "last_seen":friendGroup.user.last_seen if friendGroup.user_id else "",
+                            "online":"",
+                            "typing":0
+                           
+                        })
+                membercount= membercount+1
+                
+        group_details={
+                        "group_id":friendGroup.id,
+                        "group_name":friendGroup.group_name,
+                        "group_icon":friendGroup.group_icon,
+                        "group_member_count":membercount,
+                        "group_owner":friendGroup.created_by,
+                        "chat_enabled":friendGroup.chat_enabled,
+                        "group_type":1,
+                        "group_member_ids":members,
+                        "group_members_list":memberlist,
+                        "typing":0,
+                    }
+        return group_details
+                
+                
+    
 
 def paginate(page, size, data, total):
     reply = {"items": data, "total":total, "page": page, "size":size}

@@ -5,6 +5,7 @@ from app.utils import *
 from app.api import deps
 from sqlalchemy.orm import Session
 from datetime import datetime,date
+from sqlalchemy import func
 import re
 import socket
 import base64
@@ -1103,24 +1104,50 @@ async def sendfriendrequests(db:Session=Depends(deps.get_db),token:str=Form(...)
                                     
                                     if add_my_friends:
                                         add_notification=Insertnotification(db,user_id,login_user_id,11,login_user_id)
-                                    
-                                    
+                                        
+                                        friend_request_ids.append(add_my_friends.id)
+                                        
+                                        message_details={}
+                                        message_details.update({"message":f"{hostname} Sent a connection request","data":{"refer_id":add_my_friends.id,"type":"friend_request"},"type":"friend_request"})
+
+                                        push_notification=pushNotify(db,user,message_details,login_user_id)
+                                        
+                                        body=''
+                                        sms_message=''
+                                        sms_message,body= friendRequestNotifcationEmail(db,login_user_id,user,1)
+                                        
+                                        subject='Rawcaster - Connection Request'
+                                        email_detail = {"subject": subject, "mail_message": body, "sms_message": sms_message, "type": "friend_request"}
+                                        send_notification=addNotificationSmsEmail(db,user,email_detail,login_user_id)
+                    if friend_request_ids:
+                        return {"status":1,"msg":"Connection request sent successfully","friend_request_ids":friend_request_ids}
                 
-                
-                
-                
-                
-            
-        
-    return "done"
+                    else:
+                        return {"status":0,"msg":"Failed to send Connection request","friend_request_ids":friend_request_ids}
+                        
 
 
 
 # 16 List all friend requests (all requests sent to this users from others)
 @router.post("/listallfriendrequests")
 async def listallfriendrequests(db:Session=Depends(deps.get_db),token:str=Form(...)):
-                         
-    return "done"
+    if token.strip() == "":
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    else:
+        access_token=checkToken(db,token)
+        if access_token == False:
+            return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+        else:
+            get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+            login_user_id=get_token_details.user_id
+            login_user_name=get_token_details.user.first_name
+            
+            response_type=0
+            request_status=0
+            requested_by=2
+            pending_requests=get_friend_requests(db,login_user_id,requested_by,request_status,response_type)
+        
+            return {"status":1,"msg":"Success","pending_requests":pending_requests.pending}
 
 
 
@@ -1129,37 +1156,339 @@ async def listallfriendrequests(db:Session=Depends(deps.get_db),token:str=Form(.
 async def respondtofriendrequests(db:Session=Depends(deps.get_db),token:str=Form(...),friend_request_id:int=Form(...),notification_id:int=Form(...),
                                   response:int=Form(...,description="1-Accept,2-Reject,3-Block",ge=1,le=3)):
                          
-    return "done"
+    if token.strip() == '':
+        return {"status": -1, "msg": "Sorry! your login session expired. please login again."}
+    else:
+        access_token = checkToken(token)
+        if not access_token:
+            return {"status": -1, "msg": "Sorry! your login session expired. please login again."}
+        else:
+            get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+            
+            login_user_id=get_token_details.user_id
+            login_user_name=get_token_details.user.first_name
 
+            my_friends=db.query(MyFriends).filter(MyFriends.status == 1,MyFriends.request_status== 0,MyFriends.id == friend_request_id,MyFriends.receiver_id == login_user_id ).first()
 
-
-
+            if not my_friends:
+                return {"status": 0, "msg": "Invalid request"}
+                
+            else:
+                if response == 2:
+                    status=0
+                else:
+                    status=1
+                
+                update_my_friends=db.query(MyFriends).filter(MyFriends.id == friend_request_id).update({"status":status,"request_status":response,"status_date":datetime.now()})
+                db.commit()
+                
+                if update_my_friends:
+                    if notification_id:
+                        # if status == 1:
+                        update_notification=db.query(Notification).filter(Notification.id == notification_id).update({"status":0,"is_read":1,"read_datetime":datetime.now()})
+                        db.commi()
+                        # else:
+                        #     update_notification=db.query(Notification).filter(Notification.id == notification_id).update({"status":0,"is_read":1,"read_datetime":datetime.now()})
+                    else:
+                        update_notification=db.query(Notification).filter(Notification.notification_origin_id == my_friends.sender_id,Notification.user_id ==my_friends.receiver_id,Notification.notification_type == 11).update({"status":0,"is_read":1,"read_datetime":datetime.now()})
+                        db.commi()
+                    
+                    if response == 1:
+                        friend_requests=my_friends.user1
+                        friend_details={}
+                        friend_details.update({
+                                                "friend_request_id":friend_requests.id,
+                                                "user_id":friend_requests.id,
+                                                "email_id":friend_requests.email_id,
+                                                "first_name":friend_requests.first_name,
+                                                "last_name":friend_requests.last_name,
+                                                "display_name":friend_requests.display_name,
+                                                "gender":friend_requests.gender,
+                                                "profile_img":friend_requests.profile_img,
+                                                "online":friend_requests.online,
+                                                "last_seen":friend_requests.last_seen,
+                                                "typing":0
+                                            })
+                        
+                        sender_id=my_friends.sender_id
+                        receiver_id=my_friends.receiver_id
+                        notification_type=12
+                        insert_notification=Insertnotification(db,sender_id,receiver_id,notification_type,receiver_id)
+                    
+                        friend_request_ids=[friend_requests.id]
+                        body=''
+                        sms_message=''
+                        sms_message,body=friendRequestNotifcationEmail(db,sender_id,login_user_id,2)
+                        
+                        subject='Rawcaster - Connection Request Accepted'
+                        
+                        email_detail = {"subject": subject, "mail_message": body, "sms_message": sms_message, "type": "friend_request"}
+                        
+                        add_notification=addNotificationSmsEmail(db,list(sender_id),email_detail,login_user_id)
+                        
+                        return {"status":1,"msg":"Success","friend_details":friend_details}
+                    else:
+                        return {"status":1,"msg":"Success"}
+                else:
+                    return {"status":0,"msg":"Failed to update. please try again"}
+                    
+                        
+                    
+                    
 # 18 List all Friend Groups
 @router.post("/listallfriendgroups")
-async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(...),search_key:str=Form(None),page_number:int=Form(default=1)):
-                         
-    return "done"
-
-
+async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(...),search_key:str=Form(None),page_number:int=Form(default=1),flag:str=Form(None)):
+    if token.strip() == "":
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    else:
+        access_token=checkToken(db,token)
+        
+        if access_token == False:
+            return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+        else:
+            get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+            
+            login_user_id=get_token_details.user_id
+            
+            current_page_no=page_number
+            
+            flag=flag if flag else 0
+            
+            my_friend_group=db.query(FriendGroups.id,FriendGroups.chat_enabled,FriendGroups.created_by,FriendGroups.group_name,FriendGroups.group_icon,func.count(FriendGroupMembers.id.label("members_count")))
+            my_friend_group=my_friend_group.group_by(FriendGroups.id).filter(FriendGroups.status == 1,or_(FriendGroups.created_by == login_user_id,FriendGroupMembers.user_id == login_user_id))
+            # Query Pending
+            
+            if search_key and search_key.strip() == "":
+                my_friend_group=my_friend_group.filter(FriendGroups.group_name.like(search_key+"%"))
+                
+            get_row_count=my_friend_group.count()
+            
+            if get_row_count < 1:
+                return {"status":0,"msg":"No Result found"}
+            
+            else:
+                default_page_size=1000
+                
+                limit,offset=get_pagination(get_row_count,current_page_no,default_page_size)
+                
+                my_friend_group=my_friend_group.order_by(FriendGroups.group_name.asc()).limit(limit).offset(offset).all()
+                result_list=[]
+                for res in my_friend_group:
+                    grouptype=1
+                    groupname=res.group_name
+                    
+                    if groupname == "My Fans":
+                        grouptype=2
+                    
+                    if groupname == "My Fans" and res.created_by != login_user_id:
+                        groupname=f"Influencer: {(res.user.display_name if res.user.display_name else '') if res.created_by else ''}"
+            
+                    result_list.append({
+                                        "group_id":res.id,
+                                        "group_name":groupname,
+                                        "group_icon":res.group_icon if res.group_icon else "",
+                                        "group_member_count":res.members_count + 1 if res.members_count else 0,
+                                        "group_owner":res.created_by if res.created_by else 0,
+                                        "typing":0,
+                                        "chat_enabled":res.chat_enabled,
+                                        "group_type":grouptype
+                                        })
+                    
+                    get_group_chat=db.query(GroupChat).filter(GroupChat.status == 1,GroupChat.group_id == res.id).order_by(GroupChat.id.desc()).first()
+                    
+                    result_list.append({"last_msg":get_group_chat.message if get_group_chat else "","last_msg_datetime":get_group_chat.sent_datetime if get_group_chat.sent_datetime else "","result_list":3})
+            
+                    memberlist=[]
+                    members=[]
+                    membercount=0
+                    if grouptype == 1:
+                        members.append(res.created_by)
+                        memberlist.append({
+                                            "user_id":res.created_by,
+                                            "email_id":res.user.email_id,
+                                            "first_name":res.user.first_name,
+                                            "last_name":res.user.last_name,
+                                            "display_name":res.user.display_name,
+                                            "gender":res.user.gender,
+                                            "profile_img":res.user.profile_img,
+                                            "online":res.user.online,
+                                            "last_seen":res.user.last_seen,
+                                            "typing":0
+                                            })
+                        
+                    get_friend_group_member=db.query(FriendGroupMembers).filter(FriendGroupMembers.group_id == res.id).all()
+                    for group_member in get_friend_group_member:
+                        members.append(group_member.user_id)
+                        memberlist.append({
+                                            "user_id":group_member.user_id,
+                                            "email_id":group_member.user.email_id if group_member.user_id else "",
+                                            "first_name":group_member.user.first_name if group_member.user_id else "",
+                                            "last_name":group_member.user.last_name if group_member.user_id else "",
+                                            "display_name":group_member.user.display_name if group_member.user_id else "",
+                                            "gender":group_member.user.gender if group_member.user_id else "",
+                                            "profile_img":group_member.user.profile_img if group_member.user_id else "",
+                                            "online":group_member.user.online if group_member.user_id else "",
+                                            "last_seen":group_member.user.last_seen if group_member.user_id else "",
+                                            "typing":0
+                                            })
+                    
+                    result_list.append({"group_member_ids":members,"group_members_list":memberlist})
+                        
+                return {"status":1,"msg":"Success","group_count":get_row_count,"total_pages":get_row_count,"current_page_no":current_page_no,"friend_group_list":result_list}
+            
+            
+            
 # 19 List all Friends
 @router.post("/listallfriends")
 async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(...),search_key:str=Form(None),group_ids:str=Form(None,description="Like ['12','13','14']"),
                          nongrouped:int=Form(None,description="Send 1",ge=1,le=1),friends_count:int=Form(None),allfriends:int=Form(None,description="send 1",ge=1,le=1),
                          page_number:int=Form(None,description="send 1 for initial request")):
                          
-    return "done"
+    if token.strip() == "":
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+        
+    else:
+        access_token=checkToken(db,token)
+        if access_token == False:
+            return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+            
+        else:
+            login_from=1
+            get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+            login_user_id=get_token_details.user_id
+            login_from=get_token_details.device_type
+            
+            current_page_no=page_number
+            my_friends_ids=[]
+            
+            # Step 1) Get all active friends of logged in user (if requested for all friends list)
+            if allfriends and allfriends == 1:
+                get_all_friends=db.query(MyFriends).filter(MyFriends.status == 1,MyFriends.request_status == 1,or_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == login_user_id)).all()
+                
+                if get_all_friends:
+                    my_friends_ids=[frnds.id for frnds in get_all_friends]
+            
+                else:  #  # Step 2) Get all active friends of logged in user (based on requested conditions)
+                    # Step 2.1) Get all non grouped friends
+                    all_group_friends=set()
+                    
+                    if nongrouped and nongrouped == 1:
+                        get_all_group_friends=db.query(FriendGroupMembers).filter(FriendGroupMembers.group_id == FriendGroups.id,FriendGroupMembers.status == 1,FriendGroups.status == 1,FriendGroups.created_by == login_user_id).all()
+                        
+                        all_group_friends=[gp_user.user_id for gp_user in get_all_group_friends]
 
+                        # Step 2.1.2) Get all friends who are all not invloved any one of the group
+                        get_all_non_group_friends=db.query(MyFriends).filter(MyFriends.status == 1 ,MyFriends.request_status == 1)
 
+                        if all_group_friends:
+                            group_members_ids= ",".join(all_group_friends)
+                            get_all_non_group_friends=get_all_non_group_friends.filter(or_(MyFriends.sender_id == login_user_id,MyFriends.sender_id.not_in(group_members_ids)),or_(MyFriends.receiver_id.not_in(group_members_ids),MyFriends.receiver_id == login_user_id))
+                        else:
+                            get_all_non_group_friends=get_all_non_group_friends.filter(or_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == login_user_id))
 
+                        get_all_non_group_friends=get_all_non_group_friends.all()
+                        
+                        if get_all_non_group_friends:
+                            my_friends_ids=[enemy.id for enemy in get_all_non_group_friends]
+                    
+                    # Step 2.2) Get all friends who are already in requested groups
+                    if group_ids and group_ids.split != "":
+                        requested_group_friends=set()
+                        requested_group_ids=group_ids
+                        
+                        if requested_group_ids and requested_group_ids != []:
+                            # Step 2.2.1) Get all friends who are already in requested groups
+                            get_requested_group_members=db.query(FriendGroupMembers).filter(FriendGroupMembers.group_id == FriendGroups.id,FriendGroupMembers.status == 1,FriendGroups.status == 1,FriendGroups.created_by ==login_user_id)
+                            get_requested_group_members=get_requested_group_members.filter(FriendGroupMembers.group_id.in_(requested_group_ids)).all()
+                            
+                            if get_requested_group_members:
+                                requested_group_friends=[req_frnd.user_id for req_frnd in get_requested_group_members]
+                        
+                                # Step 2.2.2) Get all friends who are already in requested groups
+                                get_all_requested_group_friends=db.query(MyFriends).filter(MyFriends.status == 1,MyFriends.request_status == 1)
+
+                                if requested_group_friends:
+                                    requested_group_friends_ids= ",".join(requested_group_friends)
+                                    get_all_requested_group_friends=get_all_requested_group_friends.filter(or_(MyFriends.sender_id == login_user_id,MyFriends.sender_id.in_(requested_group_friends_ids)),or_(MyFriends.receiver_id.in_(requested_group_friends_ids),MyFriends.receiver_id == login_user_id ))
+
+                                    get_all_requested_group_friends=get_all_requested_group_friends.all()
+                                    
+                                    if get_all_requested_group_friends:
+                                        my_friends_ids=[req_frnd.id for req_frnd in get_all_requested_group_friends]
+                        
+                # Get Final result after applied all requested conditions    [[[[  SUB QUERY  ]]]]
+                get_row_count=db.query(MyFriends,FollowUser.id.label("follow_id"),any(db.query(FriendsChat.meaasge).filter(FriendsChat.sent_type == 1,or_(FriendsChat.sender_id == MyFriends.sender_id,FriendsChat.sender_id == MyFriends.receiver_id),or_(FriendsChat.receiver_id == MyFriends.receiver_id,FriendsChat.receiver_id == MyFriends.sender_id),or_(FriendsChat.sender_id == login_user_id,FriendsChat.receiver_id == login_user_id),or_(FriendsChat.receiver_delete == None,FriendsChat.sender_delete == None)).order_by(FriendsChat.sent_datetime.desc())))
+                
+                
+                # Pending
 
 # 20 Add Friend Group
 @router.post("/addfriendgroup")
 async def addfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(...),group_name:str=Form(...),group_members:str=Form(None,description=" User ids Like ['12','13','14']"),
                          group_icon:UploadFile=File(None)):
                          
-    return "done"
+    if token.strip() == "":
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
 
-
+    else:
+        access_token=checkToken(db,token)
+        
+        if access_token == False:
+            return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+        else:
+            get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+            login_user_id=get_token_details.user_id
+            
+            if group_name.strip() == "":
+                return {"status":0,"msg":"Sorry! Group name can not be empty."}
+            else:
+                get_row_count=db.query(FriendGroups).filter(FriendGroups.status == 1,FriendGroups.created_by == login_user_id,FriendGroups.group_name == group_name).count()
+                if get_row_count:
+                    return {"status":0,"msg":"Group name already exists"}
+                    
+                else:
+                    # Add Friend Group
+                    group_icon='group_icon'
+                    add_friend_group=FriendGroups(group_name = group_name,group_icon=defaultimage(group_icon),created_by=login_user_id,created_at=datetime.now(),status =1)
+                    db.add(add_friend_group)
+                    db.commit()
+                    
+                    if add_friend_group:
+                        if group_members:
+                            for member in group_members:
+                                get_user=db.query(User).filter(User.id == member).first()
+                                
+                                if get_user:
+                                    # add Friend Group member
+                                    add_member=FriendGroupMembers(group_id = add_friend_group.id,user_id=member,added_date=datetime.now(),added_by=login_user_id,is_admin=0,disable_notification=0,status=1)
+                                    db.add(add_member)
+                                    db.commit()
+                                    
+                        # Profile Image
+                        if group_icon:
+                            # Pending
+                            print("Pending")
+                            
+                        group_details= GetGroupDetails(db,add_friend_group.id)
+                            
+                        message_detail={"message":f"{add_friend_group.user.display_name} : created new group",
+                                        "title":add_friend_group.group_name,
+                                        "data":{"refer_id":add_friend_group.id,"type":"add_group"},
+                                        "type":"callend"
+                                        }
+                        notify_members=group_details['group_member_ids']
+                        
+                        if add_friend_group.created_by in notify_members:
+                            notify_members.remove(add_friend_group.created_by) 
+                        
+                        push_notification=pushNotify(db,notify_members,message_detail,login_user_id)
+                        
+                        return {"status":1,"msg":"Successfully created group","group_details":group_details}
+                    else:
+                        return {"status":0,"msg":"Failed to create group"}
+                        
+                        
+                        
 
 # 21 Edit Friend Group
 @router.post("/editfriendgroup")
