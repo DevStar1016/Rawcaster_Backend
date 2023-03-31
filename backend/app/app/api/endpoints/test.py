@@ -1,12 +1,13 @@
 import requests
 
+import json
 
-login_user_id = 2  # Example login user ID
-user_ids = [1, 2, 3, 4, 5]  # Example list of user IDs
+my_json_string = '["14", "27", "32"]'
+my_list = json.loads(my_json_string)
 
-del user_ids[login_user_id]
-
-print(user_ids)
+for string_number in my_list:
+    integer_number = int(string_number)
+    print(integer_number)
 
 # def get_ip():
 #     response = requests.get('https://api64.ipify.org?format=json').json()

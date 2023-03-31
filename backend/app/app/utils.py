@@ -236,6 +236,22 @@ def addNotificationSmsEmail(db,user,email_detail,login_user_id):
     return True
 
 
+def get_nugget_detail(db,nugget_id,login_user_id):
+    nugget_detail=[]
+    is_downloadable=0
+
+def getGroupids(db,login_user_id):
+    group_ids=[]
+    
+    if login_user_id:
+        friend_group_memebers=db.query(FriendGroupMembers).filter_by(status=1,user_id=login_user_id).all()
+        if friend_group_memebers:
+            for group in friend_group_memebers:
+                group_ids.append(group.group_id)
+    return group_ids
+
+    
+
 def get_friend_requests(db,login_user_id,requested_by,request_status,response_type):
     pending = []
     accepted = []
@@ -309,9 +325,63 @@ def get_friend_requests(db,login_user_id,requested_by,request_status,response_ty
                     blocked.append(friend_details)
 
     return {"pending":pending,"accepted":accepted,"rejected":rejected,"blocked":blocked}            
+               
                 
+def getFollowings(db,user_id):
+    following_ids=[]
+    if user_id:
+        following_users_list=db.query(FollowUser).filter_by(status=1,follower_userid=user_id).all()
+        if following_users_list:
+            following_ids=[follow_usr.following_userid for follow_usr in following_users_list]
+    return following_ids
+
+
+
+def NuggetAccessCheck(db,login_user_id,nugget_id):
+    group_ids=getGroupids(db,login_user_id)
+    requested_by=None
+    request_status=1
+    response_type=1
+    search_key=None
+    my_friends_req=get_friend_requests(db,login_user_id,requested_by,request_status,response_type,search_key)
+    my_friends=my_friends_req['accepted']
     
+    my_followings=getFollowings(db,login_user_id)
+    type=None
+    rawid=GetRawcasterUserID(db,type)
     
+    check_nuggets=db.query(Nuggets).filter(Nuggets.user_id == User.id,Nuggets.nuggets_id == NuggetsMaster.id,Nuggets.id == NuggetsShareWith.nuggets_id,Nuggets.id == NuggetView.nugget_id)
+    check_nuggets=check_nuggets.filter(Nuggets.status==1,Nuggets.nugget_status==1,NuggetsMaster.status == 1,Nuggets.id == nugget_id)
+    check_nuggets=check_nuggets.or_(Nuggets.user_id == login_user_id,and_(Nuggets.share_type ==1),and_(Nuggets.share_type ==2 ,Nuggets.user_id == login_user_id),and_(Nuggets.share_type == 3,NuggetsShareWith.type == 1,NuggetsShareWith.share_with.in_(group_ids)),and_(Nuggets.share_type == 4,NuggetsShareWith.type == 2,NuggetsShareWith.share_with.in_(login_user_id)),and_(Nuggets.share_type == 6,Nuggets.user_id.in_(my_friends)),and_(Nuggets.share_type == 7,Nuggets.user_id.in_(my_followings)),and_(Nuggets.user_id == rawid))
+    
+    requested_by=None
+    request_status=3
+    response_type=1
+    search_key=None
+    
+    get_all_blocked_users=get_friend_requests(db,login_user_id,requested_by,request_status,response_type,search_key)
+    blocked_users=get_all_blocked_users['blocked']
+
+    if blocked_users:
+        check_nuggets=check_nuggets.filter(Nuggets.user_id.not_in(blocked_users))
+    
+    check_nuggets=check_nuggets.count()
+    
+    if check_nuggets > 0:
+        return True
+    else:
+        return False
+    
+          
+def getFollowers(db,login_user_id):
+    following_ids=[]
+    if login_user_id and login_user_id != None and login_user_id != "":
+        following_users_list=db.query(FollowUser).filter(FollowUser.status == 1,FollowUser.following_userid == login_user_id).all()
+        if following_users_list:
+            for follow_usr in following_users_list:
+                following_ids.append(follow_usr.follower_userid)
+    
+    return following_ids
     
     
 def Insertnotification(db,user_id,notification_origin_id,notification_type,ref_id):
@@ -320,6 +390,17 @@ def Insertnotification(db,user_id,notification_origin_id,notification_type,ref_i
         db.add(add_notification)
         db.commit()
         
+        
+        
+def nuggetNotifcationEmail(db,nugget_id):
+    if nugget_id:
+        get_nugget=db.query(Nuggets).filter_by(id = nugget_id,status =1).first()
+        if get_nugget:
+            print("Pending")
+            
+            
+            
+    
         
 def get_ip():
     response = requests.get('https://api64.ipify.org?format=json').json()
@@ -510,6 +591,35 @@ def IsAccountVerified(db,user_id):
     return status
 
 
+
+def GetHashTags(content):
+    tags=[]
+    if content != '':
+        matches = re.findall(r"(\#\S+)", content, re.UNICODE)
+        tags = []
+        if matches:
+            for match in matches:
+                tags.append(match)
+    return tags  
+
+
+
+def StoreHashTags(db,nugget):
+    get_nugget=db.query(Nuggets).filter(Nuggets.id == nugget['id']).first()
+    
+    if get_nugget.nuggets_master.content and get_nugget.nuggets_master.content != '':
+        tags=GetHashTags(get_nugget.nuggets_master.content)
+        
+        deleteresult=db.query(NuggetHashTags).filter_by(nugget_id = get_nugget.id).delete()
+        db.commi()
+        
+        if tags:
+            for tag in tags:
+                add_NuggetHashTags=NuggetHashTags(nugget_master_id=get_nugget.nuggets_id,nugget_id=get_nugget.id,user_id=get_nugget.user_id,country_id=get_nugget.user.country_id,hash_tag=tag,created_date=datetime.now())
+                db.add(add_NuggetHashTags)
+                db.commit()
+                
+    
     
 def get_pagination(row_count=0, page = 1, size=10):
     current_page_no = page if page >= 1 else 1

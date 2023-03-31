@@ -1,14 +1,15 @@
 from fastapi import APIRouter, Depends, Form,File,UploadFile
 from app.models import *
 from app.core.security import *
+from typing import List
 from app.utils import *
 from app.api import deps
 from sqlalchemy.orm import Session
 from datetime import datetime,date
-from sqlalchemy import func
+from sqlalchemy import func,case
 import re
-import socket
 import base64
+import json
 
 router = APIRouter() 
 
@@ -91,11 +92,12 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:int=Form(...,descri
                 
                 check_phone=db.query(User).filter(User.mobile_no == mobile_no,User.status != 4).count()
             
-            check_user=db.query(User).filter(or_(User.email_id == email_id,User.mobile_no == mobile_no),or_(User.is_mobile_no_verified == 0,User.is_email_id_verified == 0)).first()
+            check_user=db.query(User).filter(User.email_id == email_id,or_(User.is_mobile_no_verified == 0,User.is_email_id_verified == 0)).first()
             if check_user:
+                
                 send_otp=SendOtp(db,check_user.id,signup_type)
                 
-                return {"status" : 2,"otp_ref_id":send_otp, "msg" : "Verification Pending, Redirect to OTP Verify Page"}
+                return {"status" : 2,"otp_ref_id":send_otp, "msg" : "Verification Pending, Redirect to OTP Verify Page","first_time":0}
             
             if check_email_id > 0:
                 
@@ -221,7 +223,7 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:int=Form(...,descri
                     
                     # reply=logins(db,email_id,password,device_type,device_id,push_id,login_from,voip_token,app_type)
                     
-                    return {"status":1, "msg": "Success", "email": email_id,"otp_ref_id":otp_ref_id,"user_id":add_user.id,"acc_verify_status": 0}
+                    return {"status":1, "msg": "Success", "email": email_id,"otp_ref_id":otp_ref_id,"user_id":add_user.id,"acc_verify_status": 0,"first_time":1}  # First Time (1 - New to rawcaster, 0 - existing user)
                     
                 else:
                     msg=await getModelError()  # Pending
@@ -1493,47 +1495,376 @@ async def addfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(...),gro
 # 21 Edit Friend Group
 @router.post("/editfriendgroup")
 async def editfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(...),group_name:str=Form(...),group_id:int=Form(...),
-                         group_icon:UploadFile=File(None)):
-                         
-    return "done"
+                         group_icon:UploadFile=File(None),group_members:List[int]=Form(None)):
+  
+    if token.strip() == "":
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    else:
+        access_token=checkToken(db,token)
+        
+        if access_token == False:
+            return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+        else:
+            get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+            login_user_id=get_token_details.user_id
+        
+        if group_name.strip() == "":
+            return {"status":0,"msg":"Sorry! Group name can not be empty."}
+        else:
+            get_frnd_group_count=db.query(FriendGroups).filter(FriendGroups.status == 1 ,FriendGroups.created_by == login_user_id,FriendGroups.group_name == group_name,or_(FriendGroups.id == group_id,FriendGroups.id != group_id)).count()
+            
+            if get_frnd_group_count > 0:
+                return {"status":0,"msg":"Group name already exists"}
+                
+            else:
+                get_group=db.query(FriendGroups).filter(FriendGroups.status == 1,FriendGroups.created_by == login_user_id,FriendGroups.id == group_id).first()
+                if not get_group:
+                    return {"status":0,"msg":"Invlaid request"}
 
+                elif get_group.group_name == "My Fans":
+                    return {"status":0,"msg":"You can't edit the My Fans group."}
+                    
+                else:
+                    img_path=get_group.group_icon
+                    
+                    # Profile Image
+                    if group_icon:
+                        print("Imga eupload pending")
+                    
+                    if group_members:
+                        for member in group_members:
+                            if member == member.created_by:
+                                pass
+                            get_user=db.query(User).filter(User.id == member).first()
+                            
+                            if get_user:
+                                check_member=db.query(FriendGroupMembers).filter(FriendGroupMembers.status == 1,FriendGroupMembers.group_id == group_id,FriendGroupMembers.user_id == member).first()
+                                
+                                if not check_member:
+                                    add_frnd_group=FriendGroupMembers(group_id = group_id,user_id = member,added_date=datetime.now(),added_by=login_user_id,is_admin=0,disable_notification=1,status=1)
+                                    db.add(add_frnd_group)
+                                    db.commit()
+                    update_frnd_group=db.query(FriendGroups).filter(FriendGroups.id == get_group.id).update({"group_name":group_name,"group_icon":'pending',})               
+                    db.commit()
+                    
+                    group_details=GetGroupDetails(db,group_id)
+                    
+                    return {"status":1,"msg":"Successfully updated","group_details":group_details}
 
+                
 
 
 # 22 Add Friends to Group
 @router.post("/addfriendstogroup")
-async def addfriendstogroup(db:Session=Depends(deps.get_db),token:str=Form(...),group_members:str=Form(None,description=" User ids Like ['12','13','14']"),group_id:int=Form(...)):
-                         
-    return "done"
-
-
+async def addfriendstogroup(db:Session=Depends(deps.get_db),token:str=Form(...),group_members:str=Form(...,description=" User ids Like ['12','13','14']"),group_id:int=Form(...)):
+    
+    if token.strip() == "":
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    else:
+        access_token=checkToken(db,token)
+        
+        if access_token == False:
+            return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+        else:
+            get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+            login_user_id=get_token_details.user_id
+            username =get_token_details.user.display_name
+            
+            group_members = json.loads(group_members)
+            
+            get_group=db.query(FriendGroups).filter(FriendGroups.status == 1,FriendGroups.created_by == login_user_id,FriendGroups .id == group_id).first()
+            
+            if not get_group:
+                return {"status":0,"msg":"Invalid request"}
+            
+            elif get_group.group_name == "My Fans":
+                return {"status":0,"msg":"You can't add member in My Fans group"}
+            
+            else:
+                memberdetails=[]
+                if group_members != []:
+                    memcount=0
+                    
+                    for member in group_members:
+                        get_user=db.query(User).filter(User.id == member).first()
+                        
+                        if get_user:
+                            check_member=db.query(FriendGroupMembers).filter(FriendGroupMembers.status == 1,FriendGroupMembers.group_id == group_id,FriendGroupMembers.user_id == member).first()
+                            
+                            if not check_member:
+                                add_frnd_group_member=FriendGroupMembers(group_id = group_id,user_id = member,added_date=datetime.now(),added_by=login_user_id,is_admin=0,disable_notification=1,status=1)
+                                db.add(add_frnd_group_member)
+                                db.commit()
+                                
+                                if add_frnd_group_member:
+                                    memberdetails.append({
+                                                        "display_name":add_frnd_group_member.user.display_name,
+                                                        "email_id":add_frnd_group_member.user.email_id,
+                                                        "first_name":add_frnd_group_member.user.first_name,
+                                                        "gender":add_frnd_group_member.user.gender,
+                                                        "last_name":add_frnd_group_member.user.last_name,
+                                                        "last_seen":add_frnd_group_member.user.last_seen,
+                                                        "online":'',
+                                                        "profile_img":add_frnd_group_member.user.profile_img,
+                                                        "typing":0,
+                                                        "user_id":add_frnd_group_member.user_id
+                                                        })
+                                    
+                    group_details=GetGroupDetails(db,get_group.id)
+                    
+                    message_detail={
+                                    "message":f"{username}: added members",
+                                    "title":get_group.group_name,
+                                    "data":{"refer_id":get_group.id,"type":"add_group"},
+                                    "type":"callend"
+                                }
+                    notify_members=group_details['group_member_ids']
+                    
+                    if get_group.created_by in notify_members:
+                        key = notify_members.index(get_group.created_by)
+                        notify_members.pop(key)
+                    
+                    send_push_notification=pushNotify(db,notify_members,message_detail,login_user_id)
+                    
+                    return {"status":1,"msg":"Successfully Added","memberdetails":memberdetails}
+ 
+                else:
+                    return {"status":0,"msg":"Failed to add"}
+            
 
 
 # 23 Remove Friends from Group
 @router.post("/removefriendsfromgroup")
-async def removefriendsfromgroup(db:Session=Depends(deps.get_db),token:str=Form(...),group_members:str=Form(None,description=" User ids Like ['12','13','14']"),group_id:int=Form(...)):
-                         
-    return "done"
+async def removefriendsfromgroup(db:Session=Depends(deps.get_db),token:str=Form(...),group_members:str=Form(...,description=" User ids Like ['12','13','14']"),group_id:int=Form(...)):
+             
+    if token.strip() == "":
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    else:
+        access_token=checkToken(db,token)
+        
+        if access_token == False:
+            return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+        else:
+            get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+            login_user_id=get_token_details.user_id    
+            
+            group_members = json.loads(group_members)
+            
+            get_group=db.query(FriendGroups).filter(FriendGroups.status == 1,FriendGroups.created_by == login_user_id,FriendGroups.id == group_id).first()
+            if not get_group:
+                return {"status":0,"msg":"Invalid request"}
+                
+            elif get_group.group_name == "My Fans":
+                return {"status":0,"msg":"You can't remove member in My Fans group"}
+                
+            else:
+                if group_members:
+                    for member in group_members:
+                        delete_members=db.query(FriendGroupMembers).filter_by(group_id =group_id,user_id =member).delete()
+                        db.commit()
+                
+                return {"status":1,"msg":"Successfully updated"}
 
 
 
 # 24. Delete Friend Group
 @router.post("/deletefriendgroup")
 async def deletefriendgroup(db:Session=Depends(deps.get_db),token:str=Form(...),group_id:int=Form(...)):
-                         
-    return "done"
-
+    if token.strip() == "":
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    else:
+        access_token=checkToken(db,token)
+        
+        if access_token == False:
+            return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+        else:
+            get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+            login_user_id=get_token_details.user_id        
+                      
+            get_group=db.query(FriendGroups).filter(FriendGroups.created_by == login_user_id,FriendGroups.id == group_id).first()
+            if not get_group:
+                return {"status":0,"msg":"Invalid group info"}
+            
+            elif get_group.group_name == "My Fans":
+                return {"status":0,"msg":"You can't delete My Fans group"}
+            
+            else:
+                update_event_invitation=db.query(EventInvitations).filter_by(group_id=group_id).update({"status":0})
+                update_friends_gp_memeber=db.query(FriendGroupMembers).filter_by(group_id=group_id).update({"status":0})
+                update_friends_group=db.query(FriendGroups).filter_by(id=group_id).update({"status":0})
+                
+                db.commit()
+                
+                if update_friends_group:
+                    return {"status":1,"msg":"Successfully deleted"}
+                
+                else:
+                    return {"status":0,"msg":"Failed to delete. please try again"}
+                
 
 
 
 # 25. Add Nuggets
 @router.post("/addnuggets")
-async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(...),content:str=Form(...),share_type:int=Form(None),share_with:str=Form(...,description='friends":[1,2,3],"groups":[1,2,3]}'),
-                     nuggets_media:UploadFile=File(...),poll_option:str=Form(None),poll_duration:str=Form(None)):
+async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(...),content:str=Form(...),share_type:int=Form(None),share_with:str=Form(None,description='friends":[1,2,3],"groups":[1,2,3]}'),
+                     nuggets_media:UploadFile=File(...),poll_option:str=Form(None),poll_duration:str=Form(None),metadata:str=Form(None)):
                          
-    return "done"
+    if token.strip() == "":
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    else:
+        access_token=checkToken(db,token)
+        
+        if access_token == False:
+            return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+        else:
+            get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+            login_user_id=get_token_details.user_id   
+            
+        if IsAccountVerified(db,login_user_id) == False:
+            return {"status":0,"msg":"You need to complete your account validation before you can do this"}
+            
+        share_with= json.loads(share_with) if share_with else []
+        
+        if (share_type == 3 or share_type == 4 or share_type == 5) and not share_with:
+            return {"status": 0, "msg": "Sorry! Share with can not be empty."}
+        
+        elif share_type == 3 and (not share_with.get("groups") or not share_with["groups"]):
+            return {"status": 0, "msg": "Sorry! Share with groups list missing."}
+        
+        elif share_type == 4 and (not share_with.get("friends") or not share_with["friends"]):
+            return {"status": 0, "msg": "Sorry! Share with friends list missing."}
+        
+        elif share_type == 5 and ((not share_with.get("groups") or not share_with["groups"]) and (not share_with.get("friends") or not share_with["friends"])):
+            return {"status": 0, "msg": "Sorry! Share with groups or friends list missing."}
+        
+        else:
+            anyissue = 0
+            
+            if share_type == 3 or share_type == 4 or share_type == 5:
+                if share_with:
+                    for key, val in share_with.items():
+                        if val:
+                            if key == "group" and (share_type == 3 or share_type == 5):
+                                get_groups=db.query(FriendGroups).filter(FriendGroups.id == val,FriendGroups.status == 1,FriendGroups.created_by == login_user_id)
 
+                                get_groups = {id: id for id, _ in get_groups.all()}
 
+                                if len(get_groups) != len(val):
+                                    anyissue=1
+                                
+                                elif key == "friends" and (share_type == 4 or share_type == 5):
+                                    
+                                    query = db.query(MyFriends.id, case([(MyFriends.receiver_id == login_user_id, MyFriends.sender_id)], else_=MyFriends.receiver_id).label('receiver_id'))
+                                    query = query.filter(MyFriends.status == 1, MyFriends.request_status == 1)
+                                    query = query.filter((MyFriends.sender_id == login_user_id) | (MyFriends.receiver_id == login_user_id))
+                                    query=db.query(FriendGroups).filter(FriendGroups.id == val,FriendGroups.status == 1,FriendGroups.created_by == login_user_id)
+                                    
+                                    get_friends = query.all()
+                                    
+                                    if len(set(val) - set(get_friends)) > 0:
+                                        anyissue = 1
+            if anyissue == 1:
+                return {"status": 0, "msg": "Sorry! Share with groups or friends list not correct."}
+            else:
+                add_nuggets_master=NuggetsMaster(user_id=login_user_id,content=content,metadata1=metadata,poll_duration=poll_duration,created_date=datetime.now(),status=1)
+                db.add(add_nuggets_master)
+                db.commit()
+                
+                if add_nuggets_master:
+                    # Poll Option save
+                    if poll_option:
+                        for option in poll_option:
+                            add_NuggetPollOption=NuggetPollOption(nuggets_master_id=add_nuggets_master.id,option_name=option.strip(),
+                                                                    created_date=datetime.now(),status=1)
+                    
+                            db.add(add_NuggetPollOption)
+                            db.commit()
+                    attachment_count=0  
+                    
+                    # Nuggets Media
+                    if nuggets_media:
+                        print("Pending")
+                    
+                    add_nuggets=Nuggets(nuggets_id=add_nuggets_master.id,user_id=login_user_id,type=1,share_type=share_type,created_date=datetime.now())
+                    db.add(add_nuggets)
+                    db.commit()
+                    
+                    if add_nuggets:
+                        nuggets=StoreHashTags(db,add_nuggets)
+                        totalmembers=[]
+                        
+                        if share_type == 6 or share_type == 1:
+                            requested_by=None
+                            request_status=1
+                            response_type=1
+                            search_key=None
+                            get_member=get_friend_requests(db,login_user_id,requested_by,request_status,response_type,search_key)
+
+                            totalmembers.append(totalmembers.accepted)
+                        
+                        if share_type == 7:
+                            get_members=getFollowers(db,login_user_id)
+
+                        # If share type is Group or Individual
+                        if share_type == 3 or share_type == 4 or share_type == 5:
+                            if share_type == 4:
+                                share_with.group =''
+                            if share_type == 3:
+                                share_with.friends =''
+                            
+                            if share_with:
+                                for key,val in share_with:
+                                    if val:
+                                        for shareid in val:
+                                            type= 2 if key == 'friends' else 1
+                                            add_NuggetsShareWith=NuggetsShareWith(nuggets_id=add_nuggets.id,type =type,share_with=shareid)
+                                            db.add(add_NuggetsShareWith)
+                                            db.commit()
+                                            
+                                            if add_NuggetsShareWith:
+                                                if key == 'friends':
+                                                    totalmembers.append(shareid)
+                                                else:
+                                                    getgroupmember=db.query(FriendGroupMembers).filter_by(group_id =shareid).all()
+                                                    
+                                                    for member in getgroupmember:
+                                                        if member.user_id not in totalmembers:
+                                                            totalmembers.append(member.user_id)
+                                                
+                        if totalmembers:
+                            for users in totalmembers:
+                                notification_type=1
+                                add_notification=Insertnotification(db,users,login_user_id,notification_type,add_nuggets.id)
+                                    
+                                get_user=db.query(User).filter(User.id == login_user_id).first()
+                                user_name=''
+                                if get_user:
+                                    user_name=get_user.display_name
+                                
+                                message_detail={
+                                        "message":"Posted new Nugget",
+                                        "data":{"refer_id":add_nuggets.id,"type":"add_nugget"},
+                                        "type":"nuggets"
+                                    }
+                                send_push_notification=pushNotify(totalmembers,message_detail,login_user_id)
+                                body=''
+                                sms_message=''
+                                
+                                if add_nuggets.id and add_nuggets.id != '':
+                                    sms_message,body=nuggetNotifcationEmail(db,add_nuggets.id)  # Pending
+                                    
+                                subject='Rawcaster - Notification'
+                                email_detail={"subject":subject,"mail_message":body,"sms_message":sms_message,"type":"nuggets"}
+                                add_notification_sms_email= addNotificationSmsEmail(db,totalmembers,email_detail,login_user_id)
+
+                        nugget_detail=get_nugget_detail(db,add_nuggets.id,login_user_id)  # Pending
+
+                        return {"status":1,"msg":"Nuggets created successfully!","nugget_detail":nugget_detail}
+                    else:
+                        return {"status":0,"msg":"Failed to create Nugget"}
+                    
+                else:
+                    return {"status":0,"msg":"Failed to create Nugget master"}
 
 
 # 26. List Nuggets
@@ -1548,42 +1879,255 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(...),my_nug
 
 # 27. Like And Unlike Nugget
 @router.post("/likeandunlikenugget")
-async def likeandunlikenugget(db:Session=Depends(deps.get_db),token:str=Form(...),nugget_id:int=Form(...),like:int=Form(...,description="1-like,2-unlike")):
-                         
-    return "done"
+async def likeandunlikenugget(db:Session=Depends(deps.get_db),token:str=Form(...),nugget_id:int=Form(...),like:int=Form(...,description="1-like,2-unlike",ge=1,le=2)):
+    if token.strip() == "":
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    else:
+        access_token=checkToken(db,token)
+        
+        if access_token == False:
+            return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+        else:
+            status=0
+            msg="Invalid nugget id"
+            get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+            login_user_id=get_token_details.user_id
 
-
-
+            if IsAccountVerified(db,login_user_id) == False:
+                return {"status":0,"msg":"You need to complete your account validation before you can do this"}
+            
+            access_check=NuggetAccessCheck(db,login_user_id,nugget_id)
+            
+            if not access_check:
+                return {"status":0,"msg":"Unauthorized access"}
+            
+            check_nuggets=db.query(Nuggets).filter(Nuggets.id == nugget_id).first()
+            
+            if check_nuggets:
+                if like == 1:
+                    checkpreviouslike=db.query(NuggetsLikes).filter(NuggetsLikes.nugget_id == nugget_id,NuggetsLikes.user_id == login_user_id).first()
+                    if checkpreviouslike:
+                        nuggetlike=NuggetsLikes(user_id=login_user_id,nugget_id=nugget_id,created_date=datetime.now())
+                        db.add(nuggetlike)
+                        db.commit()
+                        
+                        if nuggetlike:
+                            notification_type=5
+                            Insertnotification(db,check_nuggets.user_id,login_user_id,notification_type,nugget_id)
+                            status=1
+                            msg = 'Success'
+                        else:
+                            msg='failed to like'
+                            
+                    else:
+                        msg = 'Your already liked this nugget'
+                elif like == 2:
+                    checkpreviouslike=db.query(NuggetsLikes).filter(NuggetsLikes.nugget_id == nugget_id,NuggetsLikes.user_id == login_user_id).first()
+                    if checkpreviouslike:
+                        deleteresult=db.query(NuggetsLikes).filter_by(id = checkpreviouslike.id ).delete()
+                        if deleteresult:
+                            status = 1
+                            msg="Success"
+                        else:
+                            msg='failed to unlike'
+                    else:
+                        msg='you not yet liked this nugget'
+            return {"status":status,"msg":msg}            
+        
+        
+        
 
 # 28. Delete Nugget
 @router.post("/deletenugget")
 async def deletenugget(db:Session=Depends(deps.get_db),token:str=Form(...),nugget_id:int=Form(...)):
                          
-    return "done"
+    if token.strip() == "":
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    else:
+        access_token=checkToken(db,token)
+        
+        if access_token == False:
+            return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+        else:
+            status=0
+            msg="Invalid nugget id"
+            get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+            login_user_id=get_token_details.user_id
 
+            if IsAccountVerified(db,login_user_id) == False:
+                return {"status":0,"msg":"You need to complete your account validation before you can do this"}
+            
+            check_nugget_creater=db.query(Nuggets).filter(Nuggets.id == nugget_id,Nuggets.user_id == login_user_id).first()
+            if check_nugget_creater:
+                delete_nuggets=db.query(Nuggets).filter(Nuggets.id == check_nugget_creater.id).update({"nugget_status":2})
+                db.commit()
+                
+                if delete_nuggets:
+                    if check_nugget_creater.type == 1:
+                        update_nugget_master=db.query(NuggetsMaster).filter_by(id = check_nugget_creater.nuggets_id).update({"status":0})
+                        update_notification=db.query(Notification).filter_by(ref_id=nugget_id).delete()
+                        db.commit()
+                        
+                        return {"status":1,"msg":"Nugget Deleted"}
+                    else:
+                        return {"status":1,"msg":"Nugget Deleted"}
+                           
+                else:
+                    return {"status":0,"msg":"Unable to delete"}
+                           
+            else:
+                return {"status":0,"msg":"Invalid nugget id"}
+                       
+                
 
 
 
 # 29. Nugget Comment List
 @router.post("/nuggetcommentlist")
 async def nuggetcommentlist(db:Session=Depends(deps.get_db),token:str=Form(...),nugget_id:int=Form(...)):
-                         
-    return "done"
+    if token.strip() == "":
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    else:
+        access_token=checkToken(db,token)
+        
+        if access_token == False:
+            return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+        else:
+            status=0
+            msg="Invalid nugget id"
+            get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+            login_user_id=get_token_details.user_id
 
+            if IsAccountVerified(db,login_user_id) == False:
+                return {"status":0,"msg":"You need to complete your account validation before you can do this"}
+            
+            access_check=NuggetAccessCheck(db,login_user_id,nugget_id)
+            if not access_check:
+                return {"status":0,"msg":"Unauthorized access"}
+                
+            check_nuggets=db.query(Nuggets).filter_by(id = nugget_id).first()
+            if check_nuggets:
+                commentlist=db.query(NuggetsComments).filter(NuggetsComments.id == NuggetsCommentsLikes.comment_id).filter(NuggetsCommentsLikes.user_id == login_user_id,NuggetsComments.nugget_id == check_nuggets.id)
+                commentlist=commentlist.filter(NuggetsComments.parent_id == None).group_by(NuggetsComments.id).order_by(NuggetsComments.modified_date.asc()).all()
+                
+                if commentlist:
+                    count=0
+                    for comment in commentlist:
+                        get_cmt_likes=db.query(NuggetsCommentsLikes).filter(NuggetsCommentsLikes.comment_id == comment.id)
+                        get_cmt_like=get_cmt_likes.all()
+                        total_like=0
+                        if get_cmt_like:
+                            total_like=get_cmt_likes.count()
+                            
+                        result_list=[]
+                        result_list.append({
+                                            "comment_id":comment.id,
+                                            "user_id":comment.user_id,
+                                            "editable":True if comment.user_id == login_user_id else False,
+                                            "name":comment.user.display_name,
+                                            "profile_image":comment.user.profile_img,
+                                            "comment":comment.content,
+                                            "commented_date":comment.created_date,
+                                            "liked":True if comment.liked > 0 else False,
+                                            "like_count":total_like
+                                        })
+                        replyarray=[]
+                        
+                        if get_cmt_like:
+                            replycount=0
+                            for reply in get_cmt_like:
+                                like=False
+                                if total_like > 0:
+                                    for likes in reply:
+                                        if likes.user_id == login_user_id:
+                                            like=True
 
+                                replyarray.append({
+                                                    "comment_id":reply.id,
+                                                    "user_id":reply.user_id,
+                                                    "editable":True if login_user_id == reply.user_id else False,
+                                                    "name":reply.user.display_name,
+                                                    "profile_image":reply.user.profile_img,
+                                                    "comment":reply.content,
+                                                    "commented_date":reply.created_date,
+                                                    "liked":like,
+                                                    "like_count":total_like
+                                                })
 
+                        result_list.append({"reply":replyarray})
+                    
+                    return {"status":1,"msg":"Success","comments":result_list}
+                else:
+                    return {"status":0,"msg":"No Comments"}
+                    
+            else:
+                return {"status":0,"msg":"Invalid Nugget id"}
+            
+            
+                
 
 # 30. Add or Reply Nugget Comment
 @router.post("/addnuggetcomment")
-async def addnuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(...),type:int=Form(None,description="1-comment,2-reply"),nugget_id:int=Form(...),
+async def addnuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(...),type:int=Form(None,description="1-comment,2-reply",ge=1,le=2),nugget_id:int=Form(...),
                            comment_id:int=Form(None),comment:str=Form(...)):
     
     if type == 2 and not comment_id:
         return {"status":0,"msg":"comment id required"}
+    
+    if token.strip() == "":
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    else:
+        access_token=checkToken(db,token)
         
-                         
-    return "done"
+        if access_token == False:
+            return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+        else:
+            status=0
+            msg="Invalid nugget id"
+            get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+            login_user_id=get_token_details.user_id
 
+            if IsAccountVerified(db,login_user_id) == False:
+                return {"status":0,"msg":"You need to complete your account validation before you can do this"}
+            
+            access_check=NuggetAccessCheck(db,login_user_id,nugget_id)
+            if not access_check:
+                return {"status":0,"msg":"Unauthorized access"}
+
+            check_nuggets=db.query(Nuggets).filter_by(id = nugget_id).first()
+            if check_nuggets:
+                nugget_comment=NuggetsComments(user_id=login_user_id,parent_id=comment_id,nugget_id=nugget_id,content=comment,created_date=datetime.now(),modified_date=datetime.now())
+                db.add(nugget_comment)
+                db.commit()
+                
+                if nugget_comment:
+                    status=1
+                    msg="Success"
+                    result_list={}
+                    result_list.update({
+                                        "comment_id":nugget_comment.id,
+                                        "user_id":login_user_id,
+                                        "editable":True,
+                                        "name":nugget_comment.user.display_name,
+                                        "profile_image":nugget_comment.user.profile_image,
+                                        "comment":nugget_comment.content,
+                                        "commented_date":nugget_comment.created_date,
+                                        "liked":False,
+                                        "like_count":0
+                                        })
+                    if type == 1:
+                        result_list.update({"reply":[]})
+                    notification_type=3
+                    Insertnotification(db,check_nuggets.user_id,login_user_id,notification_type,nugget_id)
+                else:
+                    msg="failed to add comment"       
+            if status == 1:
+                return {"status":status,"msg":msg,"comment":result_list}
+            
+            else:
+                return {"status":status,"msg":msg}
+                      
+            
 
 # 31. Edit Nugget Comment
 @router.post("/editnuggetcomment")
