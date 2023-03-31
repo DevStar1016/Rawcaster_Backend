@@ -5,7 +5,7 @@ from typing import List
 from app.utils import *
 from app.api import deps
 from sqlalchemy.orm import Session
-from datetime import datetime,date
+from datetime import datetime,date,time
 from sqlalchemy import func,case
 import re
 import base64
@@ -1766,7 +1766,7 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(...),content
             if anyissue == 1:
                 return {"status": 0, "msg": "Sorry! Share with groups or friends list not correct."}
             else:
-                add_nuggets_master=NuggetsMaster(user_id=login_user_id,content=content,metadata1=metadata,poll_duration=poll_duration,created_date=datetime.now(),status=1)
+                add_nuggets_master=NuggetsMaster(user_id=login_user_id,content=content,metadata1=metadata,poll_duration=poll_duration,created_date=datetime.now(),status=0)
                 db.add(add_nuggets_master)
                 db.commit()
                 
@@ -1858,6 +1858,10 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(...),content
                                 add_notification_sms_email= addNotificationSmsEmail(db,totalmembers,email_detail,login_user_id)
 
                         nugget_detail=get_nugget_detail(db,add_nuggets.id,login_user_id)  # Pending
+                        
+                        # Update Nugget Master
+                        update_nuggets_master=db.query(NuggetsMaster).filter_by(id == add_nuggets_master.id).update({"status":1})
+                        db.commit()
 
                         return {"status":1,"msg":"Nuggets created successfully!","nugget_detail":nugget_detail}
                     else:
@@ -2178,176 +2182,666 @@ async def editnugget(db:Session=Depends(deps.get_db),token:str=Form(...),nugget_
     return "done"
 
 
-
-# # Change password 
-# @router.post("/change_password")
-# async def change_password(db:Session=Depends(deps.get_db), current_user:User=Depends(deps.get_current_user),*,change_password_details:schemas.ChangePassword):
-   
-#     if current_user:
-        
-#         get_user=db.query(User).filter(User.id == current_user.id,User.status == 1).first()
-        
-#         if get_user:
-           
-#             check_pwd=db.query(User).filter(User.id == get_user.id,User.status == 1,User.password == verify_password(change_password_details.current_password)).first()
-#             if not check_pwd:
-#                 raise HTTPException(
-#                 status_code=400,
-#                 detail=[{"msg":"Please,Check your Old password"}],
-#                 )
-            
-#             get_user.password=get_password_hash(change_password_details.new_password)
-
-#             return "Password Changed Successfully"
-
-#         else:
-#             raise HTTPException(
-#             status_code=400,
-#             detail=[{"msg":"User not found"}],
-#             )
-#     else:
-#         raise HTTPException(
-#             status_code=400,
-#             detail=[{"msg":"Invalid request"}],
-#         )
-
-
-# # Change password 
-# @router.get("/view_profile/{user_id}")
-# async def view_profile(db:Session=Depends(deps.get_db),*,current_user:User=Depends(deps.get_current_user),user_id:int):
-   
-#     if current_user:
-#         get_user=user.get(db,id=user_id)
-#         user_details={}
-#         if get_user:
-#             get_address_details=db.query(CustomerAddress).filter(CustomerAddress.user_id == user_id,CustomerAddress.status == 1).all()
-#             user_address=[]
-            
-#             for adres in get_address_details:
-  
-#                 user_address.append({"address_id":adres.id,"address_type":adres.address_type,
-#                                     "address_type_name":"Hospital" if adres.address_type == 1 else "Clinic" if adres.address_type == 2 else "Warehouse" if adres.address_type == 3 else None,
-#                                     "address":adres.address,"city":adres.city,"state":adres.state,"pin_code":adres.pin_code})
-            
-#             user_details.update({"user_id":get_user.id,"name":get_user.name,"email":get_user.email if get_user.email else "",
-#                                     "mobile_no":get_user.mobile_no if get_user.mobile_no else "",
-#                                     "customer_address":user_address if user_address!= [] else 0,
-#                                     "created_at":common_date(get_user.created_at,without_time=1)})
-#             return user_details
-#         else:
-#             raise HTTPException(
-#             status_code=400,
-#             detail=[{"msg":"Invalid user"}],
-#             )
+# 36. Share Nugget
+@router.post("/sharenugget")
+async def sharenugget(db:Session=Depends(deps.get_db),token:str=Form(...),nugget_id:int=Form(...),share_type:int=Form(...,description="1-public,2-only me,3-groups,4-individual,5-both group & individual ,6-all my friends"),
+                     share_with:str=Form(None,description='{"friends":[1,2,3],"groups":[1,2,3]}')):
     
-#     else:
-#         raise HTTPException(
-#             status_code=400,
-#             detail=[{"msg":"Invalid request"}],
-#         )
-
-# # Add Customer Address
-# @router.post("/add_address")
-# def add_address(db: Session = Depends(deps.get_db),current_user:User=Depends(deps.get_current_user), *,address_details:schemas.AddAddress):
-#     if current_user.user_type == 3:
-#         get_user=user.get(db,id=address_details.user_id)
-#         if not get_user:
-#             raise HTTPException(
-#                 status_code=400,
-#                 detail=[{"msg":"Invalid user"}],
-#                 )
-#         # Check City And State
-#         check_city=db.query(Cities).filter(Cities.id ==address_details.city,Cities.state_id==address_details.state).first()
-#         if check_city:
+    if token.strip() == "":
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    else:
+        access_token=checkToken(db,token)
         
-#             check_address=db.query(CustomerAddress).filter(CustomerAddress.user_id == address_details.user_id,CustomerAddress.address_type == address_details.address_type,CustomerAddress.status == 1).first()
-#             if check_address:
-#                 check_address.name=address_details.name
-#                 check_address.email=address_details.email
-#                 check_address.phone_number=address_details.mobile_no
-#                 check_address.address=address_details.address
-#                 check_address.city=check_city.id
-#                 check_address.state=check_city.state_id
-#                 check_address.pin_code=address_details.pin_code
-#                 db.commit()
-#                 return "Update successfully"
+        if access_token == False:
+            return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+        else:
+            if (share_type == 3 or share_type == 4 or share_type == 5) and not share_with:
+                return {"status":0,"msg":"Sorry! Share with can not be empty."}
+            
+            elif share_type == 3 and not share_with.groups:
+                return {"status":0,"msg":"Sorry! Share with groups list missing."}
                 
-#             else:
-#                 add_address=CustomerAddress(user_id=address_details.user_id,name=get_user.name,email=get_user.email,phone_number=address_details.mobile_no,
-#                                             address_type=address_details.address_type,address=address_details.address,city=address_details.city,state=address_details.state,
-#                                             pin_code=address_details.pin_code,status=1,created_at=datetime.now(settings.tz_NY))
-#                 db.add(add_address)
-#                 db.commit()
-#                 return "Add Address Successfully."
-#         else:
-#             raise HTTPException(
-#             status_code=400,
-#             detail=[{"msg":"Check your City and State"}],
-#             )
-#     else:
-#         raise HTTPException(
-#         status_code=400,
-#         detail=[{"msg":"Invalid user"}],
-#         )
+            elif share_type == 4 and not share_with.friends:
+                return {"status":0,"msg":"Sorry! Share with friends list missing."}
+            
+            elif share_type == 5 and ((not hasattr(share_with, 'groups') or share_with.groups == '' or len(share_with.groups) == 0) and (not hasattr(share_with, 'friends') or share_with.friends == '' or len(share_with.friends) == 0)):
+                return {"status":0,"msg":"Sorry! Share with groups or friends list missing."}
+
+            else:
+                get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+                login_user_id=get_token_details.user_id
+                
+                if IsAccountVerified(db,login_user_id) == False:
+                    return {"status":0,"msg":"You need to complete your account validation before you can do this"}
+                
+                access_check= NuggetAccessCheck(db,login_user_id,nugget_id)
+                if not access_check:
+                    return {"status":0,"msg":"Unauthorized access"}
+                
+                anyissue=0
+                if share_type == 3 or share_type == 4 or share_type == 5:
+                    if not share_with:
+                        for key,val in share_with:
+                            if val:
+                                if key == 'groups' and share_type == 3 or share_type == 5:
+                                    query=db.query(FriendGroups).filter(FriendGroups.id == val,FriendGroups.status == 1 ,FriendGroups.created_by == login_user_id)
+                                    get_groups = {row.id: row.id for row in query.all()}
+
+                                    if len(get_groups) != len(val):
+                                        anyissue = 1
+                                elif key == 'friends' and share_type == 4 or share_type == 5:
+                                    query=db.query(MyFriends).filter(MyFriends.status == 1 ,MyFriends.request_status == 1).filter(or_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == login_user_id))
+                                    get_friends = {row.id: row.id for row in query.all()}
+                                    
+                                    if len(list(set(val) - set(get_friends))) > 0:
+                                        anyissue = 1
+                if anyissue == 1:
+                    return {"status":0,"msg":"Sorry! Share with groups or friends list not correct."}
+                    
+                else:
+                    status =0
+                    nugget_detail=[]
+                    msg='Invalid nugget id' 
+                    
+                    nugget_id = nugget_id if nugget_id else 0
+                    check_nugget=db.query(Nuggets).filter_by(id = nugget_id,share_type=1,status=1).first()
+                    if check_nugget:
+                        share_nugget=Nuggets(nuggets_id=check_nugget.nuggets_id,user_id=login_user_id,type=2,share_type=share_type,created_date=datetime.now())
+                        db.add(share_nugget)
+                        db.commit()
+                        
+                        if share_nugget:
+                            totalmembers=[]
+                            if share_type == 6 or share_type == 1:
+                                requested_by=None
+                                request_status=1
+                                response_type=1
+                                search_key=None
+                                totalmember=get_friend_requests(db,login_user_id,requested_by,request_status,response_type,search_key)
+                            
+                                totalmembers=totalmember['accepted']
+                            
+                            # If share type is Group or Individual
+                            if share_type == 3 or share_type == 4 or share_type == 5:
+                                if share_type == 3:
+                                     share_with.friends=''
+                                
+                                if share_type == 4:
+                                    share_with.groups =''
+                                
+                                if share_with:
+                                    for key,val in share_with:
+                                        if val:
+                                            for shareid in val:
+                                                type=2 if key == 'friends' else 1
+                                                nuggets_share_with=NuggetsShareWith(nuggets_share_with=share_nugget.id,type=type,share_with=shareid)
+                                                db.add(nuggets_share_with)
+                                                db.commit()
+                                                
+                                                if nuggets_share_with:
+                                                    if key == "friends":
+                                                        totalmembers.append(shareid)
+                                                    
+                                                    else:
+                                                        getgroupmember=db.query(FriendGroupMembers).filter_by(group_id = shareid).all()
+                                                        
+                                                        if getgroupmember:
+                                                            for member in getgroupmember:
+                                                                if member.user_id in totalmembers:
+                                                                    totalmember.append(member.user_id)
+                            
+                            nugget_detail=get_nugget_detail(db,share_nugget.id,login_user_id)                     
+                                                        
+                            status =1
+                            msg="Success"
+                            
+                            if totalmember:
+                                for users in totalmember:
+                                    ref_id=8
+                                    insert_notification =Insertnotification(db,login_user_id,ref_id,check_nugget.id)
+                        else:
+                            status=0
+                            msg='Failed'
+                    else:
+                        msg = 'Invalid nugget id'
+                            
+                return {"status":status,"msg":msg,"nugget_detail":nugget_detail}         
+                            
+                     
+                     
 
 
 
-# # List User
-# @router.post("/list users")
-# async def list_users(db:Session=Depends(deps.get_db), current_user:User=Depends(deps.get_current_user),*,page:int=1,size:int=10,user_type:int=Form(...,description="2-vendor,3-customer",ge=2,le=3),name:str=Form(None),email:str=Form(None),mobile_no:str=Form(None)):
-   
-#     if current_user.user_type == 1:
-#         get_user_list=db.query(User).filter(User.user_type == user_type,User.status == 1)
 
-#         if name:
-#             get_user_list=get_user_list.filter(User.name.like(name+"%"))
-#         if email:
-#             get_user_list=get_user_list.filter(User.email.like(email+"%"))
-
-#         if mobile_no:
-#             get_user_list=get_user_list.filter(User.mobile_no.like(mobile_no+"%"))
-
-#         get_user_list=get_user_list.order_by(User.status.asc())
-
-#         get_user_list_count=get_user_list.count()
-
-
-#         limit,offset=pagination(get_user_list_count,page,size)
-
-#         get_user_list=get_user_list.limit(limit).offset(offset).all()
-#         list_of_user=[]
-#         for user in get_user_list:
-#             list_of_user.append({"user_id":user.id,"name":user.name if user.name else "","email":user.email if user.email else "",
-#                                 "mobile_no":user.mobile_no if user.mobile_no else "","user_type":user.user_type,
-#                                 "user_type_name":"Vendor" if user.user_type == 2 else "Customer" if user.user_type == 3 else ""})
+# 37. Get individual nugget detail
+@router.post("/getnuggetdetail")
+async def getnuggetdetail(db:Session=Depends(deps.get_db),token:str=Form(...),nugget_id:int=Form(...)):
+    if token.strip() == "":
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    else:
+        access_token=checkToken(db,token)
         
-#         return paginate(page,size,list_of_user,get_user_list_count)
-#     else:
-#         raise HTTPException(
-#         status_code=400,
-#         detail=[{"msg":"Invalid user"}],
-#         )
+        if access_token == False:
+            return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+        else:
+            get_token_details=db.query(ApiTokens).filter_by(token == access_token).first()
+            
+            login_user_id=get_token_details.user_id
+            
+            check_nuggets=NuggetAccessCheck(db,login_user_id,nugget_id)
+            if check_nuggets ==True:
+                nugget_detail=get_nugget_detail(db,nugget_id,login_user_id)
+                return {"status":1,"msg":"success","nugget_detail":nugget_detail}
+                     
+            else:
+                return {"status":0,"msg":"Unauthorized access"}
+            
+            
+# 38. Get Event type
+@router.post("/getnuggetdetail")
+async def getnuggetdetail(db:Session=Depends(deps.get_db),token:str=Form(...)):
+    if token.strip() == "":
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    else:
+        access_token=checkToken(db,token)
+        
+        if access_token == False:
+            return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+        else:
+            get_token_details=db.query(ApiTokens).filter_by(token == access_token).first()
+            
+            login_user_id=get_token_details.user_id
+            
+            get_eventtypes=db.query(EventTypes).filter_by(status=1).all()
+            result_list=[]
+            for type in get_eventtypes:
+                result_list.append({"id":type.id,"type":type.title if type.title else ""})
+
+            return {"status":1,"msg":"Success","event_types":result_list}
 
 
+# 39. Get Event layout
+@router.post("/geteventlayout")
+async def geteventlayout(db:Session=Depends(deps.get_db),token:str=Form(...)):
+    if token.strip() == "":
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    else:
+        access_token=checkToken(db,token)
+        
+        if access_token == False:
+            return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+        else:
+            get_token_details=db.query(ApiTokens).filter_by(token == access_token).first()
+            
+            login_user_id=get_token_details.user_id 
+
+            get_eventlayouts=db.query(EventLayouts).filter_by(status = 1).all()
+            
+            result_list = []
+            
+            for type in get_eventlayouts:
+                result_list.append({"id":type.id,"name":type.title if type.title else ''})
+            
+            return {"status":1,"msg":"Success","event_layouts":result_list}
 
 
-# @router.delete("/delete_user")
-# def delete_user(*,db: Session = Depends(deps.get_db),current_user: User = Depends(deps.get_current_user),user_id:int=Form(...)):
-#     if current_user.user_type == 1:
-
-#         check_user=db.query(User).filter(User.id == user_id,User.status == 1).first()
+# 40. Add Event
+@router.post("/addevent")
+async def addevent(db:Session=Depends(deps.get_db),token:str=Form(...),event_title:str=Form(...),event_type:int=Form(...),event_start_date:date=Form(...),event_start_time:time=Form(None),
+                   event_message:str=Form(None),event_participants:int=Form(...),event_duration:time=Form(...),event_layout:int=Form(...),
+                   event_host_audio:UploadFile=File(...),event_host_video:UploadFile=File(...),event_guest_audio:UploadFile=File(...),event_guest_video:UploadFile=File(...),event_melody:UploadFile=File(...),
+                   event_invite_mails:UploadFile=File(None),event_invite_groups:str=Form(None),event_invite_friends:str=Form(None),event_melody_id:int=Form(None),
+                   waiting_room:int=Form(None),join_before_host:int=Form(None),sound_notify:int=Form(None),user_screenshare:int=Form(None),event_banner:UploadFile=File(...)):
     
-#         if check_user:
-#             check_user.status = -1
-#             db.commit()
-#             return "Deleted Successfully"
-
-#         else:
-#             raise HTTPException(
-#             status_code=400,
-#             detail=[{"msg":"Invalid user"}])
+    event_invite_friends=json.loads(event_invite_friends) if event_invite_friends else None
+    event_invite_custom=json.loads(event_invite_mails) if event_invite_mails else None
+    event_invite_groups=json.loads(event_invite_groups) if event_invite_groups else None
     
-#     else:
-#         raise HTTPException(
-#             status_code=400,
-#             detail=[{"msg":"Invalid user"}])
+    if event_title.strip() == "":
+        return {"status":0,"msg":"Event title cant be blank."}
+    
+    
+    if token.strip() == "":
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    else:
+        
+        access_token=checkToken(db,token)
+        
+        if access_token == False:
+            return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+        else:
+            get_token_details=db.query(ApiTokens).filter_by(token == access_token).first()
+            
+            login_user_id=get_token_details.user_id 
+            
+            if IsAccountVerified(db,login_user_id) == False:
+                return {"status":0,"msg":"You need to complete your account validation before you can do this"}
+                
+            user=db.query(User).filter_by(id == login_user_id).first()
+            
+            if user:
+                userstatus=db.query(UserStatusMaster).filter_by(id = user.user_status_id).first()
+                
+                if userstatus:
+                    max_parti=userstatus.max_event_participants_count  # Max Participants Count
+                
+            if event_participants > max_parti:
+                return {"status":0,"msg":"Event participants count should be less than 100."}
+                
+            if event_participants < 2:
+                return {"status":0,"msg":"Event participants count should be greater than 1."}
+                
+            else:
+                setting=db.query(UserSettings).filter_by(user_id = login_user_id).first()
+                flag='event_banner'
+                cover_img=defaultimage(flag)
+                
+                if setting and setting.meeting_header_image != None:  
+                    cover_img=setting.meeting_header_image
+                
+                server_id =None
+                
+                server=db.query(KurentoServers).filter_by(status=1).limit(1).first()
+                
+                if server:
+                    server_id=server.server_id
+                    
+                hostname=user.display_name
+                reference_id=f"RC{random.randint(1,499)}{datetime.now().timestamp()}"
+                
+                
+                dt = datetime.strptime(str(event_start_date) + ' ' + str(event_start_time), '%Y-%m-%d %H:%M:%S')
+                datetime_str = dt.strftime('%Y-%m-%d %H:%M:%S')
+                
+                new_event=Events(title=event_title,ref_id=reference_id,server_id=server_id if server_id != None else None,event_type_id=event_type,
+                                 event_layout_id=event_layout,no_of_participants=event_participants,duration=event_duration,start_date_time=datetime_str,
+                                 created_at=datetime.now(),created_by=login_user_id,cover_img=cover_img,waiting_room=waiting_room,join_before_host=join_before_host,
+                                 sound_notify=sound_notify,user_screenshare=user_screenshare)
+                db.add(new_event)
+                db.commit()
+                
+                if new_event:
+                    totalfriends=[]
+                    if event_type == 1:
+                        requested_by=None
+                        request_status=1
+                        response_type=1
+                        search_key=None
+                        
+                        totalfriend=get_friend_requests(db,login_user_id,requested_by,request_status,response_type,search_key)
+                        totalfriends=totalfriend['accepted']
+                    
+                    #  Default Audio Video Settings
+                    new_default_av=EventDefaultAv(event_id=new_event.id,default_host_audio=event_host_audio,
+                                                  default_host_video=event_host_video,default_guest_audio=event_guest_audio,
+                                                  default_guest_video=event_guest_video)
+
+                    db.add(new_default_av)
+                    db.commit()
+                    
+                    # Banner Image
+                    if event_banner:
+                        print("Pennding")
+                    
+                    # Event Melody
+                    if event_melody:
+                        print("Pending")
+                    
+                    else:
+                        temp=event_melody_id if event_melody_id else 1
+                        update_event_melody_id = db.query(Events).filter_by(id = new_event.id).update({"event_melody_id":temp if temp > 0 else 1})
+                        db.commit()
+                    
+                    if event_invite_friends:
+                        for value in event_invite_friends:
+                            invite_friends = EventInvitations(
+                                                type=1,
+                                                event_id=new_event.id,
+                                                user_id=value,
+                                                invite_sent=0,
+                                                created_at=datetime.now(),
+                                                created_by=login_user_id
+                                            )
+                            db.add(invite_friends)
+                            db.commit()
+                            
+                            if value not in totalfriends:
+                                totalfriends.append(value)
+                            
+                    if event_invite_groups:
+                        for value in event_invite_friends:
+                            invite_groups = EventInvitations(
+                                                type=2,
+                                                event_id=new_event.id,
+                                                user_id=value,
+                                                invite_sent=0,
+                                                created_at=datetime.now(),
+                                                created_by=login_user_id
+                                            )
+                            db.add(invite_groups)
+                            db.commit()
+                            getgroupmember=db.query(FriendGroupMembers).filter_by(group_id = value).all()
+                            
+                            if getgroupmember:
+                                for member in getgroupmember:
+                                    if member.user_id not in totalfriends:
+                                        totalfriends.append(member.user_id)
+                    
+                    invite_url=inviteBaseurl()
+                    link=f"{invite_url}join/event/{reference_id}"
+                    
+                    subject = 'Rawcaster - Event Invitation'
+                    body=''
+                    sms_message=''
+                    
+                    if new_event:
+                        sms_message,body=eventPostNotifcationEmail(db,new_event.id)
+                    
+                    if event_invite_custom:
+                        for value in event_invite_custom:
+                            # check if e-mail address is well-formed
+                            if check_mail(value):
+                                invite_custom = EventInvitations(
+                                                type=3,
+                                                event_id=new_event.id,
+                                                user_id=value,
+                                                invite_sent=0,
+                                                created_at=datetime.now(),
+                                                created_by=login_user_id
+                                            )
+                                db.add(invite_custom)
+                                db.commit()
+                                
+                                if invite_custom:
+                                    to=value
+                                    send_mail=send_email(to,subject,body)
+                                    
+                    event=get_event_detail(db,new_event.id,login_user_id)      # Pending           
+                            
+                    if totalfriends:
+                        for users in totalfriends:
+                            notification_type=9
+                            
+                            Insertnotification(db,users,login_user_id,notification_type,new_event.id)
+                            
+                            message_detail={"message":"Posted new event",
+                                            "data":{"refer_id":new_event.id,"type":"add_event"},
+                                            "type":"events"
+                                            }
+
+                            pushNotify(db,totalfriends,message_detail,login_user_id)
+                            
+                            email_detail={"subject":subject,"mail_message":body,"sms_message":sms_message,"type":"events"}
+                            addNotificationSmsEmail(db,totalfriends,email_detail,login_user_id)
+                            
+                    return {"status":1,"msg":"Event saved successfully !","ref_id":reference_id,"event_detail":event}   
+                            
+                else:
+                    return {"status":0,"msg":"Event cant be created."}   
+                                 
+                                 
+# 41. List Event 
+@router.post("/listevents")
+async def listevents(db:Session=Depends(deps.get_db),token:str=Form(...),user_id:int=Form(None),event_type:int=Form(None,description="1->My Events, 2->Invited Events, 3->Public Events",ge=1,le=3),type_filter:int=Form(None,description="1 - Event,2 - Talkshow,3 - Live",ge=1,le=3),page_number:int=Form(default=1)):
+    if token.strip() == "":
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    else:
+        
+        access_token=checkToken(db,token)
+        
+        if access_token == False:
+            return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+        else:
+            get_token_details=db.query(ApiTokens).filter_by(token == access_token).first()
+            
+            login_user_id=get_token_details.user_id 
+            get_user_setting=db.query(UserSettings).filter(UserSettings.user_id == get_token_details.user_id).first()
+            user_public_event_display_setting=get_user_setting.public_event_display if get_user_setting else ''
+            
+            current_page_no=page_number
+            event_type=event_type if event_type else 0
+            requested_by=None
+            request_status=1
+            response_type=1
+            search_key=None
+            my_friend=get_friend_requests(db,login_user_id,requested_by,request_status,response_type,search_key)
+            
+            my_friends=my_friend['accepted']
+            my_followings=getFollowings(db,login_user_id)
+            
+            event_list=db.query(Events).filter_by(status=1,event_status=1)
+            
+            groups = (
+                db.query(FriendGroupMembers.group_id)
+                .filter_by(user_id=login_user_id)
+                .group_by(FriendGroupMembers.group_id)
+                .all()
+            )
+            group_ids = [group[0] for group in groups]
+            
+            if event_type == 1:  # My events (Created by User)
+                event_list=event_list.filter_by(created_by = login_user_id)
+            
+            elif event_type == 2:  # Invited Events
+                event_list=event_list.filter(EventInvitations.event_id == Events.id).filter_by(type = 1,user_id = login_user_id).filter(EventInvitations.group_id.in_(group_ids))
+            
+            elif event_type == 3: # Open Events
+                event_list=event_list.filter(Events.event_type_id == 1,Events.created_by != login_user_id)
+            
+            elif event_type == 5:
+                event_list=event_list.filter(Events.created_by == login_user_id)
+                
+            elif user_id != '':
+                if user_id == login_user_id:
+                    event_list=event_list.filter(EventInvitations.event_id == Events.id,EventInvitations.type == 1,EventInvitations.user_id == login_user_id)
+                    event_list=event_list.filter(EventInvitations.group_id.in_(groups),Events.created_by == login_user_id,Events.event_type_id == 1)
+                else:
+                    event_list=event_list.filter(Events.created_by == user_id,Events.event_type_id == 1)
+                                        
+            else:
+                my_followers=[]  # Selected Connections id's
+                followUser=db.query(FollowUser).filter_by(follower_userid=login_user_id).all()
+                if followUser:
+                    my_followers=[group_list.following_userid for group_list in followUser]
+                
+                if user_public_event_display_setting == 0:  # Rawcaster
+                    type=None
+                    rawid=GetRawcasterUserID(db,type)
+                    event_list=event_list.filter(Events.created_by == rawid)
+                    
+                elif user_public_event_display_setting == 2:  # All Connections
+                    event_list=event_list.filter(EventInvitations.event_id == Events.id).filter(EventInvitations.type == 1,EventInvitations.user_id == login_user_id).filter(Events.created_by == login_user_id).filter(Events.event_type_id.in_([1,2,3]),Events.created_by.in_(my_friends))
+                
+                elif user_public_event_display_setting == 1:   # Public
+                    event_list=event_list.filter(EventInvitations.event_id == Events.id).filter(EventInvitations.type == 1,EventInvitations.user_id == login_user_id)
+                    event_list=event_list.filter(EventInvitations.group_id.in_(group_ids),Events.created_by == login_user_id,Events.event_type_id.in_([3]),Events.created_by.in_(my_followings),Events.event_type_id == 1)
+                
+                elif user_public_event_display_setting == 3:  # Specific Connections
+                    specific_friends=[]  # Selected Connections id's
+                    online_group_list=db.query(UserProfileDisplayGroup).filter_by(user_id = login_user_id,profile_id='public_event_display').all()
+                    
+                    if online_group_list:
+                        specific_friends=[group_list.groupid for group_list in online_group_list]    
+                    
+                    event_list=event_list.filter(EventInvitations.event_id == Events.id).filter(EventInvitations.type == 1,EventInvitations.user_id == login_user_id)
+                    event_list=event_list.filter(Events.created_by == login_user_id).filter(Events.created_by.in_(specific_friends),Events.event_type_id.in_([1,2,3]))
+                
+                elif user_public_event_display_setting == 4: # All Groups
+                    event_list=event_list.filter(EventInvitations.event_id == Events.id,Events.created_by == FriendGroupMembers.user_id,FriendGroupMembers.group_id == FriendGroups.id).filter(FriendGroups.status == 1)
+                
+                    event_list=event_list.filter(or_(Events.created_by == login_user_id,FriendGroups.created_by == login_user_id))
+                    event_list=event_list.filter(or_(Events.event_type_id == 2,EventInvitations.type == 1,EventInvitations.user_id == login_user_id),(Events.event_type_id == 2,EventInvitations.type == 2,EventInvitations.group_id.in_(group_ids)),(Events.event_type_id == 3,Events.created_by.in_(my_followers)),(Events.event_type_id.in_([1],Events.created_by == login_user_id)))
+                
+                elif user_public_event_display_setting == 5:  #  Specific Groups
+                    my_friends=[]  # Selected Connections id's
+                    online_group_list=db.query(UserProfileDisplayGroup).filter_by(user_id=login_user_id,profile_id='public_event_display').all()
+                    
+                    if online_group_list:
+                        my_friends=[group_list.groupid for group_list in online_group_list]
+                    
+                    event_list=event_list.filter(EventInvitations.event_id == Events.id,Events.created_by == FriendGroupMembers.user_id,FriendGroupMembers.group_id == FriendGroups.id).filter(FriendGroups.status == 1)
+                    event_list=event_list.filter(or_(Events.created_by == login_user_id,FriendGroups.created_by == login_user_id,FriendGroups.id.in_(my_friends)))
+                    event_list=event_list.filter(or_(Events.event_type_id == 2,EventInvitations.type == 1,EventInvitations.user_id == login_user_id),(Events.event_type_id == 2,EventInvitations.type == 2,EventInvitations.group_id.in_(group_ids)),(Events.event_type_id == 3,Events.created_by.in_(my_followers)),(Events.event_type_id.in_([1],Events.created_by == login_user_id)))
+                
+                elif user_public_event_display_setting == 6:  # My influencers
+                    event_list=event_list.filter(EventInvitations.event_id == Events.id)
+                    event_list=event_list.filter(or_(Events.created_by.in_(my_followers),Events.created_by == login_user_id))
+                    event_list=event_list.filter(or_(Events.event_type_id ==2,EventInvitations.type == 1,EventInvitations.user_id == login_user_id),(Events.event_type_id == 2,EventInvitations.type == 2,EventInvitations.group_id.in_(group_ids)),(Events.event_type_id.in_([1,3]),Events.created_by == login_user_id))
+                
+                else:  # Mine only
+                    event_list=event_list.filter(Events.created_by == login_user_id)
+            
+            if event_type == 4:
+                event_list=event_list.filter(Events.start_date_time < datetime.now())
+            
+            elif event_type == 5:
+                event_list=event_list
+            
+            else:
+                event_list=event_list.filter(func.DATE_ADD(Events.start_date_time,func.INTERVAL(func.SUBSTRING(Events.duration,1,func.CHAR_LENGTH(Events.duration) - 3),'HOUR_MINUTE')) > func.now())
+            
+            event_list=event_list.filter(Events.status == 1)
+            
+            if type_filter != '':
+                event_list=event_list.filter(Events.type.in_(type_filter))
+            
+            event_list=event_list.group_by(Events.id)
+            
+            get_row_count=event_list.count()
+            
+            if get_row_count < 1:
+                return {"status":1,"msg":"No Result found","events_count":0,"total_pages":1,"current_page_no":1,"events_list":[]}
+            else:
+                default_page_size=20
+                
+                limit,offset=get_pagination(get_row_count,current_page_no,default_page_size)
+                event_list=event_list.limit(limit).offset(offset)
+                
+                if event_type == 4 or event_type == 5:
+                    event_list=event_list.order_by(Events.start_date_time.desc())
+                else:
+                    event_list=event_list.order_by(Events.start_date_time.asc())
+                
+                event_list=event_list.all()
+                
+                result_list=[]
+                if event_list:
+                    for event in event_list:
+                        waiting_room=1
+                        join_before_host=1
+                        sound_notify=1
+                        user_screenshare=1
+                        
+                        settings=UserSettings.filter_by(user_id = event.created_by).first()
+                        
+                        if settings:
+                            waiting_room=settings.waiting_room
+                            join_before_host=settings.join_before_host
+                            sound_notify=settings.participant_join_sound
+                            user_screenshare=settings.screen_share_status
+                        
+                        
+                        default_melody=db.query(EventMelody).filter_by(id = event.event_melody_id).first()
+                        
+                        default_host_audio=[]
+                        default_host_video=[]
+                        default_guest_audio=[]
+                        default_guest_video=[]
+                        event_default_av=db.query(EventDefaultAv).filter_by(event_id = event.id).all()
+                        for def_av in event_default_av:
+                            default_host_audio.append(def_av.default_host_audio)
+                            default_host_video.append(def_av.default_host_video)
+                            default_guest_audio.append(def_av.default_guest_audio)
+                            default_guest_video.append(def_av.default_guest_video)
+                            
+                        result_list.append({
+                                            "event_id":event.id,
+                                            "event_name":event.title,
+                                            "reference_id":event.ref_id,
+                                            "type":event.type,
+                                            "event_type_id":event.event_type_id,
+                                            "event_layout_id":event.event_layout_id,
+                                            "message":event.description,
+                                            "start_date_time":event.start_date_time,
+                                            "start_date":event.start_date_time,
+                                            "start_time":event.start_date_time,
+                                            "duration":event.duration,
+                                            "no_of_participants":event.no_of_participants,
+                                            "banner_image":event.cover_img,
+                                            "is_host":1 if event.created_by else 0,
+                                            "created_at":event.created_at,
+                                            "original_user_name":event.user.display_name,
+                                            "original_user_id":event.user.id,
+                                            "original_user_image":event.user.profile_img,
+                                            "event_melody_id":event.event_melody_id,
+                                            "waiting_room":event.waiting_room if event.waiting_room == 1 or event.waiting_room == 0 else waiting_room,
+                                            "join_before_host":event.join_before_host if event.join_before_host == 1 or event.join_before_host == 0 else join_before_host,
+                                            "sound_notify":event.sound_notify if event.sound_notify == 0 or event.sound_notify == 0 else sound_notify,
+                                            "user_screenshare": event.user_screenshare if event.user_screenshare ==1 or event.user_screenshare == 0 else user_screenshare,
+                                            "melodies":{"path":default_melody.path,"type":default_melody.type,"is_default":None},
+                                            "default_host_audio":default_host_audio,
+                                            "default_host_video":default_host_video,
+                                            "default_guest_audio":default_guest_audio,
+                                            "default_guest_video":default_guest_video
+                                            })
+                            
+                return {"status":1,",msg":"Success","events_count":get_row_count,"total_pages":get_row_count / default_page_size,"current_page_no":current_page_no,"events_list":result_list}           
+                            
+
+# 47. List Notifications
+@router.post("/listnotifications")
+async def listnotifications(db:Session=Depends(deps.get_db),token:str=Form(...),page_number:int=Form(default=1)):
+    if token.strip() == "":
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    else:
+        
+        access_token=checkToken(db,token)
+        
+        if access_token == False:
+            return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+        else:
+            get_token_details=db.query(ApiTokens).filter_by(token == access_token).first()
+            
+            login_user_id=get_token_details.user_id 
+            
+            current_page_no=page_number
+            
+            get_notification=db.query(Notification).filter(Notification.status == 1,Notification.user_id == login_user_id)
+            get_row_count=get_notification.count()
+            if get_row_count < 1:
+                return {"status":2,"msg":"No Result found"}
+            else:
+                default_page_size=25
+                limit,offset=get_pagination(get_row_count,current_page_no,default_page_size)
+                
+                get_notification=get_notification.limit(limit).offset(offset).order_by(Notification.id.desc()).all()
+                result_list=[]
+                for res in get_notification:
+                    friend_request_id=None
+                    friend_request_status=None
+                    
+                    if res.notification_type == 11:
+                        myfriends=db.query(MyFriends).filter_by(sender_id = res.notification_origin_id,receiver_id = res.user_id,request_status=0,status=1).first()
+                        if myfriends:
+                            friend_request_id=myfriends.id
+                            friend_request_status=myfriends.request_status
+                    
+                        
+                        
+                    result_list.append({
+                                        "notification_id":res.id,
+                                        "user_id":res.notification_origin_id,
+                                        "userName":res.user2.display_name,
+                                        "userImage":res.user2.profile_img,
+                                        "type":res.notification_type,
+                                        "friend_request_id":friend_request_id,
+                                        "friend_request_status":friend_request_status,
+                                        "ref_id":res.ref_id if res.ref_id else None,
+                                        "is_read":res.is_read if res.is_read else None,
+                                        "read_datetime":res.read_datetime if res.read_datetime else None,
+                                        "created_datetime":res.created_datetime if res.created_datetime else None
+                                        })
+                total_unread_count=db.query(Notification).filter_by(status=1,is_read=0,user_id=login_user_id).count()
+                
+                return {"status":1,"msg":"Success","total_pages":get_row_count / default_page_size,"current_page_no":current_page_no,"notification_list":result_list,"total_unread_count":total_unread_count}
+                

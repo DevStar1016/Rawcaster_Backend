@@ -643,7 +643,90 @@ def get_pagination(row_count=0, page = 1, size=10):
     return [limit, offset]
 
 
+def eventPostNotifcationEmail(db,event_id):
+    if event_id and event_id.isdigit():
+        to = ''
+        subject = ''
+        body = ''
+        phone = ''
+        event = db.query(Events).filter_by(id=event_id, status=1).first()
+        if event:
+            # event_invitations = event.event_invitations
+            # cover_img = event.cover_img
+            event_title = event.title
+            # event_start_time = event.start_date_time
+            # event_start_time = datetime.strptime(event_start_time, '%Y-%m-%d %H:%M:%S')
+            # eventStartTime = event_start_time.strftime('%-d %B %Y %-I:%M %p')
+            # subject = 'New Event Created'
+            invite_url=inviteBaseurl()
+            meeting_url =f"{invite_url}joinmeeting/{event.ref_id}"
+            event_creator_name = event.created_by.display_name if event.created_by and event.created_by.display_name else "N/A"
+            sms_message = f"Hi, {event_creator_name} is inviting you to join a web event called {event_title}. The link for this Rawcaster event is: {meeting_url}"
+            body = 'Pending'
+            return sms_message, body
+    else:
+        print("Invalid Event Id")
+        exit()
 
+
+def get_event_detail(db,event_id,login_user_id):
+    event=[]
+    event_details=db.query(Events).filter_by(id = event_id).first()
+    if event_details:
+        default_melody=db.query(EventMelody).filter_by(id = event_details.event_melody_id).first()
+        event.append({
+                        "event_id":event_details.id,
+                        "type":event_details.type,
+                        "event_name":event_details.title,
+                        "reference_id":event_details.ref_id,
+                        "message":event_details.description,
+                        "event_type_id":event_details.event_type_id,
+                        "event_layout_id":event_details.event_layout_id,
+                        "no_of_participants":event_details.no_of_participants,
+                        "duration":event_details.duration,
+                        "start_date_time":event_details.start_date_time,
+                        "start_date":(event_details.start_date_time).date(),
+                        "start_time":(event_details.start_date_time).time(),
+                        "is_host":1 if event_details.created_by else 0,
+                        "banner_image":event_details.cover_img,
+                        "created_at":event_details.created_at,
+                        "original_user_name":event_details.user.display_name,
+                        "original_user_id":event_details.user.id,
+                        "original_user_image":event_details.user.profile_img,
+                        "event_melody_id":event_details.event_melody_id,
+                        "waiting_room":event_details.waiting_room,
+                        "join_before_host":event_details.join_before_host,
+                        "sound_notify":event_details.sound_notify,
+                        "user_screenshare":event_details.user_screenshare,
+                        "melodies":{"path":default_melody.path,"type":default_melody.type,"is_default":default_melody.event_id}
+                    })
+        
+        get_event_default_avs=db.query(EventDefaultAv).filter_by(event_id =event_details.id ).all()
+        if get_event_default_avs:
+            for defaultav in get_event_default_avs:
+                event.append({"default_host_audio":defaultav.default_host_audio,
+                              "default_host_video":defaultav.default_host_video,
+                              "default_guest_audio":defaultav.default_guest_audio,
+                              "default_guest_video":defaultav.default_guest_video})
+        event_invitations=db.query(EventInvitations).filter_by(event_id = event_id,status=1).all()
+        invite_groups_id=[]
+        invite_friends_id=[]
+        invite_mails=[]
+        if event_invitations:
+            for invite in event_invitations:
+                if invite.type == 1:
+                    invite_friends_id.append(invite.user_id)
+                elif invite.type == 2:
+                    invite_groups_id.append(invite.group_id)
+                              
+                elif invite.type ==3:
+                    if invite.invite_mail != "":
+                        invite_mails.append(invite.invite_mail)
+        event.append({"invite_groups_id":invite_groups_id,"invite_friends_id":invite_friends_id,"invite_mails":invite_mails})
+    return event
+
+
+                   
 def defaultimage(flag):
     url=''
     if flag == 'profile_img':
