@@ -1,4 +1,4 @@
-from sqlalchemy import or_,and_
+from sqlalchemy import or_,and_,func
 import datetime
 import math
 from app.core.config import settings as st
@@ -16,7 +16,7 @@ from jose import jwt
 from pyfcm import FCMNotification
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 import base64
-
+from operator import itemgetter
 
 
 def check_mail(email):
@@ -426,6 +426,7 @@ def FindLocationbyIP(userIP):
 def CheckMobileNumber(db,mobile_no,geo_location):
     result= {'status':0,'msg':'Please enter a valid phone number.'}
     if geo_location != "" and geo_location != None:
+       
         country=geo_location.split(',')
         
         if (country != "") and mobile_no != "":
@@ -433,17 +434,15 @@ def CheckMobileNumber(db,mobile_no,geo_location):
             
             for place in country:
                 
-                cty=place.strip()
+                cty=str(place).strip()
                 user_country=db.query(Country).filter(Country.name == cty).first()
                 if user_country and user_country.mobile_no_length != "":
                     mobileno=str(mobile_no).replace("+" ,"")
                     mobileno=str(mobile_no).replace("-" ,"")
-                    
                     if user_country.id == 156 and geo_location[0:1] == 0:
                         mobileno=geo_location[1:]
-                    
-                    # When Country name & State Name Same
-                    if user_country.mobile_no_length == len(mobile_no):
+                  
+                    if str(user_country.mobile_no_length) in str(len(mobile_no)):
                         
                         found = 1
                         result={
@@ -454,9 +453,9 @@ def CheckMobileNumber(db,mobile_no,geo_location):
                             }
                     else:
                         
-                        country_code = len(user_country.country_code) - 1
-                        formated_mobileno=mobileno[country_code:]
-                        if int(user_country.mobile_no_length) == len(formated_mobileno):
+                        formated_mobileno = mobileno[len(user_country.country_code)-1:]
+                        
+                        if str(user_country.mobile_no_length) in str(len(formated_mobileno)):   
                             
                             found = 1
                             result={
@@ -465,6 +464,9 @@ def CheckMobileNumber(db,mobile_no,geo_location):
                                     'country_id':user_country.id,
                                     'mobile_no':formated_mobileno
                                 }
+                else:
+                    found=0
+                    
             if found == 0:
                 result= {"status":0,"msg":f"Unable to get country in DB '{geo_location}'"} 
                 
@@ -619,6 +621,61 @@ def StoreHashTags(db,nugget):
                 db.add(add_NuggetHashTags)
                 db.commit()
                 
+def FriendsCount(db,user_id):
+    get_friend_requests=db.query(MyFriends).filter(MyFriends.status == 1,MyFriends.request_status == 1,or_(MyFriends.sender_id == user_id,MyFriends.receiver_id == user_id)).count()
+    return get_friend_requests
+    
+def FriendsandGroupPermission(db,myid,otherid,flag):
+    if flag == 1:
+        get_friend_requests=db.query(MyFriends).filter(MyFriends.status == 1,MyFriends.request_status == 1 ,or_(MyFriends.sender_id == myid,MyFriends.sender_id == otherid),or_(MyFriends.receiver_id == otherid,MyFriends.receiver_id == myid)).one()
+        if get_friend_requests:
+            return True
+        else:
+            return False
+    else:
+        groupmember=db.query(FriendGroupMembers).filter(FriendGroupMembers.user_id == myid,FriendGroupMembers.group_id.in_(otherid)).count()
+        if groupmember > 0:
+            return True
+        else:
+            return False
+    
+    
+def ProfilePreference(db,myid,otherid,field,value):
+    settings=db.query(UserSettings).filter(UserSettings.user_id == otherid).first()
+    
+    if settings and settings.filed:
+        if settings.field == 0:
+            return ""
+        
+        elif settings.field == 1:
+            return value
+        
+        elif settings.field == 2:
+            flag=1
+            if FriendsandGroupPermission(db,myid,otherid,flag) == True:
+                return value
+            else:
+                return ""
+        
+        elif settings.field == 3:
+            list=[]
+            online_group_list=db.query(UserProfileDisplayGroup).filter_by(user_id = otherid,profile_id = field).all()
+            
+            if online_group_list:
+                for group_list in online_group_list:
+                    list.append(group_list.groupid)
+            if list != []:
+                flag=2
+                if FriendsandGroupPermission(db,myid,list,flag) == True:
+                    return value
+                else:
+                    return ""
+    else:
+        return False
+
+                
+              
+            
     
     
 def get_pagination(row_count=0, page = 1, size=10):
@@ -640,8 +697,21 @@ def get_pagination(row_count=0, page = 1, size=10):
     if offset < 0:
         offset = 0
     
-    return [limit, offset]
+    return [limit, offset,total_pages]
 
+
+
+def PollVoteCalculation(db,nugget):
+    getvotes=db.query(NuggetPollOption.id,NuggetPollOption.option_name,func.count(NuggetPollVoted.id).label('total_votes')).filter(NuggetPollVoted.poll_option_id == NuggetPollOption.id).filter(NuggetPollOption.nuggets_master_id == nugget).all()
+    if getvotes:
+        total_votes = sum(map(itemgetter('total_votes'), getvotes))
+        for votes in getvotes:
+            percentage = round((votes.total_votes / total_votes) * 100, 2)
+
+            update_nugget_poll=db.query(NuggetPollOption).filter(NuggetPollOption.id == votes.id).update({"poll_vote_percentage" :percentage,"votes":votes.total_votes})
+            db.commit()
+            
+            
 
 def eventPostNotifcationEmail(db,event_id):
     if event_id and event_id.isdigit():
@@ -1074,6 +1144,40 @@ def checkToken(db,access_token):
     except:
         return False   
     
+
+def EventAccessCheck(db,userid,eventid):
+    status=0
+    user=db.query(User).filter_by(id=userid).first()
+    if user:
+        event=db.query(Events).filter_by(id=eventid).first()
+        if event:
+            if event.created_by == userid: #created by $userid
+                status=1
+            elif event.event_type_id==1: #Public event
+                status=1
+
+            elif event.event_type_id==2: #Private event
+                invited=db.query(EventInvitations).filter_by(event_id=eventid,user_id=userid).first()
+                if invited:
+                    status=1
+                criteria=db.query(EventInvitations).filter_by(event_id=eventid,status=1)
+                criteria.join(FriendGroupMembers,EventInvitations.group_id==FriendGroupMembers.group_id and FriendGroupMembers.user_id==userid)
+                invited=criteria.first()
+                if invited:
+                    status=1
+                invited=db.query(EventInvitations).filter_by(event_id=eventid,invite_mail=user.email_id)
+                if invited:
+                    status=1
+            elif event.event_type_id==3:
+                follow=db.query(FollowUser).filter_by(follower_userid=userid,following_userid=event.created_by).first()
+                if follow:
+                    sattus=1
+
+    if status==1:
+        return True     
+    else:
+        return False
+
 
 def generateOTP():
     # return random.randint( 100000,999999)
