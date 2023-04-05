@@ -8,7 +8,7 @@ class NuggetsMaster(Base):
     id=Column(Integer,primary_key=True)
     user_id=Column(Integer,ForeignKey("user.id"))
     content=Column(Text)
-    metadata1=Column(BLOB)  #BLOB
+    _metadata=Column("metadata",BLOB)  #BLOB
     poll_duration=Column(String(15))
     created_date=Column(DateTime)
     modified_date=Column(DateTime)
@@ -19,4 +19,5 @@ class NuggetsMaster(Base):
     nugget_hash_tags=relationship("NuggetHashTags",back_populates="nuggets_master")
     nugget_poll_voted=relationship("NuggetPollVoted",back_populates="nuggets_master")
     nuggets_attachment=relationship("NuggetsAttachment",back_populates="nuggets_master")
+    nugget_poll_option=relationship("NuggetPollOption",back_populates="nuggets_master")
     

@@ -367,7 +367,7 @@ def upgrade():
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=True),
     sa.Column('content', sa.Text(), nullable=True),
-    sa.Column('metadata1', sa.BLOB(), nullable=True),
+    sa.Column('metadata', sa.BLOB(), nullable=True),
     sa.Column('poll_duration', sa.String(length=15), nullable=True),
     sa.Column('created_date', sa.DateTime(), nullable=True),
     sa.Column('modified_date', sa.DateTime(), nullable=True),

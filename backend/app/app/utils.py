@@ -19,6 +19,19 @@ import base64
 from operator import itemgetter
 
 
+
+
+
+def common_date(date, without_time=None):
+
+    datetime = date.strftime("%Y-%m-%d %I:%M:%S")
+
+    if without_time == 1:
+        datetime = date.strftime("%d-%m-%Y")
+
+    return datetime
+
+
 def check_mail(email):
     pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
 
@@ -27,14 +40,6 @@ def check_mail(email):
     else:
         return False
     
-    
-    # try:
-    #     v = validate_email(email)
-    #     email = v["email"] 
-    #     return True
-    # except EmailNotValidError as e:
-    #     # email is not valid, exception message is human-readable
-    #     return False
 
 
 def checkAuthCode(authcode, auth_text):
@@ -523,30 +528,30 @@ def get_friend_requests(db,login_user_id,requested_by,request_status,response_ty
     if get_my_friends:
         friend_details=[]
         for frnd_request in get_my_friends:
-            if get_my_friends.sender_id == login_user_id:
+            if frnd_request.sender_id == login_user_id:    # Receiver
                 friend_id=frnd_request.receiver_id
-                friend_details.append({"friend_request_id":friend_id.friend_request_id if friend_id.friend_request_id else None,
-                                       "user_ref_id":friend_id.user_ref_id if friend_id.user_ref_id else None,
-                                       "user_id":friend_id.user_id if friend_id.user_id else None,
-                                       "email_id":friend_id.email_id if friend_id.email_id else "",
-                                       "first_name":friend_id.first_name if friend_id.first_name else "",
-                                       "last_name":friend_id.last_name if friend_id.last_name else "",
-                                       "display_name":friend_id.display_name if friend_id.display_name else "",
-                                       "gender":friend_id.gender if friend_id.gender else "",
-                                       "profile_img":friend_id.profile_img if friend_id.profile_img else ""
+                friend_details.append({"friend_request_id":frnd_request.id,
+                                       "user_ref_id":frnd_request.user1.user_ref_id if frnd_request.receiver_id else None,
+                                       "user_id":frnd_request.user1.id if frnd_request.receiver_id else None,
+                                       "email_id":frnd_request.user1.email_id if frnd_request.receiver_id else "",
+                                       "first_name":frnd_request.user1.first_name if frnd_request.receiver_id else "",
+                                       "last_name":frnd_request.user1.last_name if frnd_request.receiver_id else "",
+                                       "display_name":frnd_request.user1.display_name if frnd_request.receiver_id else "",
+                                       "gender":frnd_request.user1.gender if frnd_request.receiver_id else "",
+                                       "profile_img":frnd_request.user1.profile_img if frnd_request.receiver_id else ""
                                     })
                 
             else:
-                friend_id=get_my_friends.sender_id
-                friend_details.append({"friend_request_id":friend_id.friend_request_id if friend_id.friend_request_id else None,
-                                       "user_ref_id":friend_id.user_ref_id if friend_id.user_ref_id else None,
-                                       "user_id":friend_id.user_id if friend_id.user_id else None,
-                                       "email_id":friend_id.email_id if friend_id.email_id else "",
-                                       "first_name":friend_id.first_name if friend_id.first_name else "",
-                                       "last_name":friend_id.last_name if friend_id.last_name else "",
-                                       "display_name":friend_id.display_name if friend_id.display_name else "",
-                                       "gender":friend_id.gender if friend_id.gender else "",
-                                       "profile_img":friend_id.profile_img if friend_id.profile_img else ""
+                friend_id=frnd_request.sender_id
+                friend_details.append({"friend_request_id":frnd_request.id,
+                                       "user_ref_id":frnd_request.user1.user_ref_id if frnd_request.sender_id else None,
+                                       "user_id":frnd_request.user1.id if frnd_request.sender_id else None,
+                                       "email_id":frnd_request.user1.email_id if frnd_request.sender_id else "",
+                                       "first_name":frnd_request.user1.first_name if frnd_request.sender_id else "",
+                                       "last_name":frnd_request.user1.last_name if frnd_request.sender_id else "",
+                                       "display_name":frnd_request.user1.display_name if frnd_request.sender_id else "",
+                                       "gender":frnd_request.user1.gender if frnd_request.sender_id else "",
+                                       "profile_img":frnd_request.user1.profile_img if frnd_request.sender_id else ""
                                     })
             if response_type == 1:  # only user ids
                 if frnd_request.request_status == 0:
@@ -941,6 +946,78 @@ async def send_email(to_mail,subject,message):
     return ({"msg": "Email has been sent"})
 
     
+    
+def ProfilePreference(db,myid,otherid,field,value):
+    settings=db.query(UserSettings).filter(UserSettings.user_id==otherid).first()
+    if settings.field:
+        if settings.field==0:
+            return ""
+        elif settings.field==1:
+            return value
+        elif settings.field==2:
+            if FriendsandGroupPermission(db,myid,otherid,1):
+                return value
+            else:
+                return ""
+        elif settings.field==3:
+            lists=[]
+            online_group_list=db.query(UserProfileDisplayGroup.groupid).filter(UserProfileDisplayGroup.user_id==otherid,UserProfileDisplayGroup.profile_id==field).all()
+            if online_group_list:
+                for group_list in online_group_list:
+                    lists.append(group_list)
+            if len(list)>0:
+                if FriendsandGroupPermission(db,myid,lists,2):
+                    return value
+                else:
+                    return ""
+            else:
+                return ""
+        
+    else:
+        return value
+    
+def FriendsandGroupPermission(db,myid,friendid,flag=1):
+    reply=False
+    if flag==1:
+        query = db.query(MyFriends)
+        query = query.filter_by(status=1)
+        query = query.filter_by(request_status=1)
+        query = query.filter(or_((and_((MyFriends.sender_id == myid) , (MyFriends.receiver_id == friendid))) , (and_((MyFriends.sender_id == friendid),(MyFriends.receiver_id == myid)))))
+        get_friend_requests = query.first()
+
+        if get_friend_requests:
+            return True
+    else:
+        query = db.query(FriendGroupMembers)
+        query = query.filter_by(user_id=myid)
+        query = query.filter(FriendGroupMembers.group_id.in_(friendid))
+
+        # get count
+        groupmember = query.count()
+        if groupmember>0:
+            reply=True
+    return reply
+
+
+def eventPostNotifcationEmail(db,eventId):
+    if eventId != '' and eventId.isnumeric():
+        to = ''
+        subject = ''
+        body = ''
+        phone = ''
+        event = Events.objects.filter(id=eventId, status=1).first()
+        if event is not None:
+            eventInvitations = event.eventInvitations
+            coverImg = event.cover_img
+            eventTitle = event.title
+            event_start_time = event.start_date_time
+            eventStartTime = datetime.strptime(event_start_time, '%Y-%m-%d %H:%M:%S').strftime('%-d %b %Y %-I:%M %p')
+            subject = 'New Event Created'
+            meetingUrl = inviteBaseurl() + 'joinmeeting/' + event.ref_id
+            eventCreatorName = event.createdBy.display_name if event.createdBy is not None else "N/A"
+            sms_message = 'Hi, ' + eventCreatorName + ' is inviting you to join a web event called ' + eventTitle + '. The link for this Rawcaster event is: ' + meetingUrl
+            return (sms_message, body)
+
 def GenerateUserRegID(id):
     dt = str(int(datetime.utcnow().timestamp()))
     
@@ -963,8 +1040,11 @@ def GetRawcasterUserID(db,type):
     
 def logins(db,username, password, device_type, device_id, push_id,login_from,voip_token,app_type,socual=0):
     username=username.strip()
-    
-    get_user=db.query(User).filter(or_(User.email_id == username,User.mobile_no == username),or_(User.email_id != None,User.mobile_no != None)).first()
+   
+    get_user=db.query(User).filter(or_(
+                            and_(User.email_id == username, User.email_id != None),
+                            and_(User.mobile_no.like(username), User.mobile_no != None)
+                                                )).first()
     
     if get_user == None or not get_user:
         
@@ -975,40 +1055,40 @@ def logins(db,username, password, device_type, device_id, push_id,login_from,voi
         else:
             return {"status":0,"msg" : "Login Failed. Invalid email id or password"}
             
-    elif get_user.password != password and socual != 1:
-        
+    elif get_user.password != password and socual != 1: #  Invalid password!
+      
         if get_user.status == 2:
             return {"status":0,"msg" : "Your account is currently blocked!"}
         else:
            
             userIP = get_ip()
-            add_failure_login=LoginFailureLog(user_id=get_user.id,ip=userIP,created_at=datetime.now(),status=1)
+            add_failure_login=LoginFailureLog(user_id=get_user.id,ip=userIP,create_at=datetime.now(),status=1)
             db.add(add_failure_login)
             db.commit()
             
             get_settings=db.query(Settings).filter(Settings.settings_topic == 'login_block_time').first()
             if get_settings:
                 total_block_dur=get_settings.settings_value
+                curretTime=datetime.now() - timedelta(minutes=int(total_block_dur))
                 
-                curretTime=datetime.now() - timedelta(minutes=total_block_dur)
             else:
                 total_block_dur=30
                 curretTime=datetime.now() - timedelta(minutes=30)
             
-            failure_count=db.query(LoginFailureLog).filter(LoginFailureLog.user_id == get_user.id,LoginFailureLog.created_at > curretTime).count()
-            
-            if failure_count > 2:
-                msg=""
-                if total_block_dur < 60:
-                    msg=f'{total_block_dur} minutes'
-                elif total_block_dur == 60:
-                    msg='1 hour'
-                elif total_block_dur > 60:
-                    msg = f'{math.floor(total_block_dur/60)} hours {total_block_dur % 60} minutes'
+                failure_count=db.query(LoginFailureLog).filter(LoginFailureLog.user_id == get_user.id,LoginFailureLog.create_at > curretTime).count()
                 
-                return {"status":0, "msg" :f'Your account is currently blocked. Please try again after {msg}'}
-                
-            return {"status":0, "msg" :'Login Failed. invalid email id or password'}
+                if failure_count > 2:
+                    msg=""
+                    if int(total_block_dur) < 60:
+                        msg=f'{total_block_dur} minutes'
+                    elif int(total_block_dur) == 60:
+                        msg='1 hour'
+                    elif int(total_block_dur) > 60:
+                        msg = f'{math.floor(total_block_dur/60)} hours {total_block_dur % 60} minutes'
+                    
+                    return {"status":0, "msg" :f'Your account is currently blocked. Please try again after {msg}'}
+        
+        return {"status":0, "msg" :'Login Failed. invalid email id or password'}
     
     elif get_user.status == 4: # Account deleted
         return {"status":0, "msg" :'Your account has been removed'}
@@ -1016,7 +1096,7 @@ def logins(db,username, password, device_type, device_id, push_id,login_from,voi
     elif get_user.status == 3: # Admin Blocked user!
         return {"status":0, "msg" :'Your account has been removed'}
         
-    elif get_user.status == 2:  # dmin suspended user!
+    elif get_user.status == 2:  # admin suspended user!
         return {"status":0, "msg" :'Your account is currently blocked!'}
         
     elif get_user.admin_verified_status != 1: # Admin has to verify!
@@ -1216,17 +1296,6 @@ def generateOTP():
 #     return db_path
 
 
-
-
-    
-# def common_date(date, without_time=None):
-
-#     datetime = date.strftime("%d-%m-%Y %I:%M:%S %p")
-
-#     if without_time == 1:
-#         datetime = date.strftime("%d-%m-%Y")
-
-#     return datetime
 
 # def common_date_only(date, without_time=None):
 

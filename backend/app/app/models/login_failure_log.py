@@ -9,7 +9,7 @@ class LoginFailureLog(Base):
     id=Column(Integer,primary_key=True)
     user_id=Column(Integer,ForeignKey("user.id"),comment=" ref user table ")
     ip=Column(String(15),comment=" ip address ")
-    created_at=Column(DateTime)
+    create_at=Column(DateTime)
     status=Column(TINYINT,default=1)
     
     user=relationship("User",back_populates="login_failure_log")
