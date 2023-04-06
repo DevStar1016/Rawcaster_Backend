@@ -1,4 +1,4 @@
-from sqlalchemy import or_,and_,func
+from sqlalchemy import or_,and_,func,not_
 import datetime
 import math
 from app.core.config import settings as st
@@ -272,7 +272,7 @@ def get_friend_requests(db,login_user_id,requested_by,request_status,response_ty
         my_friends = my_friends.filter_by(receiver_id = login_user_id)
         
     else:  # Both sent and received requests
-        my_friends = my_friends.filter(or_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == login_user_id))
+        my_friends = my_friends.filter((MyFriends.sender_id == login_user_id) | (MyFriends.receiver_id == login_user_id))
 
     if request_status and len(request_status) > 0:
         my_friends = my_friends.filter_by(MyFriends.request_status.in_(request_status))
@@ -341,36 +341,50 @@ def getFollowings(db,user_id):
     return following_ids
 
 
-
 def NuggetAccessCheck(db,login_user_id,nugget_id):
     group_ids=getGroupids(db,login_user_id)
     requested_by=None
     request_status=1
     response_type=1
     search_key=None
-    my_friends_req=get_friend_requests(db,login_user_id,requested_by,request_status,response_type,search_key)
+    my_friends_req=get_friend_requests(db,login_user_id,requested_by,request_status,response_type)
     my_friends=my_friends_req['accepted']
-    
+ 
     my_followings=getFollowings(db,login_user_id)
     type=None
     rawid=GetRawcasterUserID(db,type)
     
-    check_nuggets=db.query(Nuggets).filter(Nuggets.user_id == User.id,Nuggets.nuggets_id == NuggetsMaster.id,Nuggets.id == NuggetsShareWith.nuggets_id,Nuggets.id == NuggetView.nugget_id)
-    check_nuggets=check_nuggets.filter(Nuggets.status==1,Nuggets.nugget_status==1,NuggetsMaster.status == 1,Nuggets.id == nugget_id)
-    check_nuggets=check_nuggets.or_(Nuggets.user_id == login_user_id,and_(Nuggets.share_type ==1),and_(Nuggets.share_type ==2 ,Nuggets.user_id == login_user_id),and_(Nuggets.share_type == 3,NuggetsShareWith.type == 1,NuggetsShareWith.share_with.in_(group_ids)),and_(Nuggets.share_type == 4,NuggetsShareWith.type == 2,NuggetsShareWith.share_with.in_(login_user_id)),and_(Nuggets.share_type == 6,Nuggets.user_id.in_(my_friends)),and_(Nuggets.share_type == 7,Nuggets.user_id.in_(my_followings)),and_(Nuggets.user_id == rawid))
+    criteria = db.query(Nuggets)
+    criteria = criteria.join(User, Nuggets.user_id == User.id, isouter=True)
+    criteria = criteria.join(NuggetsMaster, Nuggets.nuggets_id == NuggetsMaster.id, isouter=True)
+    criteria = criteria.join(NuggetsShareWith, Nuggets.id == NuggetsShareWith.nuggets_id, isouter=True)
+    criteria = criteria.join(NuggetView, Nuggets.id == NuggetView.nugget_id, isouter=True)
+    criteria = criteria.filter(Nuggets.status == 1, Nuggets.nugget_status == 1, NuggetsMaster.status == 1, Nuggets.id == nugget_id)
+    criteria = criteria.filter(or_(
+        Nuggets.user_id == login_user_id,
+        and_(Nuggets.share_type == 1),
+        and_(Nuggets.share_type == 2, Nuggets.user_id == login_user_id),
+        and_(Nuggets.share_type == 3, NuggetsShareWith.type == 1, NuggetsShareWith.share_with.in_(group_ids)),
+        and_(Nuggets.share_type == 4, NuggetsShareWith.type == 2, NuggetsShareWith.share_with.in_([login_user_id])),
+        and_(Nuggets.share_type == 6, Nuggets.user_id.in_(my_friends)),
+        and_(Nuggets.share_type == 7, Nuggets.user_id.in_(my_followings)),
+        and_(Nuggets.user_id == rawid)
+    ))
     
     requested_by=None
     request_status=3
     response_type=1
-    search_key=None
     
-    get_all_blocked_users=get_friend_requests(db,login_user_id,requested_by,request_status,response_type,search_key)
+    
+    get_all_blocked_users=get_friend_requests(db,login_user_id,requested_by,request_status,response_type)
     blocked_users=get_all_blocked_users['blocked']
+    
 
     if blocked_users:
-        check_nuggets=check_nuggets.filter(Nuggets.user_id.not_in(blocked_users))
+        criteria = criteria.filter(not_(Nuggets.user_id.in_(blocked_users)))
+   
+    check_nuggets=criteria.count()
     
-    check_nuggets=check_nuggets.count()
     
     if check_nuggets > 0:
         return True
@@ -518,16 +532,18 @@ def get_friend_requests(db,login_user_id,requested_by,request_status,response_ty
     elif requested_by == 2: # Friend request reveived from other users to this user
         get_my_friends=get_my_friends.filter(MyFriends.receiver_id == login_user_id)
     
-    else:
-        get_my_friends=get_my_friends.filter(or_(MyFriends.sender_id == login_user_id ,MyFriends.receiver_id == login_user_id))
+    else:  # Both sent and received requests
+        get_my_friends=get_my_friends.filter(or_(MyFriends.sender_id == login_user_id , MyFriends.receiver_id == login_user_id))
         
-    if request_status:
+    if request_status:  # pending, accepted, rejected, blocked  
+        
         get_my_friends=get_my_friends.filter(MyFriends.request_status.in_([request_status]))
     
     get_my_friends=get_my_friends.all()
     if get_my_friends:
-        friend_details=[]
+        
         for frnd_request in get_my_friends:
+            friend_details=[]
             if frnd_request.sender_id == login_user_id:    # Receiver
                 friend_id=frnd_request.receiver_id
                 friend_details.append({"friend_request_id":frnd_request.id,
@@ -553,6 +569,7 @@ def get_friend_requests(db,login_user_id,requested_by,request_status,response_ty
                                        "gender":frnd_request.user1.gender if frnd_request.sender_id else "",
                                        "profile_img":frnd_request.user1.profile_img if frnd_request.sender_id else ""
                                     })
+            
             if response_type == 1:  # only user ids
                 if frnd_request.request_status == 0:
                     pending.append(friend_id) # if pending
@@ -683,27 +700,50 @@ def ProfilePreference(db,myid,otherid,field,value):
             
     
     
-def get_pagination(row_count=0, page = 1, size=10):
-    current_page_no = page if page >= 1 else 1
-
-    total_pages = math.ceil(row_count / size)
-
-    if current_page_no > total_pages:
-        current_page_no = total_pages
+# def get_pagination(row_count, page, size):
+#     current_page_no = page if page >= 1 else 1
     
-    limit =  current_page_no * size
-    offset = limit - size
+#     total_pages = math.ceil(row_count / size)
+
+#     if current_page_no > total_pages:
+#         current_page_no = total_pages
+    
+#     limit =  current_page_no * size
+#     offset = limit - size
+
+#     if limit > row_count:
+#         limit = offset + (row_count % size)
+    
+#     limit = limit - offset
+
+#     if offset < 0:
+#         offset = 0
+    
+#     return [limit, offset,total_pages]
+
+
+def get_pagination(row_count=0, current_page_no=1, default_page_size=10):
+    
+    current_page_no = current_page_no
+    
+    total_pages = math.ceil(row_count / default_page_size)
+    
+    if current_page_no > total_pages :
+    
+        current_page_no =  total_pages
+
+    
+    limit = current_page_no * default_page_size
+    offset = limit - default_page_size
 
     if limit > row_count:
-        limit = offset + (row_count % size)
+
+        limit =  offset + row_count % default_page_size
+
     
     limit = limit - offset
-
-    if offset < 0:
-        offset = 0
     
-    return [limit, offset,total_pages]
-
+    return limit,offset,total_pages       
 
 
 def PollVoteCalculation(db,nugget):
@@ -1274,7 +1314,7 @@ def generateOTP():
 #     try:
 #         os.makedirs(base_dir, mode=0o777, exist_ok=True)
 #     except OSError as e:
-#         sys.exit("Can't create {dir}: {err}".format(
+#         sys.exit("Can'Nuggets create {dir}: {err}".format(
 #             dir=base_dir, err=e))
     
 #     filename=file.filename
