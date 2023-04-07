@@ -4,7 +4,7 @@ from app.core.security import *
 from typing import List
 from app.utils import *
 from app.api import deps
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session,joinedload
 from datetime import datetime,date,time
 from sqlalchemy import func,case,text
 import re
@@ -14,6 +14,8 @@ from langdetect import detect
 from gtts import gTTS
 from playsound import playsound
 from profanityfilter import ProfanityFilter
+from moviepy.video.io.VideoFileClip import VideoFileClip
+import math
 
 router = APIRouter() 
 
@@ -21,67 +23,33 @@ router = APIRouter()
 access_key="AKIAYFYE6EFYG6RJOPMF"
 access_secret="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"
 
-# # For Testing
-# @router.post("/test")
-# async def test(db:Session=Depends(deps.get_db),auth_code:str=Form(...)):
-#     # import boto3
-    
-#     # polly = boto3.client(
-#     #             'polly',
-#     #             aws_access_key_id=access_key,
-#     #             aws_secret_access_key=access_secret,
-#     #             region_name="us-east-1",
-#     #             )
 
-#     # # Set the parameters for the speech synthesis
-#     # output_format = 'mp3'
-#     # voice_id = 'Joanna'
-#     # text = 'Hello, this is a test of Amazon Polly.'
-    
-#     # lang = detect(text)
-#     # # Call the synthesize_speech() method to generate the audio file
-    
-#     # response = polly.synthesize_speech(Text=text, VoiceId=voice_id, OutputFormat=output_format)
+# 1 Video Spliting
+@router.post("/video_split")
+async def video_split(db:Session=Depends(deps.get_db)):
 
-#     # # Save the audio file to disk
-#     # with open('test.mp3', 'wb') as f:
-#     #     f.write(response['AudioStream'].read())
-#     # playsound("test.mp3")
-    
-   
-   
-#     #   ---------------------------------
-#     import os
-#     from google.cloud import translate_v2 as translate
-#     os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = '/path/to/service_account_key.json'
-#     client = translate.Client()
-   
-#     result = client.translate('Hello, how are you?', target_language='ta')
-#     print(result['translatedText'])
-    
-    
-   
-# For Testing
-@router.post("/lang")
-async def lang(db:Session=Depends(deps.get_db),auth_code:str=Form(...)):
-    from googletrans import Translator
-    pf=ProfanityFilter()
-    translator = Translator()
-    translated = translator.translate('In the Tamil language, the letters formed with each of the twelve vowels and eighteen consonants are called vowels.', dest='ta')
-    print(translated.text)
+    segment_duration = 5 * 60
 
-    filtered_text = pf.censor(translated.text)
-    
-    # Languages
-    lang = detect(translated.text)
-    print("language",lang)
-    
-    tts = gTTS(text=filtered_text,lang='ta')
-    
-    
-    tts.save("test.mp3")   
-    playsound("test.mp3")
-    
+    video = VideoFileClip("/home/radhakrishnan/Desktop/videoplayback.mp4")
+    duration = video.duration
+
+    total_duration = video.duration
+    if duration < 3000:
+        num_segments = math.ceil(total_duration / segment_duration)
+        for i in range(num_segments):
+        
+            start_time = i * segment_duration
+            end_time = min((i+1) * segment_duration, total_duration)
+            
+            segment = video.subclip(start_time, end_time)
+            
+            # Save the segment as a new file
+            segment_filename = f"output_segment_{i+1}.mp4"
+            segment.write_videofile(segment_filename, codec="libx264")
+    else:
+        print("fail")
+
+
 
 # 1 Signup User
 @router.post("/signup")
@@ -601,7 +569,7 @@ async def forgotpassword(db:Session=Depends(deps.get_db),username:str=Form(...,d
                 
                 get_otp=db.query(OtpLog).filter_by(user_id = get_user.id,otp_type=3).order_by(OtpLog.id.desc()).first()
                 if get_otp:
-                    update_otp_log=db.query(OtpLog).filter_by(id =get_otp.id).update({"otp":otp,"created_date":otp_time,"status":1})
+                    update_otp_log=db.query(OtpLog).filter_by(id =get_otp.id).update({"otp":otp,"created_at":otp_time,"status":1})
                     db.commit()
                     otp_ref_id=get_otp.id
                 else:
@@ -665,12 +633,13 @@ async def verifyotpandresetpassword(db:Session=Depends(deps.get_db),otp_ref_id:i
                 return {"status":0,"msg":"OTP is invalid"}
                 
             else:
-                update=False
+                
                 new_password=hashlib.sha1(new_password.encode()).hexdigest()
+                
                 if (get_otp_log.user.password and new_password) == get_otp_log.user.password:
                     update=True
                 else:
-                    get_otp_log.user.password = new_password  # Update Password
+                    update=db.query(User).filter(User.id == get_otp_log.user_id).update({"status":1,"is_email_id_verified":1,"password":new_password})
                     db.commit()
                 
                 if update:
@@ -755,9 +724,6 @@ async def getcountylist(db:Session=Depends(deps.get_db)):
     else:
         return {"status" : 0, "msg" :"No result found!"}
         
-        
-
-
 
 
 # 10 - Contact us
@@ -790,9 +756,12 @@ async def contactus(db:Session=Depends(deps.get_db),name:str=Form(...),email_id:
             to_mail='support@rawcaster.com'
             subject=f'New enquiry received from {name}'
             message=f'<table width="600" border="0" align="center" cellpadding="10" cellspacing="0" style="border: 1px solid #e8e8e8;"> <tr><th> Name : </th><td> {name} </td></tr> <tr><th> Email id : </th><td> {email_id} </td></tr> <tr><th> Subject : </th><td> {subject} </td></tr> <tr><th> Message : </th><td> {message} </td></tr> </table>'
+            try:
+                send_mail=await send_email(to_mail,subject,message)
+            except:
+                return {"status" : 0, "msg" :"Something went wrong.Please Try Again later"}
+                
             
-            send_mail=await send_email(to_mail,subject,message)
-            # Pending
             
             return {"status" : 1, "msg" :"Thank you for contacting us. we will get back to you soon."}
         
@@ -924,22 +893,20 @@ async def updatemyprofile(db:Session=Depends(deps.get_db),token:str=Form(...),na
             if checkAuthCode(auth_code,auth_text) == False:
                 return {"status" : 0, "msg" :"Authentication failed!"}
             else:
+                
                 get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
                 
                 login_user_id=get_token_details.user_id if get_token_details else None
                 
                 get_user_profile=db.query(User).filter(User.id == login_user_id).first()
                 
-                if email_id:
-                    check_email=db.query(User).filter(User.email_id == email_id,User.id != login_user_id).first()
-                    if check_email:
-                        return {"status" : 0, "msg" :"This email ID is already used"}
+                check_email=db.query(User).filter(User.email_id == email_id,User.id != login_user_id).count()
+                if check_email > 0:
+                    return {"status" : 0, "msg" :"This email ID is already used"}
                 
-                if mobile_no:
-                    check_phone=db.query(User).filter(User.mobile_no == mobile_no,User.id != login_user_id).first()
-                    if check_phone:
-                        return {"status" : 0, "msg" :"This phone number is already used"}
-                
+                check_phone=db.query(User).filter(User.mobile_no == mobile_no,User.id != login_user_id).count()
+                if check_phone > 0:
+                    return {"status" : 0, "msg" :"This phone number is already used"}
                 
                 elif re.search("/[^A-Za-z0-9]/", first_name.strip()):
                     return {"status" : 0, "msg" :"Please provide valid first name"}
@@ -977,11 +944,13 @@ async def updatemyprofile(db:Session=Depends(deps.get_db),token:str=Form(...),na
                     else:
                         return {"status":0,"msg":"Something went wrong!"}
                         
+                        
 
 # 13 Search Rawcaster Users (for friends)
+
 @router.post("/searchrawcasterusers")
 async def searchrawcasterusers(db:Session=Depends(deps.get_db),token:str=Form(...),auth_code:str=Form(...,description="SALT + token"),
-                               search_for:int=Form(None,description="0-Pending,1-Accepted,2-Rejected,3-Blocked",ge=0,le=3),page_number:int=Form(default=1),search_key:str=Form(None)):
+                               search_key:str=Form(None),page_number:int=Form(default=1)):
     if token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif auth_code.strip() == "":
@@ -1002,7 +971,10 @@ async def searchrawcasterusers(db:Session=Depends(deps.get_db),token:str=Form(..
                 login_user_email=get_token_details.user.email_id if get_token_details else None
                 
                 current_page_no=page_number
-                get_user=db.query(User.id,User.email_id,User.user_ref_id,User.first_name,User.last_name,User.display_name,User.gender,User.profile_img,User.geo_location,MyFriends.request_status.label("friend_request_status"),FollowUser.id.label("follow_id")).filter(User.status == 1,User.id != login_user_id,or_(MyFriends.sender_id == User.id,MyFriends.receiver_id == User.id),or_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == login_user_id),FollowUser.following_userid == User.id,FollowUser.follower_userid == login_user_id)
+                
+                
+                get_user=db.query(User.id,User.email_id,User.user_ref_id,User.first_name,User.last_name,User.display_name,User.gender,User.profile_img,User.geo_location,MyFriends.request_status.label("friend_request_status"),FollowUser.id.label("follow_id")).join(MyFriends,or_(MyFriends.sender_id == User.id,MyFriends.receiver_id == User.id)).filter(MyFriends.status == 1,or_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == login_user_id))
+                get_user=get_user.join(FollowUser,FollowUser.following_userid == User.id).filter(FollowUser.follower_userid == login_user_id).filter(User.status == 1,User.id != login_user_id)
                 
                 # Omit blocked users
                 request_status=3
@@ -1034,7 +1006,8 @@ async def searchrawcasterusers(db:Session=Depends(deps.get_db),token:str=Form(..
                     
                     user_list=[]
                     for user in get_user:
-                        mutual_friends=MutualFriends(db.login_user_id,user.id)
+                        
+                        mutual_friends=MutualFriends(db,login_user_id,user.id)
                         user_list.append({  "user_id":user.id,
                                             "user_ref_id":user.user_ref_id,
                                             "email_id":user.email_id if user.email_id else "",
@@ -1044,8 +1017,8 @@ async def searchrawcasterusers(db:Session=Depends(deps.get_db),token:str=Form(..
                                             "gender":user.gender if user.gender else "",
                                             "profile_img":user.profile_img if user.profile_img else "",
                                             "friend_request_status":user.friend_request_status if user.friend_request_status else "",
-                                            "follow":user.follow,
-                                            "location":user.location,
+                                            "follow":user.follow_id if user.follow_id else "",
+                                            "location":user.geo_location if user.geo_location else "",
                                             "mutual_friends":mutual_friends
                                         })
                     return {"status":1,"msg":"Success","total_pages":total_pages,"current_page_no":current_page_no,"users_list":user_list}
@@ -4119,7 +4092,7 @@ async def getothersprofile(db:Session=Depends(deps.get_db),token:str=Form(...),a
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
-            get_token_details=db.query(ApiTokens).filter_by(token == access_token).first()
+            get_token_details=db.query(ApiTokens).filter_by(token = access_token).first()
             
             login_user_id=get_token_details.user_id 
             
@@ -4137,7 +4110,7 @@ async def getothersprofile(db:Session=Depends(deps.get_db),token:str=Form(...),a
             else:
                 get_user=db.query(FollowUser).filter(User.id == user_id,FollowUser.following_userid == User.id,FollowUser.follower_userid == login_user_id).first()
                 
-                followers_count=db.query(FollowUser).filter_by(follower_userid = user_id).count()
+                followers_count=db.query(FollowUser).filter_by(following_userid = user_id).count()
                 
                 following_count=db.query(FollowUser).filter_by(follower_userid = user_id).count()
                 
@@ -4147,46 +4120,46 @@ async def getothersprofile(db:Session=Depends(deps.get_db),token:str=Form(...),a
                 else:
                     field='bio_display_status'
                     settings=db.query(UserSettings).filter(UserSettings.user_id == login_user_id).first()
-                    get_friend_requests=db.query(MyFriends).filter(MyFriends.status == 1,or_(MyFriends.sender_id == login_user_id,MyFriends.sender_id == user_id),or_(MyFriends.receiver_id == user_id,MyFriends.receiver_id == login_user_id)).order_by(MyFriends.id.desc()).first()
+                    get_friend_request=db.query(MyFriends).filter(MyFriends.status == 1,or_(MyFriends.sender_id == login_user_id,MyFriends.sender_id == user_id),or_(MyFriends.receiver_id == user_id,MyFriends.receiver_id == login_user_id)).order_by(MyFriends.id.desc()).first()
                     
                     
                     result_list={
                                     "user_id":get_user.id,
-                                    "user_ref_id":get_user.user_ref_id,
-                                    "name":get_user.display_name if get_user.display_name else "",
-                                    "email_id":get_user.email_id if get_user.email_id else "",
+                                    "user_ref_id":get_user.user2.user_ref_id if get_user.following_userid else "",
+                                    "name":get_user.user2.display_name if get_user.following_userid else "",
+                                    "email_id":get_user.user2.email_id if get_user.following_userid else "",
                                     
-                                    "mobile":get_user.mobile_no,
-                                    "dob":get_user.dob,
-                                    "geo_location":get_user.geo_location,
-                                    "bio_data":ProfilePreference(db,login_user_id,get_user.id,field,get_user.boi_data),
+                                    "mobile":get_user.user2.mobile_no if get_user.following_userid else "",
+                                    "dob":get_user.user2.dob if get_user.following_userid else "",
+                                    "geo_location":get_user.user2.geo_location if get_user.following_userid else "",
+                                    "bio_data":ProfilePreference(db,login_user_id,get_user.id,field,get_user.user2.bio_data),
                                     
-                                    "profile_image":get_user.profile_img if get_user.profile_img else "",
-                                    "cover_image":get_user.cover_image if get_user.cover_image else "",
-                                    "website":get_user.website if get_user.website else "",
-                                    "first_name":get_user.first_name if get_user.first_name else "",
-                                    "last_name":get_user.last_name if get_user.last_name else "",
-                                    "gender":get_user.gender if get_user.gender else "",
-                                    "country_code":get_user.country_code if get_user.country_code else "",
-                                    "country_id":get_user.country_id if get_user.country_id else "",
-                                    "user_code":get_user.user_code if get_user.user_code else "",
-                                    "latitude":get_user.latitude if get_user.latitude else "",
-                                    "longitude":get_user.longitude if get_user.longitude else "",
-                                    "date_of_join":get_user.created_at if get_user.created_at else "",
-                                    "user_type":get_user.user_type_master.name if get_user.user_type_id else "",
-                                    "user_status":get_user.user_status_master.name if get_user.user_status_id else "",
-                                    "user_status_id":get_user.user_status_id,
-                                    "friends_count":FriendsCount(db,get_user.id),
+                                    "profile_image":get_user.user2.profile_img if get_user.following_userid else "",
+                                    "cover_image":get_user.user2.cover_image if get_user.following_userid else "",
+                                    "website":get_user.user2.website if get_user.following_userid else "",
+                                    "first_name":get_user.user2.first_name if get_user.following_userid else "",
+                                    "last_name":get_user.user2.last_name if get_user.following_userid else "",
+                                    "gender":get_user.user2.gender if get_user.following_userid else "",
+                                    "country_code":get_user.user2.country_code if get_user.following_userid else "",
+                                    "country_id":get_user.user2.country_id if get_user.following_userid else "",
+                                    "user_code":get_user.user2.user_code if get_user.following_userid else "",
+                                    "latitude":get_user.user2.latitude if get_user.following_userid else "",
+                                    "longitude":get_user.user2.longitude if get_user.following_userid else "",
+                                    "date_of_join":get_user.user2.created_at if get_user.following_userid else "",
+                                    "user_type":get_user.user2.user_type_master.name if get_user.following_userid else "",
+                                    "user_status":get_user.user2.user_status_master.name if get_user.following_userid else "",
+                                    "user_status_id":get_user.user2.user_status_id if get_user.following_userid else "",
+                                    "friends_count":FriendsCount(db,get_user.user2.id),
                                     "friend_status":None,
                                     "friend_request_id":None,
                                     "is_friend_request_sender":0,
-                                    "follow":True if get_user.follow_id else False,
+                                    "follow":True if get_user.id else False,
                                     "followers_count":followers_count,
                                     "following_count":following_count,
                                     "language": settings.language.name if settings else "English",
-                                    "friend_request_id":get_friend_requests.id if get_friend_requests else "",
-                                    "friend_status":get_friend_requests.request_status if get_friend_requests else "",
-                                    "is_friend_request_sender": 1 if get_friend_requests and get_friend_requests.sender_id == get_user.id else "",
+                                    "friend_request_id":get_friend_request.id if get_friend_request else "",
+                                    "friend_status":get_friend_request.request_status if get_friend_request else "",
+                                    "is_friend_request_sender": 1 if get_friend_request and get_friend_request.sender_id == get_user.id else "",
                             }
                 
                     return {"status":1,"msg":"Success","profile":result_list}
@@ -5406,8 +5379,8 @@ async def followandunfollow(db:Session=Depends(deps.get_db),token:str=Form(...),
             
 
 # 71 Get follower and following list
-@router.post("/actionGetfollowlist")
-async def actionGetfollowlist(db:Session=Depends(deps.get_db),token:str=Form(...),user_id:int=Form(None),type:int=Form(...,description="1->follower,2->following"),search_key:str=Form(None),page_number:int=Form(None)):
+@router.post("/getfollowlist")
+async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(...),user_id:int=Form(None),type:int=Form(...,description="1->follower,2->following",ge=1,le=2),search_key:str=Form(None),page_number:int=Form(default=1)):
     if token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     else:
@@ -5420,89 +5393,109 @@ async def actionGetfollowlist(db:Session=Depends(deps.get_db),token:str=Form(...
             for res in get_token_details:
                 login_user_id=res.user_id
 
-        current_page_no=page_number if page_number>0 else 1
-        user_id=user_id if user_id >0 else None
-        criteria =db.query(FollowUser).alias('fu')
+        current_page_no = page_number
+        
+        get_follow_user =db.query(FollowUser)
 
-        if type == 1:
-            following_subquery = (
-                db.query(FollowUser).with_entities(func.count(FollowUser.id)).filter(
-                    FollowUser.follower_userid == User.id,
-                    FollowUser.following_userid == login_user_id,
+        if type == 1:   # Followers
+            get_follow_user = db.query(FollowUser, 
+                (db.query(func.count(FollowUser.id))
+                    .filter(FollowUser.follower_userid == User.id,
+                            FollowUser.following_userid == login_user_id)
+                    .order_by(FollowUser.id)
+                    .limit(1)
                 )
-                .order_by(FollowUser.id)
-                .limit(1)
-                .correlate(User)
-                .label('following')
-            )
+            ).join(User).filter(FollowUser.following_userid == User.id)
+            
+            # query = select(['fu.*', '(SELECT COUNT(ff.id) FROM follow_user ff WHERE (ff.follower_userid = user.id AND ff.following_userid = :login_user_id) ORDER BY ff.id LIMIT 1) AS following']).select_from('your_table AS fu')
+            # result = session.query(query).params(login_user_id=123).all()
+            
+            # subq = db.query(FollowUser.id).filter(Table1.column1 == 'value1').subquery()
+            # get_follow_user=get_follow_user.join(User,FollowUser.following_userid == User.id,isouter=True).filter(FollowUser.follower_userid == User.id,FollowUser.following_userid == login_user_id)
+            
+            
+            # following_subquery = (
+            #     db.query(FollowUser).with_entities(func.count(FollowUser.id)).filter(
+            #         FollowUser.follower_userid == User.id,
+            #         FollowUser.following_userid == login_user_id,
+            #     )
+            #     .order_by(FollowUser.id)
+            #     .limit(1)
+            #     .correlate(User)
+            #     .label('following')
+            # )
 
-            criteria = (
-                db.query(FollowUser)
-                .with_entities(FollowUser, following_subquery)
-                .join(User, User.id == FollowUser.following_userid)
-                .options(aliased(User).load_only('display_name', 'profile_img'))
-            )
+            # get_follow_user = (
+            #     db.query(FollowUser)
+            #     .with_entities(FollowUser, following_subquery)
+            #     .join(User, User.id == FollowUser.following_userid)
+            #     .options(aliased(User).load_only('display_name', 'profile_img'))
+            # )
 
-            if user_id is None:
-                criteria = criteria.filter_by(follower_userid=login_user_id)
+            if not user_id:
+                get_follow_user = get_follow_user.filter(FollowUser.follower_userid == login_user_id)
+            
             else:
-                criteria = criteria.filter_by(follower_userid=user_id)
-        else:
-            following_subquery = (
-                db.query(FollowUser)
-                .with_entities(func.count(FollowUser.id))
-                .filter(
-                    FollowUser.following_userid == User.id,
-                    FollowUser.follower_userid == login_user_id,
-                )
-                .order_by(FollowUser.id)
-                .limit(1)
-                .correlate(User)
-                .label('following')
-            )
+                get_follow_user = get_follow_user.filter_by(FollowUser.follower_userid == user_id)
+                
+        else:  # Following
+            get_follow_user=get_follow_user.join(User,FollowUser.following_userid == User.id,isouter=True).filter(FollowUser.follower_userid == login_user_id,FollowUser.following_userid == User.id)
+            
+            # following_subquery = (
+            #     db.query(FollowUser)
+            #     .with_entities(func.count(FollowUser.id))
+            #     .filter(
+            #         FollowUser.following_userid == User.id,
+            #         FollowUser.follower_userid == login_user_id,
+            #     )
+            #     .order_by(FollowUser.id)
+            #     .limit(1)
+            #     .correlate(User)
+            #     .label('following')
+            # )
 
-            criteria = (
-                db.query(FollowUser)
-                .with_entities(FollowUser, following_subquery)
-                .join(User, User.id == FollowUser.follower_userid)
-                .options(aliased(User).load_only('display_name', 'profile_img'))
-            )
+            # criteria = (
+            #     db.query(FollowUser)
+            #     .with_entities(FollowUser, following_subquery)
+            #     .join(User, User.id == FollowUser.follower_userid)
+            #     .options(aliased(User).load_only('display_name', 'profile_img'))
+            # )
 
-            if user_id is None:
-                criteria = criteria.filter_by(following_userid=login_user_id)
+            if not user_id:
+                get_follow_user = get_follow_user.filter(FollowUser.following_userid == login_user_id)
             else:
-                criteria = criteria.filter_by(following_userid=user_id)
+                get_follow_user = get_follow_user.filter(FollowUser.following_userid == user_id)
+            
+            
             if search_key and search_key.strip() != '':
-                criteria = criteria.filter(or_(User.email_id.like('%'+search_key+'%'), 
+                get_follow_user = get_follow_user.filter(or_(User.email_id.like('%'+search_key+'%'), 
                                             User.display_name.like('%'+search_key+'%'),
                                             User.first_name.like('%'+search_key+'%'),
                                             User.last_name.like('%'+search_key+'%'),
                                             func.concat(User.first_name, ' ', User.last_name).like('%'+search_key+'%')))
                 
-            get_row_count = criteria.count()
+            get_row_count = get_follow_user.count()
+            
             if get_row_count < 1:
                 reply = {"status": 0, "msg": "No Result found"}
             else:
                 default_page_size = 50
                 total_pages, offset, limit = get_pagination(get_row_count, current_page_no, default_page_size)
                 
-                criteria = criteria.limit(limit)
-                criteria = criteria.offset(offset)
-                get_result = criteria.all()
+                get_result = get_follow_user.limit(limit).offset(offset).all()
+               
                 result_list = []
-
-
                 for follow in get_result:
                     if type == 1:
                         friend_details = {
                             'user_id': follow.followingUser.id if follow.followingUser.id != '' else '',
                             'user_ref_id': follow.followingUser.user_ref_id if follow.followingUser.user_ref_id != '' else '',
-                            'email_id': html.escape(follow.followingUser.email_id) if follow.followingUser.email_id != '' else '',
-                            'first_name': html.escape(follow.followingUser.first_name) if follow.followingUser.first_name != '' else '',
-                            'last_name': html.escape(follow.followingUser.last_name) if follow.followingUser.last_name != '' else '',
-                            'display_name': html.escape(follow.followingUser.display_name) if follow.followingUser.display_name != '' else '',
-                            'gender': html.escape(follow.followingUser.gender) if follow.followingUser.gender != '' else '',
-                            'profile_img': html.escape(follow.followingUser.profile_img) if follow.followingUser.profile_img != '' else '',
+                            'email_id': follow.followingUser.email_id if follow.followingUser.email_id != '' else '',
+                            'first_name': follow.followingUser.first_name if follow.followingUser.first_name != '' else '',
+                            'last_name': follow.followingUser.last_name if follow.followingUser.last_name != '' else '',
+                            'display_name': follow.followingUser.display_name if follow.followingUser.display_name != '' else '',
+                            'gender': follow.followingUser.gender if follow.followingUser.gender != '' else '',
+                            'profile_img': follow.followingUser.profile_img if follow.followingUser.profile_img != '' else '',
                             'online': ProfilePreference(db,login_user_id, follow.followingUser.id, 'online_status', follow.followingUser.online),
                             'last_seen': follow.followingUser.last_seen if follow.followingUser.last_seen != '' else '',
                             'follow': True if follow.following != 0 else False,
@@ -5511,12 +5504,12 @@ async def actionGetfollowlist(db:Session=Depends(deps.get_db),token:str=Form(...
                         friend_details = {
                             'user_id': follow.followerUser.id if follow.followerUser.id != '' else '',
                             'user_ref_id': follow.followerUser.user_ref_id if follow.followerUser.user_ref_id != '' else '',
-                            'email_id': html.escape(follow.followerUser.email_id) if follow.followerUser.email_id != '' else '',
-                            'first_name': html.escape(follow.followerUser.first_name) if follow.followerUser.first_name != '' else '',
-                            'last_name': html.escape(follow.followerUser.last_name) if follow.followerUser.last_name != '' else '',
-                            'display_name': html.escape(follow.followerUser.display_name) if follow.followerUser.display_name != '' else '',
-                            'gender': html.escape(follow.followerUser.gender) if follow.followerUser.gender != '' else '',
-                            'profile_img': html.escape(follow.followerUser.profile_img) if follow.followerUser.profile_img != '' else '',
+                            'email_id': follow.followerUser.email_id if follow.followerUser.email_id != '' else '',
+                            'first_name': follow.followerUser.first_name if follow.followerUser.first_name != '' else '',
+                            'last_name': follow.followerUser.last_name if follow.followerUser.last_name != '' else '',
+                            'display_name': follow.followerUser.display_name if follow.followerUser.display_name != '' else '',
+                            'gender': follow.followerUser.gender if follow.followerUser.gender != '' else '',
+                            'profile_img': follow.followerUser.profile_img if follow.followerUser.profile_img != '' else '',
                             'online': ProfilePreference(db,login_user_id, follow.followerUser.id, 'online_status', follow.followerUser.online),
                             'last_seen': follow.followerUser.last_seen if follow.followerUser.last_seen != '' else '',
                             'follow': True if follow.following != 0 else False,
@@ -5623,7 +5616,7 @@ async def getreferrallist(db:Session=Depends(deps.get_db),token:str=Form(...),pa
 # 74. Create Live Event
 
 @router.post("/addliveevent")
-async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(...),event_title:str=Form(...),event_type:int=Form(...),event_start_data:date=Form(...),event_start_time:time=Form(...),event_banner:UploadFile=File(...),event_invite_mails:str=Form(...,description="example abc@mail.com,def@mail.com"),event_invite_groups:str=Form(None,description="example 14,27,32"),event_invite_friends:str=Form(None,description="example 5,7,3")):
+async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(...),event_title:str=Form(...),event_type:int=Form(...),event_start_date:date=Form(...),event_start_time:time=Form(...),event_banner:UploadFile=File(...),event_invite_mails:str=Form(None,description="example abc@mail.com,xyz@gmail.com"),event_invite_groups:str=Form(None,description="example [14,27,32]"),event_invite_friends:str=Form(None,description="example [5,7,3]")):
     if token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     else:
@@ -5639,19 +5632,20 @@ async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(...),event
 
             if IsAccountVerified(db,login_user_id) == False:
                 return {"status":0,"msg":"You need to complete your account validation before you can do this"}
+            
             event_title=event_title if event_title.strip() !=None or event_title.strip() !="" else None
             event_type=event_type if event_type>0 else None
             event_start_date=event_start_date
             event_start_time=event_start_time
 
-            event_invite_custom=event_invite_mails if len(event_invite_custom)>0 else None
-            event_invite_groups=event_invite_groups if len(event_invite_groups)>0 else None
-            event_invite_friends=event_invite_friends if len(event_invite_friends) >0 else None
-
-            event_invite_custom= [int(i) for i in event_invite_mails.split(',')]
-            event_invite_groups= [int(i) for i in event_invite_groups.split(',')]
-            event_invite_friends= [int(i) for i in event_invite_friends.split(',')]
-
+            event_invite_custom=event_invite_mails if event_invite_mails and event_invite_mails.strip() != '' else None
+            event_invite_groups=event_invite_groups if event_invite_groups and event_invite_groups.strip() != '' else None
+            event_invite_friends=event_invite_friends if event_invite_friends and event_invite_friends.strip() != '' else None
+            
+            event_invite_custom= event_invite_custom.split(',') if event_invite_custom else None
+            event_invite_groups= json.loads(event_invite_groups) if event_invite_groups else None
+            event_invite_friends=json.loads(event_invite_friends) if event_invite_friends else None
+            
             if not event_title:
                 return {"status":0,"msg":"Live event title cant be blank."}
             elif not event_type:
@@ -5661,40 +5655,42 @@ async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(...),event
             elif not event_start_time:
                 return {"status":0,"msg":"Live event start time cant be blank."}
             else:
-                setting=db.query(UserSettings).filter(UserSettings.user_id==login_user_id).first()
-                cover_img=defaultimage('talkshow')
-                if setting and setting.meeting_header_image !=None:
+                setting=db.query(UserSettings).filter(UserSettings.user_id == login_user_id).first()
+                img_flag='talkshow'
+                cover_img=defaultimage(img_flag)
+                
+                if setting and setting.meeting_header_image != None:
                     cover_img=setting.meeting_header_image
+                    
                 server_id=None
-                query = db.query(KurentoServers)
-                query = query.filter_by(status=1)
-                query = query.order_by(func.rand())
-                query = query.limit(1)
-
-                # get result
-                server = query.one()
+                server = db.query(KurentoServers).filter(KurentoServers.status == 1).order_by(func.random()).limit(1).first()
 
                 if server:
                     server_id=server.server_id
-                user=db.query(User).filter(User.id==login_user_id).first()
-                userstatus=db.query(UserStatusMaster).filter(UserStatusMaster.id==user.user_status_id).first()
+                    
+                user=db.query(User).filter(User.id == login_user_id).first()
+                userstatus=db.query(UserStatusMaster).filter(UserStatusMaster.id == user.user_status_id).first()
 
                 duration=userstatus.max_event_duration * 3600
                 duration = (datetime.min + timedelta(seconds=duration)).strftime('%H:%M:%S')
 
-                reference_id = f"RC{str(random.randint(1, 499))}{str(int(time.time()))}"
+                reference_id = f"RC{str(random.randint(1, 499))}{str(int(datetime.now().timestamp()))}"
                 
                 new_event = Events(title=event_title,type = 2,ref_id = reference_id,server_id = server_id if server_id else None,
                                    event_type_id = event_type,event_layout_id = 1,duration = duration,created_at = datetime.now(),
-                                   created_by = login_user_id,cover_img = cover_img,start_date_time = event_start_date + " " + event_start_time)
+                                   created_by = login_user_id,cover_img = cover_img,start_date_time = str(event_start_date) + " " + str(event_start_time))
 
                 db.add(new_event)
                 db.commit()
-                
-                totalfriend=[]
-                if event_type ==1:
-                    totalfriends=get_friend_requests(login_user_id,requested_by=None,request_status=1,response_type=1,search_key=None)
-                    totalfriend.append(totalfriends.accepted)
+                if new_event:
+                    totalfriend=[]
+                    
+                    if event_type ==1:
+                        totalfriends=get_friend_requests(db,login_user_id,requested_by=None,request_status=1,response_type=1)
+                        totalfriend = totalfriend + totalfriends['accepted']
+                    
+                    if event_banner:
+                        print("Pending")
 #-------------------#---------------------------_#---------------------------_______#-----------------------___#_----------#
 
 
@@ -5705,57 +5701,70 @@ async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(...),event
 #-----------------#_----------------------#_------------------------#-----------------------#
 
 
-                if event_invite_friends:
-                    for value in event_invite_friends:
-                        invite_friends = EventInvitations(type = 1,event_id = new_event.id,user_id = value,invite_sent = 0,
-                                                        created_at = datetime.now(),created_by = login_user_id)
-                        db.add(invite_friends)
-                        db.commit()
-                        if value not in totalfriends:
-                            totalfriend.append(value)
+                    if event_invite_friends:
+                        for value in event_invite_friends:
+                            invite_friends = EventInvitations(type = 1,event_id = new_event.id,user_id = value,invite_sent = 0,
+                                                            created_at = datetime.now(),created_by = login_user_id)
+                            db.add(invite_friends)
+                            db.commit()
+                            if value not in totalfriends:
+                                totalfriend.append(value)
+                    
+                    if event_invite_groups:
+                        for value in event_invite_groups:
+                            invite_groups = EventInvitations(type = 2,event_id = new_event.id,group_id = value,
+                                                            invite_sent = 0,created_at = datetime.now(),created_by = login_user_id)
                             
-                if event_invite_groups:
-                    for value in event_invite_groups:
-                        invite_groups = EventInvitations(type = 2,event_id = new_event.id,group_id = value,
-                                                         invite_sent = 0,created_at = datetime.now(),created_by = login_user_id)
+                            db.add(invite_groups)
+                            db.commit()
                         
-                        db.add(invite_groups)
-                        db.commit()
-                        
-                       
-                        get_group_member = db.query(FriendGroupMembers).filter_by(group_id=value).all()
-                        if get_group_member:
-                            for member in get_group_member:
-                                if member.user_id not in totalfriend:
-                                    totalfriend.append(member.user_id)
-                        
-                link = inviteBaseurl() + 'join/event/' + reference_id
-                subject = 'Rawcaster - Talkshow Invitation'
-                body = ''
-                sms_message = ''
-                if new_event.id is not None and new_event.id != '':
-                    sms_message , body = eventPostNotifcationEmail(new_event.id)
+                            get_group_member = db.query(FriendGroupMembers).filter_by(group_id=value).all()
+                            if get_group_member:
+                                for member in get_group_member:
+                                    if member.user_id not in totalfriend:
+                                        totalfriend.append(member.user_id)
+                    
+                    invite_url=inviteBaseurl()
+                    link = f"{invite_url}join/event/{reference_id}"
+                    subject = 'Rawcaster - Talkshow Invitation'
+                    body = ''
+                    sms_message = ''
+                    
+                    if new_event.id:  # Created Event
+                        sms_message , body = eventPostNotifcationEmail(db,new_event.id)
 
-                if event_invite_custom is not None and len(event_invite_custom) > 0:
-                    for value in event_invite_custom:                    
-                        invite_custom = EventInvitations(type=3, event_id=new_event.id, invite_mail=value, invite_sent=0, created_at=datetime.now(), created_by=login_user_id)
-                        db.add(invite_custom)
-                        db.commit()
-                        to=value
-                        send_mail=await send_email(to,subject,body)
-                event=get_event_detail(new_event.id,login_user_id)
-                message_detail=[]
-                email_detail=[]
-                if totalfriends:
-                    for users in totalfriends:
-                        Insertnotification(users,login_user_id,13,new_event.id)
-                    message_detail.append({"message":"Posted new talkshow","data":{"refer_id":new_event.id,"type":"add_event"},"type":"events"})
-                    pushNotify(totalfriends,message_detail,login_user_id)
-                    email_detail.append({"subject":subject,"mail_message":body,"sms_message":sms_message,"type":"events"})
-                    addNotificationSmsEmail(totalfriends,email_detail,login_user_id)
-                
-                return {"status":1,"msg":"Event saved successfully !","ref_id":reference_id,"event_detail":event}
-            return {"status":0,'msg':"Event cant be created."}
+                    if event_invite_custom and event_invite_custom != '':
+                        for value in event_invite_custom:  # check if e-mail address is well-formed    
+                            if check_mail(value) == True:
+                                invite_custom = EventInvitations(type=3, event_id=new_event.id, invite_mail=value, invite_sent=0, created_at=datetime.now(), created_by=login_user_id)
+                                db.add(invite_custom)
+                                db.commit()
+                                to=value
+                                if invite_custom:
+                                    try:
+                                        send_mail=await send_email(to,subject,body)
+                                    except:
+                                        pass
+                                    
+                    event=get_event_detail(db,new_event.id,login_user_id)
+                    message_detail={}
+                    email_detail={}
+                    if totalfriend:
+                        
+                        for users in totalfriend:
+                            Insertnotification(db,users,login_user_id,13,new_event.id)
+                        
+                        message_detail.update({"message":"Posted new talkshow","data":{"refer_id":new_event.id,"type":"add_event"},"type":"events"})
+                        
+                        push_notification=pushNotify(db,totalfriend,message_detail,login_user_id)
+                        
+                        email_detail.update({"subject":subject,"mail_message":body,"sms_message":sms_message,"type":"events"})
+                        
+                        addNotificationSmsEmail(db,totalfriend,email_detail,login_user_id)
+                    
+                    return {"status":1,"msg":"Event saved successfully !","ref_id":reference_id,"event_detail":event}
+                else:
+                    return {"status":0,'msg':"Event cant be created."}
 
                
 

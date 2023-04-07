@@ -22,12 +22,38 @@ from operator import itemgetter
 
 
 
+async def send_email(to_mail, subject, message):
+    conf = ConnectionConfig(
+        MAIL_USERNAME= "AKIAYFYE6EFYF3SQOJHI",
+        MAIL_PASSWORD= "BPkaC3u48gAj15i/YBLMDnICroNWdHXRWHMBYGWlDT6Q",
+        MAIL_FROM="rawcaster@rawcaster.com",
+        MAIL_PORT=587,
+        MAIL_SERVER="smtp.gmail.com", 
+        MAIL_FROM_NAME="Rawcaster",
+        MAIL_TLS=True,
+        MAIL_SSL=False,
+        VALIDATE_CERTS = True,
+        USE_CREDENTIALS=True
+
+    )
+    message = MessageSchema(
+        subject=subject,
+        recipients=[to_mail],
+        body=message,
+        subtype="html"
+    )
+
+    fm = FastMail(conf)
+    await fm.send_message(message)
+    return ({"msg": "Email has been sent"})
+    
+
 def common_date(date, without_time=None):
 
     datetime = date.strftime("%Y-%m-%d %I:%M:%S")
 
     if without_time == 1:
-        datetime = date.strftime("%d-%m-%Y")
+        datetime = date.strftime("%Y-%m-%d")
 
     return datetime
 
@@ -72,11 +98,12 @@ def EmailorMobileNoValidation(email_id):
             return {'status': 0, 'type': 0, 'email': None, 'mobile': None}
        
 def pushNotify(db,user_ids,details,login_user_id):
+    
     api_key="AAAAJndtCwI:APA91bEdwo6X4izLPWkAaoYDIt9zUzrQ8pi_jHUFVne-xMuEDNiqCn1KBSse4TuxRd_5nakioin7l5p8mY7-OhdnXS-SubCqsc-UJS2mDtjJVEY3jq7K9kkE_-3O9LuKJTqPds8Ughi4"
-    title=details.title if details.title else "New notification"
-    type=details.type if details.type else "nuggets"
-    message=details.message if details.message else ""
-    data=details.data if details.data else ""
+    title="New notification"
+    type=details['type'] if details['type'] else "nuggets"
+    message=details['message'] if details['message'] else ""
+    data=details['data'] if details['data'] else ""
     
     get_user=db.query(User).filter(User.id == login_user_id).first()
     
@@ -86,10 +113,9 @@ def pushNotify(db,user_ids,details,login_user_id):
     get_api_token=db.query(ApiTokens.user_id,ApiTokens.device_type,ApiTokens.push_device_id,UserSettings.nuggets,UserSettings.events,UserSettings.friend_request)
     get_api_token=get_api_token.filter(UserSettings.user_id == ApiTokens.user_id,ApiTokens.status == 1,and_(or_(ApiTokens.push_device_id != None,ApiTokens.push_device_id != ""))).group_by(ApiTokens.push_device_id)
     
-    if (user_ids != None or user_ids != "") and type(user_ids) == list:
+    if user_ids:
         get_api_token=get_api_token.filter(ApiTokens.user_id.in_(user_ids))
-    elif user_ids != "":
-        get_api_token=get_api_token.filter(ApiTokens.user_id ==user_ids)
+    
     
     get_api_token=get_api_token.all()
     registration_ids=[]
@@ -194,12 +220,12 @@ def friendRequestNotifcationEmail(db,senderId,receiverId,flag):   # flag = 1 Fri
         print("Invalid Parameters")
                 
 def addNotificationSmsEmail(db,user,email_detail,login_user_id):
-    sms_message = email_detail.sms_message if email_detail.sms_message else ""
-    mail_message = email_detail.mail_message if email_detail.mail_message else ""
-    subject = email_detail.subject if email_detail.subject else ""
-    type_ = email_detail.type if email_detail.type else "nuggets"
-    email = email_detail.email if email_detail.email else ""
-
+    sms_message = email_detail['sms_message'] if email_detail['sms_message'] else ""
+    mail_message = email_detail['mail_message'] if email_detail['mail_message'] else ""
+    subject = email_detail['subject'] if email_detail['subject'] else ""
+    type_ = email_detail['type'] if email_detail['type'] else "nuggets"
+    # email = email_detail['email'] if email_detail['email'] else ""
+    email=''
     mobile_nos = ""
     if user:
         get_user =db.query(User.id,User.country_code,User.email_id,User.mobile_no,UserSettings.nuggets,UserSettings.events,UserSettings.friend_request)
@@ -599,8 +625,8 @@ def MutualFriends(db,login_user_id,user_id):
     otherfriends=get_friend_requests(db,user_id,None,None,1)
     
     if myfriends and otherfriends:
-        if myfriends.accepted and otherfriends.accepted:
-            mutual_friends =len(set(myfriends.accepted).intersection(otherfriends.accepted))
+        if myfriends['accepted'] and otherfriends['accepted']:
+            mutual_friends =len(set(myfriends['accepted']).intersection(otherfriends['accepted']))
         else:
             return {"status":0,"msg":"Mutual Friends failed"}
     return mutual_friends
@@ -785,41 +811,41 @@ def eventPostNotifcationEmail(db,event_id):
 
 
 def get_event_detail(db,event_id,login_user_id):
-    event=[]
+    event={}
     event_details=db.query(Events).filter_by(id = event_id).first()
     if event_details:
         default_melody=db.query(EventMelody).filter_by(id = event_details.event_melody_id).first()
-        event.append({
+        event.update({
                         "event_id":event_details.id,
-                        "type":event_details.type,
-                        "event_name":event_details.title,
-                        "reference_id":event_details.ref_id,
-                        "message":event_details.description,
-                        "event_type_id":event_details.event_type_id,
-                        "event_layout_id":event_details.event_layout_id,
-                        "no_of_participants":event_details.no_of_participants,
-                        "duration":event_details.duration,
-                        "start_date_time":event_details.start_date_time,
-                        "start_date":(event_details.start_date_time).date(),
+                        "type":event_details.type if event_details.type else "",
+                        "event_name":event_details.title if event_details.title else "",
+                        "reference_id":event_details.ref_id if event_details.ref_id else "",
+                        "message":event_details.description if event_details.description else "",
+                        "event_type_id":event_details.event_type_id if event_details.event_type_id else "",
+                        "event_layout_id":event_details.event_layout_id if event_details.event_layout_id else "",
+                        "no_of_participants":event_details.no_of_participants if event_details.no_of_participants else "",
+                        "duration":event_details.duration if event_details.duration else "",
+                        "start_date_time":common_date(event_details.start_date_time) if event_details.start_date_time else "",
+                        "start_date":common_date(((event_details.start_date_time).date()),without_time=1) if event_details.start_date_time else "",
                         "start_time":(event_details.start_date_time).time(),
                         "is_host":1 if event_details.created_by else 0,
-                        "banner_image":event_details.cover_img,
-                        "created_at":event_details.created_at,
-                        "original_user_name":event_details.user.display_name,
-                        "original_user_id":event_details.user.id,
-                        "original_user_image":event_details.user.profile_img,
-                        "event_melody_id":event_details.event_melody_id,
-                        "waiting_room":event_details.waiting_room,
-                        "join_before_host":event_details.join_before_host,
-                        "sound_notify":event_details.sound_notify,
+                        "banner_image":event_details.cover_img if event_details.cover_img else "",
+                        "created_at":common_date(event_details.created_at) if event_details.created_at else "",
+                        "original_user_name":event_details.user.display_name if event_details.created_by else "",
+                        "original_user_id":event_details.user.id if event_details.created_by else "",
+                        "original_user_image":event_details.user.profile_img if event_details.created_by else "",
+                        "event_melody_id":event_details.event_melody_id if event_details.event_melody_id else "",
+                        "waiting_room":event_details.waiting_room if event_details.waiting_room else "",
+                        "join_before_host":event_details.join_before_host if event_details.join_before_host else "",
+                        "sound_notify":event_details.sound_notify if event_details.sound_notify else "",
                         "user_screenshare":event_details.user_screenshare,
-                        "melodies":{"path":default_melody.path,"type":default_melody.type,"is_default":default_melody.event_id}
+                        "melodies":{"path":default_melody.path if default_melody.path else None,"type":default_melody.type if default_melody.type else None,"is_default":default_melody.event_id if default_melody.event_id else None}
                     })
         
         get_event_default_avs=db.query(EventDefaultAv).filter_by(event_id =event_details.id ).all()
         if get_event_default_avs:
             for defaultav in get_event_default_avs:
-                event.append({"default_host_audio":defaultav.default_host_audio,
+                event.update({"default_host_audio":defaultav.default_host_audio,
                               "default_host_video":defaultav.default_host_video,
                               "default_guest_audio":defaultav.default_guest_audio,
                               "default_guest_video":defaultav.default_guest_video})
@@ -837,7 +863,7 @@ def get_event_detail(db,event_id,login_user_id):
                 elif invite.type ==3:
                     if invite.invite_mail != "":
                         invite_mails.append(invite.invite_mail)
-        event.append({"invite_groups_id":invite_groups_id,"invite_friends_id":invite_friends_id,"invite_mails":invite_mails})
+        event.update({"invite_groups_id":invite_groups_id,"invite_friends_id":invite_friends_id,"invite_mails":invite_mails})
     return event
 
 
@@ -957,39 +983,9 @@ def SendOtp(db,user_id,signup_type):
     return otp_ref_id
 
 
-
-async def send_email(to_mail,subject,message):
-    if type(to_mail)==list:
-        to_mail=to_mail
-    else:
-        to_mail=[to_mail]
-
-    conf = ConnectionConfig(
-        MAIL_USERNAME="AKIAYFYE6EFYF3SQOJHI", 
-        MAIL_PASSWORD="BPkaC3u48gAj15i/YBLMDnICroNWdHXRWHMBYGWlDT6Q", 
-        MAIL_FROM="rawcaster@rawcaster.com",
-        MAIL_PORT=587,
-        MAIL_SERVER="email-smtp.us-west-2.amazonaws.com",  # "smtp.gmail.com",
-        MAIL_FROM_NAME="Rawcaster",
-        MAIL_TLS=True,
-        MAIL_SSL=False,
-        USE_CREDENTIALS=True
-    )
-  
-    message = MessageSchema(
-        subject=subject,
-        recipients=to_mail,
-        body=message,
-    )
-    fm = FastMail(conf)
-    await fm.send_message(message)
-    return ({"msg": "Email has been sent"})
-
-    
-    
 def ProfilePreference(db,myid,otherid,field,value):
-    settings=db.query(UserSettings).filter(UserSettings.user_id==otherid).first()
-    if settings.field:
+    settings=db.query(UserSettings).filter(UserSettings.user_id == otherid).first()
+    if settings and settings.field:
         if settings.field==0:
             return ""
         elif settings.field==1:
@@ -1040,22 +1036,22 @@ def FriendsandGroupPermission(db,myid,friendid,flag=1):
 
 
 def eventPostNotifcationEmail(db,eventId):
-    if eventId != '' and eventId.isnumeric():
+    if eventId != None and eventId != '':
         to = ''
         subject = ''
         body = ''
         phone = ''
-        event = Events.objects.filter(id=eventId, status=1).first()
-        if event is not None:
-            eventInvitations = event.eventInvitations
-            coverImg = event.cover_img
+        event = db.query(Events).filter_by(id = eventId, status = 1).first()
+        if event:
+            # eventInvitations = event.eventInvitations
+            # coverImg = event.cover_img
             eventTitle = event.title
             event_start_time = event.start_date_time
-            eventStartTime = datetime.strptime(event_start_time, '%Y-%m-%d %H:%M:%S').strftime('%-d %b %Y %-I:%M %p')
-            subject = 'New Event Created'
+            # eventStartTime = datetime.strptime(event_start_time, '%Y-%m-%d %H:%M:%S').strftime('%-d %b %Y %-I:%M %p')
+            # subject = 'New Event Created'
             meetingUrl = inviteBaseurl() + 'joinmeeting/' + event.ref_id
-            eventCreatorName = event.createdBy.display_name if event.createdBy is not None else "N/A"
-            sms_message = 'Hi, ' + eventCreatorName + ' is inviting you to join a web event called ' + eventTitle + '. The link for this Rawcaster event is: ' + meetingUrl
+            eventCreatorName = event.user.display_name if event.created_by else None
+            sms_message =f'Hi,{eventCreatorName} is inviting you to join a web event called {eventTitle}. The link for this Rawcaster event is: {meetingUrl}'
             return (sms_message, body)
 
 def GenerateUserRegID(id):
