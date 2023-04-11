@@ -19,24 +19,30 @@ from moviepy.video.io.VideoFileClip import VideoFileClip
 router = APIRouter() 
 
 
+# 1 Video Spliting
 @router.post("/video_split")
 async def video_split(db:Session=Depends(deps.get_db)):
-    clip = VideoFileClip("input_video.mp4")
 
-    # Set the length of each part in seconds
-    part_length = 300  # 5 minutes * 60 seconds
+    segment_duration = 5 * 60
 
-    # Calculate the number of parts
-    num_parts = int(clip.duration / part_length) + 1
+    video = VideoFileClip("/home/radhakrishnan/Desktop/videoplayback.mp4")
+    duration = video.duration
 
-    # Loop through each part and write it to a separate file
-    for i in range(num_parts):
-        start = i * part_length
-        end = min((i + 1) * part_length, clip.duration)
-        part = clip.subclip(start, end)
-        part.write_videofile(f"output_part_{i}.mp4")
-
-    return "Done"
+    total_duration = video.duration
+    if duration < 3000:
+        num_segments = math.ceil(total_duration / segment_duration)
+        for i in range(num_segments):
+        
+            start_time = i * segment_duration
+            end_time = min((i+1) * segment_duration, total_duration)
+            
+            segment = video.subclip(start_time, end_time)
+            
+            # Save the segment as a new file
+            segment_filename = f"output_segment_{i+1}.mp4"
+            segment.write_videofile(segment_filename, codec="libx264")
+    else:
+        print("fail")
 
 
 # def get_ip():

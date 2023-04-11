@@ -23,32 +23,34 @@ from PIL import Image
 import os,boto3
 
 
-async def send_email(to_mail, subject, message):
-    conf = ConnectionConfig(
-        MAIL_USERNAME= "AKIAYFYE6EFYF3SQOJHI",
-        MAIL_PASSWORD= "BPkaC3u48gAj15i/YBLMDnICroNWdHXRWHMBYGWlDT6Q",
-        MAIL_FROM="rawcaster@rawcaster.com",
-        MAIL_PORT=587,
-        MAIL_SERVER="smtp.gmail.com", 
-        MAIL_FROM_NAME="Rawcaster",
-        MAIL_TLS=True,
-        MAIL_SSL=False,
-        VALIDATE_CERTS = True,
-        USE_CREDENTIALS=True
+async def send_email(db,to_mail, subject, message):
+    check_bounce_mail=db.query(AwsBounceEmails).filter(AwsBounceEmails.email_id == to_mail).first()
+    if not check_bounce_mail:
+        conf =  ConnectionConfig(
+            MAIL_USERNAME="AKIAYFYE6EFYF3SQOJHI",
+            MAIL_PASSWORD="BPkaC3u48gAj15i/YBLMDnICroNWdHXRWHMBYGWlDT6Q",  
+            MAIL_FROM="rawcaster@rawcaster.com", 
+            MAIL_PORT=587,
+            MAIL_SERVER="email-smtp.ap-south-1.amazonaws.com",
+            MAIL_FROM_NAME='Rawcaster',
+            MAIL_STARTTLS = True,
+            MAIL_SSL_TLS = False,
+            USE_CREDENTIALS = True,
+            VALIDATE_CERTS = True
+            )
+        
+        message = MessageSchema(
+            subject=subject,
+            recipients=[to_mail],
+            body=message
+        )
 
-    )
-    message = MessageSchema(
-        subject=subject,
-        recipients=[to_mail],
-        body=message,
-        subtype="html"
-    )
-
-    fm = FastMail(conf)
-    await fm.send_message(message)
-    return ({"msg": "Email has been sent"})
+        fm = FastMail(conf)
+        await fm.send_message(message)
+        return ({"msg": "Email has been sent"})
     
-    
+    else:
+        print(":sdfsfsdf")
 
 def sendSMS(mobile_no,message):
     # Create an SNS client
@@ -94,7 +96,7 @@ def checkAuthCode(authcode, auth_text):
     if authcode == result.hexdigest():
         return True
     else:
-        return None
+        return False
     
     
 def EmailorMobileNoValidation(email_id):
@@ -528,7 +530,6 @@ def getFollowings(db,user_id):
 
 
 def NuggetAccessCheck(db,login_user_id,nugget_id):
-    
     group_ids=getGroupids(db,login_user_id)
     
     requested_by=None
@@ -537,17 +538,18 @@ def NuggetAccessCheck(db,login_user_id,nugget_id):
     search_key=None
     my_friends_req=get_friend_requests(db,login_user_id,requested_by,request_status,response_type)
     my_friends=my_friends_req['accepted']
-   
+ 
     my_followings=getFollowings(db,login_user_id)
     type=None
     rawid=GetRawcasterUserID(db,type)
     
     criteria = db.query(Nuggets)
+    criteria = criteria.join(User, Nuggets.user_id == User.id, isouter=True)
     criteria = criteria.join(NuggetsMaster, Nuggets.nuggets_id == NuggetsMaster.id, isouter=True)
     criteria = criteria.join(NuggetsShareWith, Nuggets.id == NuggetsShareWith.nuggets_id, isouter=True)
     criteria = criteria.join(NuggetView, Nuggets.id == NuggetView.nugget_id, isouter=True)
     criteria = criteria.filter(Nuggets.status == 1, Nuggets.nugget_status == 1, NuggetsMaster.status == 1, Nuggets.id == nugget_id)
-    criteria = criteria.filter(Nuggets.user_id == User.id,or_(
+    criteria = criteria.filter(or_(
         Nuggets.user_id == login_user_id,
         and_(Nuggets.share_type == 1),
         and_(Nuggets.share_type == 2, Nuggets.user_id == login_user_id),
@@ -564,19 +566,21 @@ def NuggetAccessCheck(db,login_user_id,nugget_id):
     
     
     get_all_blocked_users=get_friend_requests(db,login_user_id,requested_by,request_status,response_type)
+    
+        
     blocked_users=get_all_blocked_users['blocked']
     
 
     if blocked_users:
-        criteria = criteria.filter(not_(Nuggets.user_id.in_(blocked_users)))
+        criteria = criteria.filter(Nuggets.user_id.notin_(blocked_users))
    
     check_nuggets=criteria.count()
-    
     
     if check_nuggets > 0:
         return True
     else:
         return False
+
     
           
 def getFollowers(db,login_user_id):
