@@ -50,6 +50,13 @@ async def video_split(db:Session=Depends(deps.get_db)):
         print("fail")
 
 
+#  1 Video Spliting
+@router.post("/test_sms")
+async def test_sms(db:Session=Depends(deps.get_db)):
+    phone='9500586972'
+    msg='Test'
+    send_sms=sendSMS(phone,msg)
+
 
 # 1 Signup User
 @router.post("/signup")
@@ -253,9 +260,7 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:int=Form(...,descri
                     return {"status":1, "msg": "Success", "email": email_id,"otp_ref_id":otp_ref_id,"user_id":add_user.id,"acc_verify_status": 0,"first_time":1}  # First Time (1 - New to rawcaster, 0 - existing user)
                     
                 else:
-                    msg=await getModelError()  # Pending
-                    
-                    return {"status":0,"msg":msg}
+                    return {"status":0,"msg":"Failed to add User"}
                         
                                        
 
@@ -588,7 +593,8 @@ async def forgotpassword(db:Session=Depends(deps.get_db),username:str=Form(...,d
                     to=get_user.mobile_no
                     sms=f"{otp} is your OTP for Rawcaster. PLEASE DO NOT SHARE THE OTP WITH ANYONE."
                     msg="A one time passcode (OTP) has been sent to the phone number you provided"
-                    # SMS Pending
+                    # Send SMS
+                    send_sms=sendSMS(to,sms)
                 
                 elif check_mail(username) == True:
                     to=get_user.email_id
@@ -1645,13 +1651,16 @@ async def addfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(...),gro
                     
                 else:
                     # Add Friend Group
-                    group_icon='group_icon'
+                    group_icon=defaultimage("group_icon")
+                    
                     add_friend_group=FriendGroups(group_name = group_name,group_icon=defaultimage(group_icon),created_by=login_user_id,created_at=datetime.now(),status =1)
                     db.add(add_friend_group)
                     db.commit()
                     
                     if add_friend_group:
                         if group_members:
+                            group_members=json.loads(group_members) if group_members else []
+                            
                             for member in group_members:
                                 get_user=db.query(User).filter(User.id == member).first()
                                 
@@ -1690,7 +1699,7 @@ async def addfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(...),gro
 # 21 Edit Friend Group
 @router.post("/editfriendgroup")
 async def editfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(...),group_name:str=Form(...),group_id:int=Form(...),
-                         group_icon:UploadFile=File(None),group_members:List[int]=Form(None)):
+                         group_icon:UploadFile=File(None),group_members:str=Form(None,description=" User ids Like ['12','13','14']")):
   
     if token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
@@ -1706,7 +1715,7 @@ async def editfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(...),gr
         if group_name.strip() == "":
             return {"status":0,"msg":"Sorry! Group name can not be empty."}
         else:
-            get_frnd_group_count=db.query(FriendGroups).filter(FriendGroups.status == 1 ,FriendGroups.created_by == login_user_id,FriendGroups.group_name == group_name,or_(FriendGroups.id == group_id,FriendGroups.id != group_id)).count()
+            get_frnd_group_count=db.query(FriendGroups).filter(FriendGroups.status == 1 ,FriendGroups.created_by == login_user_id,FriendGroups.group_name == group_name,FriendGroups.id == group_id).filter(FriendGroups.id != group_id).count()
             
             if get_frnd_group_count > 0:
                 return {"status":0,"msg":"Group name already exists"}
@@ -1714,7 +1723,7 @@ async def editfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(...),gr
             else:
                 get_group=db.query(FriendGroups).filter(FriendGroups.status == 1,FriendGroups.created_by == login_user_id,FriendGroups.id == group_id).first()
                 if not get_group:
-                    return {"status":0,"msg":"Invlaid request"}
+                    return {"status":0,"msg":"Invlaid Group"}
 
                 elif get_group.group_name == "My Fans":
                     return {"status":0,"msg":"You can't edit the My Fans group."}
@@ -1724,11 +1733,11 @@ async def editfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(...),gr
                     
                     # Profile Image
                     if group_icon:
-                        print("Imga eupload pending")
+                        print("Image upload pending")
                     
                     if group_members:
                         for member in group_members:
-                            if member == member.created_by:
+                            if member == get_group.created_by:
                                 pass
                             get_user=db.query(User).filter(User.id == member).first()
                             
@@ -1739,7 +1748,8 @@ async def editfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(...),gr
                                     add_frnd_group=FriendGroupMembers(group_id = group_id,user_id = member,added_date=datetime.now(),added_by=login_user_id,is_admin=0,disable_notification=1,status=1)
                                     db.add(add_frnd_group)
                                     db.commit()
-                    update_frnd_group=db.query(FriendGroups).filter(FriendGroups.id == get_group.id).update({"group_name":group_name,"group_icon":'pending',})               
+                    
+                    update_frnd_group=db.query(FriendGroups).filter(FriendGroups.id == get_group.id).update({"group_name":group_name,"group_icon":"" if group_icon else img_path})               
                     db.commit()
                     
                     group_details=GetGroupDetails(db,group_id)
@@ -1765,7 +1775,7 @@ async def addfriendstogroup(db:Session=Depends(deps.get_db),token:str=Form(...),
             login_user_id=get_token_details.user_id
             username =get_token_details.user.display_name
             
-            group_members = json.loads(group_members)
+            group_members = json.loads(group_members) if group_members else []
             
             get_group=db.query(FriendGroups).filter(FriendGroups.status == 1,FriendGroups.created_by == login_user_id,FriendGroups .id == group_id).first()
             
@@ -1778,7 +1788,6 @@ async def addfriendstogroup(db:Session=Depends(deps.get_db),token:str=Form(...),
             else:
                 memberdetails=[]
                 if group_members != []:
-                    memcount=0
                     
                     for member in group_members:
                         get_user=db.query(User).filter(User.id == member).first()
@@ -1816,8 +1825,7 @@ async def addfriendstogroup(db:Session=Depends(deps.get_db),token:str=Form(...),
                     notify_members=group_details['group_member_ids']
                     
                     if get_group.created_by in notify_members:
-                        key = notify_members.index(get_group.created_by)
-                        notify_members.pop(key)
+                        notify_members.pop(get_group.created_by)
                     
                     send_push_notification=pushNotify(db,notify_members,message_detail,login_user_id)
                     
@@ -1843,7 +1851,7 @@ async def removefriendsfromgroup(db:Session=Depends(deps.get_db),token:str=Form(
             get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
             login_user_id=get_token_details.user_id    
             
-            group_members = json.loads(group_members)
+            group_members = json.loads(group_members) if group_members else []
             
             get_group=db.query(FriendGroups).filter(FriendGroups.status == 1,FriendGroups.created_by == login_user_id,FriendGroups.id == group_id).first()
             if not get_group:
@@ -1901,7 +1909,7 @@ async def deletefriendgroup(db:Session=Depends(deps.get_db),token:str=Form(...),
 
 # 25. Add Nuggets
 @router.post("/addnuggets")
-async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(...),content:str=Form(...),share_type:int=Form(None),share_with:str=Form(None,description='friends":[1,2,3],"groups":[1,2,3]}'),
+async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(...),content:str=Form(...),share_type:int=Form(...),share_with:str=Form(None,description='friends":[1,2,3],"groups":[1,2,3]}'),
                      nuggets_media:UploadFile=File(...),poll_option:str=Form(None),poll_duration:str=Form(None),metadata:str=Form(None)):
                          
     if token.strip() == "":
@@ -1961,7 +1969,7 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(...),content
             if anyissue == 1:
                 return {"status": 0, "msg": "Sorry! Share with groups or friends list not correct."}
             else:
-                add_nuggets_master=NuggetsMaster(user_id=login_user_id,content=content,metadata=metadata,poll_duration=poll_duration,created_date=datetime.now(),status=0)
+                add_nuggets_master=NuggetsMaster(user_id=login_user_id,content=content,_metadata=metadata,poll_duration=poll_duration,created_date=datetime.now(),status=0)
                 db.add(add_nuggets_master)
                 db.commit()
                 
@@ -1974,8 +1982,8 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(...),content
                     
                             db.add(add_NuggetPollOption)
                             db.commit()
-                    attachment_count=0  
                     
+                    attachment_count=0  
                     # Nuggets Media
                     if nuggets_media:
                         print("Pending")
@@ -1983,9 +1991,12 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(...),content
                     add_nuggets=Nuggets(nuggets_id=add_nuggets_master.id,user_id=login_user_id,type=1,share_type=share_type,created_date=datetime.now())
                     db.add(add_nuggets)
                     db.commit()
+                    db.refresh(add_nuggets)
                     
                     if add_nuggets:
-                        nuggets=StoreHashTags(db,add_nuggets)
+                        
+                        nuggets=StoreHashTags(db,add_nuggets.id)
+                        
                         totalmembers=[]
                         
                         if share_type == 6 or share_type == 1:
@@ -1995,7 +2006,7 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(...),content
                             search_key=None
                             get_member=get_friend_requests(db,login_user_id,requested_by,request_status,response_type)
 
-                            totalmembers.append(totalmembers.accepted)
+                            totalmembers=totalmembers+get_member['accepted']
                         
                         if share_type == 7:
                             get_members=getFollowers(db,login_user_id)
@@ -2027,8 +2038,10 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(...),content
                                                             totalmembers.append(member.user_id)
                                                 
                         if totalmembers:
+                            
                             for users in totalmembers:
                                 notification_type=1
+                              
                                 add_notification=Insertnotification(db,users,login_user_id,notification_type,add_nuggets.id)
                                     
                                 get_user=db.query(User).filter(User.id == login_user_id).first()
@@ -2041,11 +2054,11 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(...),content
                                         "data":{"refer_id":add_nuggets.id,"type":"add_nugget"},
                                         "type":"nuggets"
                                     }
-                                send_push_notification=pushNotify(totalmembers,message_detail,login_user_id)
+                                send_push_notification=pushNotify(db,totalmembers,message_detail,login_user_id)
                                 body=''
                                 sms_message=''
                                 
-                                if add_nuggets.id and add_nuggets.id != '':
+                                if add_nuggets.id and add_nuggets.id != '':                                    
                                     sms_message,body=nuggetNotifcationEmail(db,add_nuggets.id)  # Pending
                                     
                                 subject='Rawcaster - Notification'
@@ -2055,7 +2068,7 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(...),content
                         nugget_detail=get_nugget_detail(db,add_nuggets.id,login_user_id)  # Pending
                         
                         # Update Nugget Master
-                        update_nuggets_master=db.query(NuggetsMaster).filter_by(id == add_nuggets_master.id).update({"status":1})
+                        update_nuggets_master=db.query(NuggetsMaster).filter_by(id = add_nuggets_master.id).update({"status":1})
                         db.commit()
 
                         return {"status":1,"msg":"Nuggets created successfully!","nugget_detail":nugget_detail}
@@ -2090,7 +2103,7 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(...),my_nug
                 if get_user_settings:
                     user_public_nugget_display_setting=get_user_settings.public_nugget_display
                 
-            
+            return user_public_nugget_display_setting
             current_page_no=page_number
             
             group_ids=getGroupids(db,login_user_id)
@@ -2228,7 +2241,7 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(...),my_nug
             get_nuggets=get_nuggets.order_by(Nuggets.created_date.desc())
             
             get_nuggets_count=get_nuggets.count()
-            return get_nuggets_count
+            
             if get_nuggets_count < 1:
                 return {"status":0,"msg":"No Result found"}
             else:
@@ -2421,9 +2434,11 @@ async def likeandunlikenugget(db:Session=Depends(deps.get_db),token:str=Form(...
                             msg='failed to unlike'
                     else:
                         msg='you not yet liked this nugget'
-            return {"status":status,"msg":msg}            
-        
-        
+            return {"status":status,"msg":msg} 
+
+
+
+    
         
 
 # 28. Delete Nugget
@@ -2491,6 +2506,7 @@ async def nuggetcommentlist(db:Session=Depends(deps.get_db),token:str=Form(...),
                 return {"status":0,"msg":"You need to complete your account validation before you can do this"}
             
             access_check=NuggetAccessCheck(db,login_user_id,nugget_id)
+            
             if not access_check:
                 return {"status":0,"msg":"Unauthorized access"}
                 
@@ -2686,6 +2702,7 @@ async def deletenuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(...
                             db.commit()
 
                             return {"status":status,"msg":msg}
+                        
 
 # 33. Like and Unlike Nugget Comment
 
@@ -2707,7 +2724,7 @@ async def likeandunlikenuggetcomment(db:Session=Depends(deps.get_db),token:str=F
                 if IsAccountVerified(db,login_user_id) == False:
                     return {"status":0,"msg":"You need to complete your account validation before you can do this"} 
                 else:
-                    check_nuggets_comment=db.query(NuggetsComments).filter_by(parent_id=comment_id,status=1).first()
+                    check_nuggets_comment=db.query(NuggetsComments).filter_by(id=comment_id,status=1).first()
 
                     access_check=NuggetAccessCheck(db,login_user_id,check_nuggets_comment.nugget_id)
                     if not access_check:
@@ -2718,7 +2735,7 @@ async def likeandunlikenuggetcomment(db:Session=Depends(deps.get_db),token:str=F
                             checkpreviouslike=db.query(NuggetsCommentsLikes).filter_by(comment_id=comment_id,user_id=login_user_id,status=1).first()
                             if not checkpreviouslike:
                                 nuggetcommentlike=NuggetsCommentsLikes(user_id=login_user_id,nugget_id=check_nuggets_comment.nugget_id,comment_id=comment_id,created_date=datetime.now())
-                                db.execute(nuggetcommentlike)
+                                db.add(nuggetcommentlike)
                                 db.commit()
                                 status=1
                                 msg='Success'
@@ -2739,9 +2756,11 @@ async def likeandunlikenuggetcomment(db:Session=Depends(deps.get_db),token:str=F
                                 msg="Success"
                             else:
                                 msg='you not yet liked this comment'
-                        return {"status":status,"msg":msg}
+                        return {"status":status,"msg":msg} 
                     
-
+                    
+                    
+                     
 # 34. Nugget and comment Liked user list 
 
 @router.post("/nuggetandcommentlikeeduserlist")
@@ -2881,7 +2900,7 @@ async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(...),nugge
                             if delete_media_id:
                                 del_nugget_attac=db.query(NuggetsAttachment).filter(NuggetsAttachment.id.in_(delete_media_id)).delete()
                                 
-                            add_hash_tag=StoreHashTags(db,check_nuggets)   
+                            add_hash_tag=StoreHashTags(db,check_nuggets.id)   
                             
                             # Nuggets Media
                             if nuggets_media:
@@ -3651,9 +3670,8 @@ async def listevents(db:Session=Depends(deps.get_db),token:str=Form(...),user_id
                             
 
 #  42. Delete Events
-@router.post("/actionDeleteevent")
-
-async def actionDeleteevent(db:Session=Depends(deps.get_db),token:str=Form(...),event_id:int=Form(...)):
+@router.post("/deleteevent")
+async def deleteevent(db:Session=Depends(deps.get_db),token:str=Form(...),event_id:int=Form(...)):
     if token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     else:
@@ -3680,9 +3698,11 @@ async def actionDeleteevent(db:Session=Depends(deps.get_db),token:str=Form(...),
             else:
                 return {"status":0,"mgs":"Invalid event id"}
 
+
+
 # 43. View Event         
-@router.post("/actionViewevent")
-async def actionViewevent(db:Session=Depends(deps.get_db),token:str=Form(...),event_id:int=Form(...)):
+@router.post("/viewevent")
+async def viewevent(db:Session=Depends(deps.get_db),token:str=Form(...),event_id:int=Form(...)):
     if token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     else:
@@ -3707,14 +3727,37 @@ async def actionViewevent(db:Session=Depends(deps.get_db),token:str=Form(...),ev
 
 
 
-#     44. Add Event
-@router.post("/actionEditevent")
-async def actionEditevent(db:Session=Depends(deps.get_db),token:str=Form(...),event_id:int=Form(...),event_title:str=Form(...),event_type:int=Form(...),
-                          event_start_date:date=Form(...),event_start_time:timedelta=Form(...),
-                          event_message:str=Form(None),event_participants:int=Form(...,description="max no of participants"),event_duration:timedelta=Form(...,description="Duration of Event hh:mm"),
-                          event_layout:int=Form(...),event_melody_id:int=Form(None,description="Event melody id (56 api table)"),event_melody:UploadFile=File(...),default_host_audio:int=Form(...,description="0->No ,1->Yes"),default_host_video:int=Form(...,description="0->No ,1->Yes"),default_guest_audio:int=Form(...,description="0->No ,1->Yes"),
-                          default_guest_video:int=Form(...,description="0->No ,1->Yes"),event_banner:UploadFile=File(...),event_invite_mails:str=Form(None,description="example abc@mail.com , def@mail.com"),event_invite_group:str=Form(...,description="example 1,2,3"),event_invite_friends:str=Form(...,description="example 1,2,3"),delete_invite_friends:str=Form(...,description="example 1,2,3"),delete_invite_groups:str=Form(...,description="example 1,2,3"),delete_invite_custom:str=Form(...,description="example 1,2,3"),
-                          waiting_room:int=Form(...),join_before_host:int=Form(...),sound_notify:int=Form(...),user_screenshare:int=Form(...)):
+# 44. Edit Event
+@router.post("/editevent")
+async def editevent(db:Session=Depends(deps.get_db),token:str=Form(...),event_id:int=Form(...),event_title:str=Form(...),
+                        event_type:int=Form(...),
+                        event_start_date:date=Form(...),event_start_time:time=Form(...),
+                        event_message:str=Form(None),
+                        event_participants:int=Form(...,description="max no of participants"),
+                        event_duration:timedelta=Form(...,description="Duration of Event hh:mm"),
+                        event_layout:int=Form(...),
+                        
+                        event_melody_id:int=Form(None,description="Event melody id (56 api table)"),
+                        event_melody:UploadFile=File(...),
+                        event_banner:UploadFile=File(...),
+                        
+                        event_host_audio:int=Form(...,description="0->No ,1->Yes"),
+                        event_host_video:int=Form(...,description="0->No ,1->Yes"),
+                        event_guest_audio:int=Form(...,description="0->No ,1->Yes"),
+                        event_guest_video:int=Form(...,description="0->No ,1->Yes"),
+                        
+                        event_invite_mails:str=Form(None,description="example abc@mail.com , def@mail.com"),
+                        event_invite_groups:str=Form(None,description="example [1,2,3]"),
+                        event_invite_friends:str=Form(None,description="example[ 1,2,3]"),
+                        
+                        delete_invite_friends:str=Form(None,description="example [1,2,3]"),
+                        delete_invite_groups:str=Form(None,description="example [1,2,3]"),
+                        delete_invite_mails:str=Form(None,description="example abc@gmail.com,xyz@mail.com"),
+                        
+                        waiting_room:int=Form(None,description="0-No,1-Yes",ge=0,le=1),
+                        join_before_host:int=Form(None,description="0-No,1-Yes",ge=0,le=1),
+                        sound_notify:int=Form(None,description="0-No,1-Yes",ge=0,le=1),
+                        user_screenshare:int=Form(None,description="0-No,1-Yes",ge=0,le=1)):
     
     
     if token.strip() == "":
@@ -3730,102 +3773,165 @@ async def actionEditevent(db:Session=Depends(deps.get_db),token:str=Form(...),ev
             
             if not IsAccountVerified(db,login_user_id):
                 return {"status":0, "msg":"You need to complete your account validation before you can do this"}
-            event_exist=db.query(Events).filter_by(id=event_id,created_by=login_user_id).count()
-
-            if event_exist==0:
-                return {"status":0,"msg":"Invalid Event ID."}
-            elif(not event_title):
-                return {"status":0,"msg":"Event title cant be blank."}
-            elif not event_type:
-                return {"status":0,"msg":"Event type cant be blank."}
-            elif not event_start_date:
-                return {"status":0,"msg":"Event start date cant be blank."}
             
-            elif not event_start_time:
-                return {"status":0,"mgs":"Event start time cant be blank."}
-            elif not event_participants:
-                return {"status":0,"msg":"Event participants cant be blank."}
-            elif not event_duration:
-                return {"status":0,"msg":"Event duration cant be blank."}
-            elif event_duration>10:
-                return {"status":0,"msg":"Event duration invalid"}
-            elif not event_layout:
-                return {"status":0,"msg":"Event layout cant be blank."}
-            elif not default_host_audio:
-                return {"status":0,"msg":"Event host audio settings cant be blank."}
-            elif not default_host_video:
-                return {"status":0,"msg":"Event host video settings cant be blank."}
-            elif not default_guest_audio:
-                return {"status":0,"msg":"Event guest audio settings cant be blank."}
-            elif not default_guest_video:
-                return {"status":0,"msg":"Event guest video settings cant be blank."}
+            
+            delete_invite_custom=json.loads(delete_invite_mails) if delete_invite_mails else None
+            delete_invite_groups=json.loads(delete_invite_groups) if delete_invite_groups else None
+            delete_invite_friends=json.loads(delete_invite_friends) if delete_invite_friends else None
+            
+            event_exist=db.query(Events).filter_by(id=event_id,created_by=login_user_id).count()
+            
+            if event_exist == 0:
+                return {"status":0,"msg":"Invalid Event ID."}
+            
+         
             elif not event_melody:
                 return {"status":0,"mgs":"Event melody cant be blank."}
             
             else:
-                delete_invite_friends = [int(i) for i in delete_invite_friends.split(',')]
-                if delete_invite_friends !="" and delete_invite_friends!=" " and delete_invite_custom !=None:
-                    delete_query=db.query(EventInvitations).filter(and_(EventInvitations.event_id==event_id,EventInvitations.user_id.in_(delete_invite_friends)) ).delete()
+                # Delete Invites
+                if delete_invite_friends:
+                    delete_friends=db.query(EventInvitations).filter(EventInvitations.event_id == event_id,EventInvitations.user_id.in_(delete_invite_friends)).delete()
                     db.commit()
-                delete_invite_groups = [int(i) for i in delete_invite_groups.split(',')]
-                if delete_invite_groups !="" and delete_invite_groups!=" " and delete_invite_groups !=None:
-                    delete_query=db.query(EventInvitations).filter(and_(EventInvitations.event_id==event_id,EventInvitations.user_id.in_(delete_invite_groups)) ).delete()
+                
+                if delete_invite_groups:
+                    event_invite_group=db.query(EventInvitations).filter(and_(EventInvitations.event_id==event_id,EventInvitations.group_id.in_(delete_invite_groups))).delete()
                     db.commit()
-                delete_invite_custom = [int(i) for i in delete_invite_custom.split(',')]
-                if delete_invite_custom !="" and delete_invite_custom!=" " and delete_invite_custom !=None:
-                    delete_query=db.query(EventInvitations).filter(and_(EventInvitations.event_id==event_id,EventInvitations.user_id.in_(delete_invite_custom)) ).delete()
+                
+                if delete_invite_custom:
+                    delete_invite_mails=db.query(EventInvitations).filter(and_(EventInvitations.event_id==event_id,EventInvitations.invite_mail.in_(delete_invite_custom))).delete()
                     db.commit()
 
-                if event_type==3:
+                if event_type == 3:
                     delete_query=db.query(EventInvitations).filter(EventInvitations.event_id==event_id).delete()
                     db.commit()
-                user=db.query(User).filter(User.id==login_user_id).first()
-                hostname=user.display_name
+                
+                user=db.query(User).filter(User.id == login_user_id).first()
+                hostname=user.display_name if user else ""
                 is_event_changed=0
-                edit_event=db.query(Events).filter(Events.id==event_id).first()
-                old_start_datetime=edit_event.start_date_time
+                
+                edit_event=db.query(Events).filter(Events.id == event_id).first()
+                
+                old_start_datetime=edit_event.start_date_time if edit_event else None
+                
                 edit_event.title=event_title
-
                 edit_event.event_type_id=event_type
                 edit_event.event_layout_id=event_layout
                 edit_event.no_of_participants=event_participants
                 edit_event.duration=event_duration
-                edit_event.start_date_time=event_start_date+" "+event_start_time
+                edit_event.start_date_time=str(event_start_date) +" "+ str(event_start_time)
                 edit_event.waiting_room=waiting_room
                 edit_event.join_before_host=join_before_host
                 edit_event.sound_notify=sound_notify
                 edit_event.user_screenshare=user_screenshare
-
-                
                 db.commit()
-                totalfriends=[]
-                if event_type==1:
-                    totalfriends=get_friend_requests(login_user_id,requested_by=None,request_status=1,response_type=1,search_key=None)
-                    totalfriends=totalfriends.accepted
-                if old_start_datetime !=edit_event.start_date_time:
-                    is_event_changed=1
-                edit_default_av=db.query(EventDefaultAv).filter(EventDefaultAv.event_id==event_id,EventDefaultAv.status==1).first()
-                edit_default_av.default_host_audio=default_host_audio
-                edit_default_av.default_host_video=default_host_video
-                edit_default_av.default_guest_audio=default_guest_audio
-                edit_default_av.default_guest_video=default_guest_video
+                if edit_event:
+                    totalfriends=[]
+                    if event_type == 1:
+                        totalfriends=get_friend_requests(db,login_user_id,requested_by=None,request_status=1,response_type=1)
+                        totalfriends = totalfriends['accepted']
+                    
+                    if old_start_datetime !=edit_event.start_date_time:
+                        is_event_changed = 1
+                        
+                    #  Default Audio Video Settings
+                    edit_default_av=db.query(EventDefaultAv).filter(EventDefaultAv.event_id == event_id).first()
+                    if edit_default_av:
+                        edit_default_av.default_host_audio=event_host_audio
+                        edit_default_av.default_host_video=event_host_video
+                        edit_default_av.default_guest_audio=event_guest_audio
+                        edit_default_av.default_guest_video=event_guest_video
+                        db.commit()
+                    
+                    # Banner Image
+                    if event_banner:
+                        print("Pending")
+                    else:  
+                        temp=event_melody_id
+                        edit_event.event_melody_id =temp if temp > 0 else 1
+                        db.commit()
+                    
+                    # Event Melody
+                    if event_melody:
+                        print("Pending")
+                    
+                    
+                    else:
+                        temp=event_melody_id if event_melody_id else 1
+                        edit_event.event_melody_id =temp if temp > 0 else 1
+                        db.commit()
+                    
+                    if is_event_changed == 1:
+                        update_invitation=db.query(EventInvitations).filter(EventInvitations.event_id == event_id).update({"is_changed":1})
+                        db.commit()
+                    
+                    if event_invite_friends:
+                        for invite_frnds in event_invite_friends:
+                            invite_friends=EventInvitations(type=1,event_id=event_id,user_id=invite_frnds,invite_sent=0,created_at=datetime.now(),created_by=login_user_id)
+                            db.add(invite_friends)
+                            db.commit()
+                            db.refresh(invite_friends)
+                            
+                            if invite_frnds not in totalfriends:
+                                totalfriends.append(invite_frnds)
+                    
+                    if event_invite_groups:
+                        for invite_frnds in event_invite_friends:
+                            invite_friends=EventInvitations(type=2,event_id=event_id,user_id=invite_frnds,invite_sent=0,created_at=datetime.now(),created_by=login_user_id)
+                            db.add(invite_friends)
+                            db.commit()
+                            db.refresh(invite_friends)
+                            
+                            getgroupmember=db.query(FriendGroupMembers).filter(FriendGroupMembers.group_id == invite_frnds).all()
+                            if getgroupmember:
+                                for member in getgroupmember:
+                                    if member.user_id in totalfriends:
+                                        totalfriends.append(member.user_id)
+                    
+                    invite_url=inviteBaseurl()
+                    link=f"{invite_url}join/event/{edit_event.ref_id}"
+                    subject='Rawcaster - Event Invitation'
+                    content=''
+                    body=''
+                    if event_invite_mails:
+                        for invite_mail in event_invite_mails:
+                            invite_friends=EventInvitations(type =3,event_id=event_id,invite_mail=invite_mail,
+                                                            invite_sent=0,created_at=datetime.now(),created_by=login_user_id)
+                            db.add(invite_friends)
+                            db.commit()
+                            db.refresh(invite_friends)
+                            
+                            if invite_friends:
+                                to=invite_mail
+                                
+                                send_mail=send_email(to,subject,body)
+                    
+                    event=get_event_detail(db,event_id,login_user_id)
+                    if totalfriends:
+                        for users in totalfriends:
+                            insert_notification =Insertnotification(db,users,login_user_id,10,edit_event.id)
 
-                db.commit()
-#--------------------------#------not stored just checked the type------------------#--------------------#--------------------------_#--------------#
-                file_type=magic.from_buffer(event_melody,mime=True)
-                if file_type.startswith("image"):
-                    return {"file_type": "image"}
-                elif file_type.startswith("video"):
-                    return {"file_type": "video"}
-                elif file_type.startswith("audio"):
-                    return {"file_type": "audio"}
+                            message_detail={"message":"Updated an event",
+                                            "data":{"refer_id":edit_event.id,"type":"edit_event"},
+                                            "type":"events"}
+                            
+                            push_notification = pushNotify(db,totalfriends,message_detail,login_user_id)
+
+                            sms_message=f'Hi,greetings from Rawcaster.com.You have been invited by {hostname} to an event titled {event_title}.Use the following link to join the Rawcaster event.{link} '
+                            
+                            email_detail={"subject":subject,"mail_message":body,"sms_message":sms_message,"type":"events"}
+                            add_notification=addNotificationSmsEmail(db,totalfriends,email_detail,login_user_id)
+                            
+                    return {"status":1,"msg":"Event Updated successfully !","ref_id":edit_event.ref_id,"event_detail":event}      
+                    
                 else:
-                    return {"file_type": "unknown"}
+                    return {"status":0,"msg":"Event cant be updated."}      
+                
+                      
 
 # 45. List Chat Messages    
-    
-@router.post("/actionListchatmessages")
-async def actionListchatmessages(db:Session=Depends(deps.get_db),token:str=Form(...),user_id:int=Form(...),page_number:int=Form(...),search_key:str=Form(None),last_msg_id:int=Form(None),msg_from:str=Form(None),sender_delete:int=Form(None),receiver_delete:int=Form(None)):
+@router.post("/listchatmessages")
+async def listchatmessages(db:Session=Depends(deps.get_db),token:str=Form(...),user_id:int=Form(...),page_number:int=Form(default=1),search_key:str=Form(None),last_msg_id:int=Form(None),msg_from:str=Form(default=2),sender_delete:int=Form(None),receiver_delete:int=Form(None)):
 
     if token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
@@ -3842,63 +3948,66 @@ async def actionListchatmessages(db:Session=Depends(deps.get_db),token:str=Form(
                 return {"status":0, "msg":"You need to complete your account validation before you can do this"}
             if not user_id:
                 return {"status":0,"msg":"User id is missing"}
-            search_key=search_key if search_key.strip()!="" or search_key.strip()!=None or search_key.strip()!=" " else 0
-            msg_from=msg_from if msg_from.strip() !="" or msg_from.strip() !=" " or msg_from.strip() !=None else 0
-
-            criteria=db.query(FriendsChat).filter(FriendsChat.status==1,FriendsChat.is_deleted_for_both==0,
-                                                     FriendsChat.type==1,FriendsChat.sender_id==login_user_id if FriendsChat.sender_delete==None and FriendsChat.receiver_delete !=None else user_id
-                                                     ,FriendsChat.receiver_id==user_id if FriendsChat.sender_delete==None and FriendsChat.receiver_delete !=None else login_user_id 
-                                                     )
-            if msg_from==1:
-                criteria.filter(FriendsChat.msg_from==msg_from)
-            if search_key !="":
-                criteria.filter(FriendsChat.search_key.like("%"+search_key+"%")).order_by(FriendsChat.id.desc())
-
+            
+            # criteria=db.query(FriendsChat).filter(FriendsChat.status==1,FriendsChat.is_deleted_for_both==0,
+            #                                          FriendsChat.type==1,FriendsChat.sender_id==login_user_id if FriendsChat.sender_delete==None and FriendsChat.receiver_delete !=None else user_id
+            #                                          ,FriendsChat.receiver_id==user_id if FriendsChat.sender_delete==None and FriendsChat.receiver_delete !=None else login_user_id 
+            #                                          )
+            criteria=db.query(FriendsChat).filter(FriendsChat.status == 1,FriendsChat.is_deleted_for_both == 0,FriendsChat.type == 1,or_(FriendsChat.sender_id == login_user_id,FriendsChat.receiver_id == user_id,FriendsChat.sender_delete != None,FriendsChat.sender_id == user_id,FriendsChat.receiver_id == login_user_id,FriendsChat.receiver_delete == None))
+            if msg_from == 1:
+                criteria.filter(FriendsChat.msg_from == msg_from)
+            
+            if search_key and search_key.strip() != '':
+                criteria=criteria.filter(FriendsChat.message.like(search_key+"%"))
+                
+            if last_msg_id:
+                criteria=criteria.filter(FriendsChat.id < last_msg_id)
+                
             get_row_count=criteria.count()
 
             if get_row_count<1:
                 return {"status":2,"msg":"No Result found"}
             else:
                 default_page_size=10
-                limit,offset=get_pagination(get_row_count,page=page_number,size=default_page_size)
-                get_result=criteria.limit(limit).offset(offset).all()
-                result_list=[]
-                count=0
-                for res in get_result:
-                    result_list[count]['id'] =res.id
-                    result_list[count]['uniqueId']=res.msg_code if res.msg_code else None,
-                    result_list[count]['senderId']=res.sender_id if res.sender_id else None,
-                    result_list[count]['senderName']=res.sender.display_name if res.sender.display_name else None,
-                    result_list[count]['userImage']=res.sender.profile_img if res.sender.profile_img else None,
-                    result_list[count]['receiverId']=res.receiver_id if res.receiver_id else None,
-                    result_list[count]['sentType']=res.sent_type if res.sent_type else None,
-                    result_list[count]['parentMsgId']=res.parent_msg_id if res.parent_msg_id else None,
-                    result_list[count]['forwarded_from']=res.forwarded_from if res.forwarded_from else None,
-                    result_list[count]['type']=res.type if res.type else None,
-                    result_list[count]['message']=res.message if res.message else None,
-                    result_list[count]['path']=res.path if res.path else None,
-                    result_list[count]['sent_datetime']=res.sent_datetime if res.sent_datetime else None,
-                    result_list[count]['is_read']=res.is_read if res.is_read else None,
-                    result_list[count]['is_edited']=res.is_edited if res.is_edited else None,
-                    result_list[count]['read_datetime']=res.read_datetime if res.read_datetime else None,
-                    result_list[count]['is_deleted_for_both']=res.is_deleted_for_both if res.is_deleted_for_both else None,
-                    result_list[count]['sender_delete']=res.sender_delete if res.sender_delete else None,
-                    result_list[count]['receiver_delete']=res.receiver_delete if receiver_delete else None,
-                    result_list[count]['sender_deleted_datetime']=res.sender_deleted_datetime  if res.sender_deleted_datetime else None,
-                    result_list[count]['receiver_deleted_datetime']=res.receiver_deleted_datetime if res.receiver_deleted_datetime else None,
-                    result_list[count]['call_status']=res.call_status if res.call_status else None,
-                    result_list[count]['msg_from']=res.msg_from if res.msg_from else None,
-                    count+=1
+                limit,offset,total_pages=get_pagination(get_row_count,page_number,default_page_size)
+                get_result=criteria.order_by(FriendsChat.id.desc()).limit(limit).offset(offset).all()
                 
-                result_list=result_list[::-1]
-                total_pages=int(get_row_count)/default_page_size
+                result_list=[]
+                for res in get_result:
+                    result_list.append({'id':res.id,
+                                        'uniqueId':res.msg_code if res.msg_code else None,
+                                        'senderId':res.sender_id if res.sender_id else None,
+                                        'senderName':(res.user1.display_name if res.user1.display_name else "") if res.sender_id else None,
+                                        'userImage':(res.user1.profile_img if res.user1.profile_img else "") if res.sender_id else None,
+                                       'receiverId':res.receiver_id if res.receiver_id else None,
+                                       'sentType':res.sent_type if res.sent_type else None,
+                                       'parentMsgId':res.parent_msg_id if res.parent_msg_id else None,
+                                       'forwarded_from':res.forwarded_from if res.forwarded_from else None,
+                                       'type':res.type if res.type else None,
+                                       'message':res.message if res.message else None,
+                                       'path':res.path if res.path else None,
+                                       'sent_datetime':common_date(res.sent_datetime) if res.sent_datetime else None,
+                                       'is_read':res.is_read if res.is_read else None,
+                                       'is_edited':res.is_edited if res.is_edited else None,
+                                       'read_datetime':common_date(res.read_datetime) if res.read_datetime else None,
+                                       'is_deleted_for_both':res.is_deleted_for_both if res.is_deleted_for_both else None,
+                                       'sender_delete':res.sender_delete if res.sender_delete else None,
+                                       'receiver_delete':res.receiver_delete if receiver_delete else None,
+                                       'sender_deleted_datetime':common_date(res.sender_deleted_datetime)  if res.sender_deleted_datetime else None,
+                                       'receiver_deleted_datetime':common_date(res.receiver_deleted_datetime) if res.receiver_deleted_datetime else None,
+                                       'call_status':res.call_status if res.call_status else None,
+                                       'msg_from':res.msg_from if res.msg_from else None,
+                                        })
+                    
                 return {"status":1,"msg":"Success","total_pages":total_pages,"current_page_no":page_number,"chat_list":result_list}
             
 
+
+
 #46. Upload Chat Attachment
 
-@router.post("/actionUploadchatattachment")
-async def actionUploadchatattachment(db:Session=Depends(deps.get_db),token:str=Form(...),refid:str=Form(...),chatattachment:UploadFile=File(...) ):
+@router.post("/uploadchatattachment")
+async def uploadchatattachment(db:Session=Depends(deps.get_db),token:str=Form(...),refid:str=Form(...),chatattachment:UploadFile=File(...) ):
     if token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     else:
@@ -3910,14 +4019,16 @@ async def actionUploadchatattachment(db:Session=Depends(deps.get_db),token:str=F
             get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
             login_user_id=get_token_details.user_id
             
-            if not refid or refid.strip() =="" or refid.strip()==None:
+            if refid.strip() == "":
                 return {"status":0,"msg":"Reference id is missing"}
-            elif not chatattachment:
-                return {"status":0,"msg":"File is missing"}
+           
             else:
-                pass
+                path='/uploads/chatattachments'
+                print("Pending")
             
 #----------------------------file want to store---#-----------#----------#---------------------_#-----------------------------------______#--------#
+
+
 
 # 47. List Notifications
 @router.post("/listnotifications")
@@ -3931,7 +4042,7 @@ async def listnotifications(db:Session=Depends(deps.get_db),token:str=Form(...),
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
-            get_token_details=db.query(ApiTokens).filter_by(token == access_token).first()
+            get_token_details=db.query(ApiTokens).filter_by(token = access_token).first()
             
             login_user_id=get_token_details.user_id 
             
@@ -3945,7 +4056,7 @@ async def listnotifications(db:Session=Depends(deps.get_db),token:str=Form(...),
                 default_page_size=25
                 limit,offset,total_pages=get_pagination(get_row_count,current_page_no,default_page_size)
                 
-                get_notification=get_notification.limit(limit).offset(offset).order_by(Notification.id.desc()).all()
+                get_notification=get_notification.order_by(Notification.id.desc()).limit(limit).offset(offset).all()
                 result_list=[]
                 for res in get_notification:
                     friend_request_id=None
@@ -3957,8 +4068,6 @@ async def listnotifications(db:Session=Depends(deps.get_db),token:str=Form(...),
                             friend_request_id=myfriends.id
                             friend_request_status=myfriends.request_status
                     
-                        
-                        
                     result_list.append({
                                         "notification_id":res.id,
                                         "user_id":res.notification_origin_id,
@@ -3969,9 +4078,10 @@ async def listnotifications(db:Session=Depends(deps.get_db),token:str=Form(...),
                                         "friend_request_status":friend_request_status,
                                         "ref_id":res.ref_id if res.ref_id else None,
                                         "is_read":res.is_read if res.is_read else None,
-                                        "read_datetime":res.read_datetime if res.read_datetime else None,
-                                        "created_datetime":res.created_datetime if res.created_datetime else None
+                                        "read_datetime":common_date(res.read_datetime) if res.read_datetime else None,
+                                        "created_datetime":common_date(res.created_datetime) if res.created_datetime else None
                                         })
+                    
                 total_unread_count=db.query(Notification).filter_by(status=1,is_read=0,user_id=login_user_id).count()
                 
                 return {"status":1,"msg":"Success","total_pages":total_pages,"current_page_no":current_page_no,"notification_list":result_list,"total_unread_count":total_unread_count}
@@ -3990,17 +4100,17 @@ async def deletenotification(db:Session=Depends(deps.get_db),token:str=Form(...)
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
-            get_token_details=db.query(ApiTokens).filter_by(token == access_token).first()
+            get_token_details=db.query(ApiTokens).filter_by(token = access_token).first()
             
             login_user_id=get_token_details.user_id 
 
             get_notification=db.query(Notification).filter_by(id = notification_id,status=1).first()
             
-            if get_notification:
+            if not get_notification:
                 return {"status":0,"msg":"Invalid Notification ID"}
             else:
                 if get_notification.user_id == login_user_id:
-                    delete_notification=db.query(Notification).filter_by(id == notification_id).update({"status":0,"deleted_datetime":datetime.now()})
+                    delete_notification=db.query(Notification).filter_by(id = notification_id).update({"status":0,"deleted_datetime":datetime.now()})
                     db.commit()
                     
                     if delete_notification:
@@ -4011,13 +4121,11 @@ async def deletenotification(db:Session=Depends(deps.get_db),token:str=Form(...)
                         
                 else:
                     return {"status":0,"msg":"Your not authorized to delete this notification"}
-                    
-                    
     
     
 # 49. Read Notification
 @router.post("/readnotification")
-async def readnotification(db:Session=Depends(deps.get_db),token:str=Form(...),notification_id:int=Form(...),mark_all_as_read:int=Form(default=1)):
+async def readnotification(db:Session=Depends(deps.get_db),token:str=Form(...),notification_id:int=Form(None),mark_all_as_read:int=Form(default=0)):
     if token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     else:
@@ -4027,16 +4135,19 @@ async def readnotification(db:Session=Depends(deps.get_db),token:str=Form(...),n
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
-            get_token_details=db.query(ApiTokens).filter_by(token == access_token).first()
+            get_token_details=db.query(ApiTokens).filter_by(token = access_token).first()
             
             login_user_id=get_token_details.user_id 
 
             if notification_id:
                 read_notify=db.query(Notification).filter_by(user_id = login_user_id,id = notification_id).update({"is_read":1,"read_datetime":datetime.now()})
+            
             elif mark_all_as_read == 1:
                 read_notify=db.query(Notification).filter_by(user_id = login_user_id).update({"is_read":1,"read_datetime":datetime.now()})
+            
             db.commit()
             return {"status":1,"msg":"Success"}
+    
     
 
 # 50. Unfriend a friend
@@ -4051,23 +4162,22 @@ async def unfriend(db:Session=Depends(deps.get_db),token:str=Form(...),user_id:i
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
-            get_token_details=db.query(ApiTokens).filter_by(token == access_token).first()
+            get_token_details=db.query(ApiTokens).filter_by(token = access_token).first()
             
             login_user_id=get_token_details.user_id 
             
             get_user=db.query(User).filter_by(user_ref_id = user_id).first()
             
             if get_user:
-                friends_rm=db.query(MyFriends).filter(MyFriends.status == 1,MyFriends.request_status == 1 ,or_(MyFriends.sender_id == login_user_id,MyFriends.sender_id == user_id),or_(MyFriends.receiver_id == user_id,MyFriends.sender_id == login_user_id)).update({"status":0})
+                
+                friends_rm=db.query(MyFriends).filter(MyFriends.status == 1,MyFriends.request_status == 1 ,or_(and_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == user_id),and_(MyFriends.sender_id == user_id,MyFriends.receiver_id == login_user_id))).update({"status":0})
                 db.commit()
                 
-                if friends_rm:
-                    
+                if friends_rm:               
                     get_friends=db.query(FriendGroupMembers).filter(or_(FriendGroupMembers.user_id == user_id,FriendGroupMembers.user_id == login_user_id)).filter(FriendGroups.status == 1,or_(FriendGroups.created_by == login_user_id,FriendGroups.created_by == user_id)).all()
                     
                     frnd_group_member_ids=[frnd.id for frnd in get_friends]
                     
-                    # for frnd_grp in get_friends:
                     del_frnd_group=db.query(FriendGroupMembers).filter(FriendGroupMembers.id.in_(frnd_group_member_ids)).delete()
                     db.commit()
                     
@@ -4089,80 +4199,85 @@ async def getothersprofile(db:Session=Depends(deps.get_db),token:str=Form(...),a
         
         access_token=checkToken(db,token)
         
-        if access_token == False:
-            return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+        if checkAuthCode(auth_code,token) == False:
+            return {"status":0,"msg":"Authentication failed!"}
         else:
-            get_token_details=db.query(ApiTokens).filter_by(token = access_token).first()
-            
-            login_user_id=get_token_details.user_id 
-            
-            # Omit blocked users
-            requested_by=None
-            request_status=3
-            response_type=1
-            
-            get_all_blocked_users=get_friend_requests(db,login_user_id,requested_by,request_status,response_type)
-            blocked_users=get_all_blocked_users['blocked']
-            
-            if blocked_users and user_id in blocked_users:
-                return {"status": 0, "msg": "No result found!"}
-        
+            if access_token == False:
+                return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
             else:
-                get_user=db.query(FollowUser).filter(User.id == user_id,FollowUser.following_userid == User.id,FollowUser.follower_userid == login_user_id).first()
+                get_token_details=db.query(ApiTokens).filter_by(token = access_token).first()
                 
-                followers_count=db.query(FollowUser).filter_by(following_userid = user_id).count()
+                login_user_id=get_token_details.user_id if get_token_details else None
                 
-                following_count=db.query(FollowUser).filter_by(follower_userid = user_id).count()
+                # Omit blocked users
+                requested_by=None
+                request_status=3
+                response_type=1
                 
-                if get_user == None or get_user.status != 1:
+                get_all_blocked_users=get_friend_requests(db,login_user_id,requested_by,request_status,response_type)
+                blocked_users=get_all_blocked_users['blocked']
+                
+                if blocked_users and user_id in blocked_users:
                     return {"status": 0, "msg": "No result found!"}
-
+            
                 else:
-                    field='bio_display_status'
-                    settings=db.query(UserSettings).filter(UserSettings.user_id == login_user_id).first()
-                    get_friend_request=db.query(MyFriends).filter(MyFriends.status == 1,or_(MyFriends.sender_id == login_user_id,MyFriends.sender_id == user_id),or_(MyFriends.receiver_id == user_id,MyFriends.receiver_id == login_user_id)).order_by(MyFriends.id.desc()).first()
-                    
-                    
-                    result_list={
-                                    "user_id":get_user.id,
-                                    "user_ref_id":get_user.user2.user_ref_id if get_user.following_userid else "",
-                                    "name":get_user.user2.display_name if get_user.following_userid else "",
-                                    "email_id":get_user.user2.email_id if get_user.following_userid else "",
-                                    
-                                    "mobile":get_user.user2.mobile_no if get_user.following_userid else "",
-                                    "dob":get_user.user2.dob if get_user.following_userid else "",
-                                    "geo_location":get_user.user2.geo_location if get_user.following_userid else "",
-                                    "bio_data":ProfilePreference(db,login_user_id,get_user.id,field,get_user.user2.bio_data),
-                                    
-                                    "profile_image":get_user.user2.profile_img if get_user.following_userid else "",
-                                    "cover_image":get_user.user2.cover_image if get_user.following_userid else "",
-                                    "website":get_user.user2.website if get_user.following_userid else "",
-                                    "first_name":get_user.user2.first_name if get_user.following_userid else "",
-                                    "last_name":get_user.user2.last_name if get_user.following_userid else "",
-                                    "gender":get_user.user2.gender if get_user.following_userid else "",
-                                    "country_code":get_user.user2.country_code if get_user.following_userid else "",
-                                    "country_id":get_user.user2.country_id if get_user.following_userid else "",
-                                    "user_code":get_user.user2.user_code if get_user.following_userid else "",
-                                    "latitude":get_user.user2.latitude if get_user.following_userid else "",
-                                    "longitude":get_user.user2.longitude if get_user.following_userid else "",
-                                    "date_of_join":get_user.user2.created_at if get_user.following_userid else "",
-                                    "user_type":get_user.user2.user_type_master.name if get_user.following_userid else "",
-                                    "user_status":get_user.user2.user_status_master.name if get_user.following_userid else "",
-                                    "user_status_id":get_user.user2.user_status_id if get_user.following_userid else "",
-                                    "friends_count":FriendsCount(db,get_user.user2.id),
-                                    "friend_status":None,
-                                    "friend_request_id":None,
-                                    "is_friend_request_sender":0,
-                                    "follow":True if get_user.id else False,
-                                    "followers_count":followers_count,
-                                    "following_count":following_count,
-                                    "language": settings.language.name if settings else "English",
-                                    "friend_request_id":get_friend_request.id if get_friend_request else "",
-                                    "friend_status":get_friend_request.request_status if get_friend_request else "",
-                                    "is_friend_request_sender": 1 if get_friend_request and get_friend_request.sender_id == get_user.id else "",
-                            }
+                    # get_user=db.query(User).join(FollowUser,FollowUser.following_userid == User.id).filter(User.id == user_id).first()
                 
-                    return {"status":1,"msg":"Success","profile":result_list}
+                    get_user=db.query(FollowUser).filter(User.id == user_id,FollowUser.following_userid == User.id,FollowUser.follower_userid == login_user_id).first()
+                    
+                    followers_count=db.query(FollowUser).filter_by(following_userid = user_id).count()
+                    
+                    following_count=db.query(FollowUser).filter_by(follower_userid = user_id).count()
+                    
+                    if get_user == None or get_user.status != 1:
+                        return {"status": 0, "msg": "No result found!"}
+
+                    else:
+                        field='bio_display_status'
+                        settings=db.query(UserSettings).filter(UserSettings.user_id == login_user_id).first()
+                        get_friend_request=db.query(MyFriends).filter(MyFriends.status == 1,or_(MyFriends.sender_id == login_user_id,MyFriends.sender_id == user_id),or_(MyFriends.receiver_id == user_id,MyFriends.receiver_id == login_user_id)).order_by(MyFriends.id.desc()).first()
+                        
+                        
+                        result_list={
+                                        "user_id":get_user.id,
+                                        "user_ref_id":get_user.user2.user_ref_id if get_user.following_userid else "",
+                                        "name":get_user.user2.display_name if get_user.following_userid else "",
+                                        "email_id":get_user.user2.email_id if get_user.following_userid else "",
+                                        
+                                        "mobile":get_user.user2.mobile_no if get_user.following_userid else "",
+                                        "dob":get_user.user2.dob if get_user.following_userid else "",
+                                        "geo_location":get_user.user2.geo_location if get_user.following_userid else "",
+                                        "bio_data":ProfilePreference(db,login_user_id,get_user.id,field,get_user.user2.bio_data),
+                                        
+                                        "profile_image":get_user.user2.profile_img if get_user.following_userid else "",
+                                        "cover_image":get_user.user2.cover_image if get_user.following_userid else "",
+                                        "website":get_user.user2.website if get_user.following_userid else "",
+                                        "first_name":get_user.user2.first_name if get_user.following_userid else "",
+                                        "last_name":get_user.user2.last_name if get_user.following_userid else "",
+                                        "gender":get_user.user2.gender if get_user.following_userid else "",
+                                        "country_code":get_user.user2.country_code if get_user.following_userid else "",
+                                        "country_id":get_user.user2.country_id if get_user.following_userid else "",
+                                        "user_code":get_user.user2.user_code if get_user.following_userid else "",
+                                        "latitude":get_user.user2.latitude if get_user.following_userid else "",
+                                        "longitude":get_user.user2.longitude if get_user.following_userid else "",
+                                        "date_of_join":get_user.user2.created_at if get_user.following_userid else "",
+                                        "user_type":get_user.user2.user_type_master.name if get_user.following_userid else "",
+                                        "user_status":get_user.user2.user_status_master.name if get_user.following_userid else "",
+                                        "user_status_id":get_user.user2.user_status_id if get_user.following_userid else "",
+                                        "friends_count":FriendsCount(db,get_user.user2.id),
+                                        "friend_status":None,
+                                        "friend_request_id":None,
+                                        "is_friend_request_sender":0,
+                                        "follow":True if get_user.id else False,
+                                        "followers_count":followers_count,
+                                        "following_count":following_count,
+                                        "language": settings.language.name if settings else "English",
+                                        "friend_request_id":get_friend_request.id if get_friend_request else "",
+                                        "friend_status":get_friend_request.request_status if get_friend_request else "",
+                                        "is_friend_request_sender": 1 if get_friend_request and get_friend_request.sender_id == get_user.id else "",
+                                }
+                    
+                        return {"status":1,"msg":"Success","profile":result_list}
 
 
 # 52. List all Blocked users
@@ -4178,20 +4293,21 @@ async def listallblockedusers(db:Session=Depends(deps.get_db),token:str=Form(...
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
-            get_token_details=db.query(ApiTokens).filter_by(token == access_token).first()
+            get_token_details=db.query(ApiTokens).filter_by(token = access_token).first()
             
-            login_user_id=get_token_details.user_id 
+            login_user_id=get_token_details.user_id if get_token_details else None
             
             current_page_no=page_number
             
             # Get Final result after applied all requested conditions
-            get_friends=db.query(MyFriends).filter(MyFriends.sender_id == User.id,MyFriends.receiver_id == User.id).filter(MyFriends.status == 1 ,MyFriends.request_status == 3,MyFriends.sender_id == login_user_id)
+            get_friends=db.query(MyFriends).join(User,MyFriends.receiver_id == User.id).filter(MyFriends.status == 1 ,MyFriends.request_status == 3,MyFriends.sender_id == login_user_id)
             
             if search_key:
                 get_friends=get_friends.filter(or_(User.email_id.like(get_friends),User.display_name.like(search_key),User.first_name.like(search_key),User.last_name.like(search_key)))
             
             get_friends_count=get_friends.count()
-            if get_friends_count <1:
+            
+            if get_friends_count < 1:
                 return {"status":0,"msg":"No Result found"}
                 
             else:
@@ -4205,16 +4321,16 @@ async def listallblockedusers(db:Session=Depends(deps.get_db),token:str=Form(...
                         friend_details.append(
                             {
                                 "friend_request_id":frnd_req.id,
-                                "user_id":frnd_req.user2.id if frnd_req.request_id else "",
-                                "user_ref_id":frnd_req.user2.user_ref_id if frnd_req.request_id else "",
-                                "email_id":frnd_req.user2.email_id if frnd_req.request_id else "",
-                                "first_name":frnd_req.user2.first_name if frnd_req.request_id else "",
-                                "last_name":frnd_req.user2.last_name if frnd_req.request_id else "",
-                                "display_name":frnd_req.user2.display_name if frnd_req.request_id else "",
-                                "gender":frnd_req.user2.gender if frnd_req.request_id else "",
-                                "profile_img":frnd_req.user2.profile_img if frnd_req.request_id else "",
-                                "online":frnd_req.user2.online if frnd_req.request_id else "",
-                                "last_seen":frnd_req.user2.last_seen if frnd_req.request_id else "",
+                                "user_id":frnd_req.user2.id if frnd_req.receiver_id else "",
+                                "user_ref_id":frnd_req.user2.user_ref_id if frnd_req.receiver_id else "",
+                                "email_id":frnd_req.user2.email_id if frnd_req.receiver_id else "",
+                                "first_name":frnd_req.user2.first_name if frnd_req.receiver_id else "",
+                                "last_name":frnd_req.user2.last_name if frnd_req.receiver_id else "",
+                                "display_name":frnd_req.user2.display_name if frnd_req.receiver_id else "",
+                                "gender":frnd_req.user2.gender if frnd_req.receiver_id else "",
+                                "profile_img":frnd_req.user2.profile_img if frnd_req.receiver_id else "",
+                                "online":frnd_req.user2.online if frnd_req.receiver_id else "",
+                                "last_seen":(common_date(frnd_req.user2.last_seen) if frnd_req.user2.last_seen else None) if frnd_req.receiver_id else "",
                                 "typing":0
                             }
                         )
@@ -4232,7 +4348,7 @@ async def listallblockedusers(db:Session=Depends(deps.get_db),token:str=Form(...
                                 "gender":frnd_req.user1.gender if frnd_req.sender_id else "",
                                 "profile_img":frnd_req.user1.profile_img if frnd_req.sender_id else "",
                                 "online":frnd_req.user1.online if frnd_req.sender_id else "",
-                                "last_seen":frnd_req.user1.last_seen if frnd_req.sender_id else "",
+                                "last_seen":(common_date(frnd_req.user1.last_seen) if frnd_req.user1.last_seen else None) if frnd_req.sender_id else "",
                                 "typing":0
                             }
                         )
@@ -4253,9 +4369,9 @@ async def blockunblockuser(db:Session=Depends(deps.get_db),token:str=Form(...),u
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
-            get_token_details=db.query(ApiTokens).filter_by(token == access_token).first()
+            get_token_details=db.query(ApiTokens).filter_by(token = access_token).first()
             
-            login_user_id=get_token_details.user_id 
+            login_user_id=get_token_details.user_id if get_token_details else None
             
             if action == 1:  # Block User
                 update_my_frnds=db.query(MyFriends).filter(or_(MyFriends.sender_id == login_user_id,MyFriends.sender_id == user_id),or_(MyFriends.receiver_id == login_user_id,MyFriends.receiver_id == user_id)).update({"status":0})
@@ -4267,7 +4383,6 @@ async def blockunblockuser(db:Session=Depends(deps.get_db),token:str=Form(...),u
                 if not add_frnd:
                     return {"status":0,"msg":"Failed to update. please try again"}
                     
-                
                 # remove blocked user from group
                 get_my_frnds=db.query(FriendGroupMembers).filter(FriendGroups.status == 1,or_(FriendGroups.created_by == login_user_id,FriendGroups.created_by == user_id)).filter(or_(FriendGroupMembers.user_id == user_id,FriendGroupMembers.user_id == login_user_id))
                 
@@ -4458,24 +4573,26 @@ async def getusersettings(db:Session=Depends(deps.get_db),token:str=Form(...)):
         
 
 #55 Update User Settings
-@router.post("/actionUpdateusersettings")
-async def actionUpdateusersettings(db:Session=Depends(deps.get_db),token:str=Form(...),online_status:int=Form(None,description="0->Don't show,1->Public,2->Friends only,3->Special Group"),phone_display_status:int=Form(None,description="0->Don't show,1->Public,2->Friends only,3->Special Group"),
+@router.post("/updateusersettings")
+async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(...),online_status:int=Form(None,description="0->Don't show,1->Public,2->Friends only,3->Special Group"),phone_display_status:int=Form(None,description="0->Don't show,1->Public,2->Friends only,3->Special Group"),
            location_display_status:int=Form(None,description="0->Don't show,1->Public,2->Friends only,3->Special Group"),dob_display_status:int=Form(None,description="0->Don't show,1->Public,2->Friends only,3->Special Group"),bio_display_status:int=Form(None,description="0->Don't show,1->Public,2->Friends only,3->Special Group"),
            friend_request:str=Form(None,description="3 digit 000 to 111, 1st digit->Push notify , 2nd digit->Email notify,3rd digit->SMS"),nuggets:str=Form(None,description="3 digit 000 to 111, 1st digit->Push notify , 2nd digit->Email notify,3rd digit->SMS"),events:str=Form(None,description="3 digit 000 to 111, 1st digit->Push notify , 2nd digit->Email notify,3rd digit->SMS"),
            passcode_status:int=Form(None,description="1->Enabled,0->Disabled"),passcode:str=Form(None),waiting_room:int=Form(None,description="1->Enabled,0->Disabled"),schmoozing_status:int=Form(None,description="1->Enabled,0->Disabled"),breakout_status:int=Form(None,description="1->Enabled,0->Disabled"),join_before_host:int=Form(None,description="1->Enabled,0->Disabled"),auto_record:int=Form(None,description="1->Enabled,0->Disabled"),
-           participant_join_sound:int=Form(None,description="1->Sound On,0->Sound Off"),screen_share_status:int=Form(None,description="1->Enabled,0->Disabled"),virtual_background:int=Form(None,description="1->Enabled,0->Disabled"),host_audio:int=Form(None,description="1->On,0->Off"),host_video:int=Form(None),participant_audio:int=Form(None,description="1->On,0->Off"),participant_video:int=Form(None,description="1->On,0->Off"),melody:int=Form(None),meeting_header_image:UploadFile=File(None),language_id:int=Form(None,description="table 65"),time_zone:str=Form(None,description='get from 64'),date_format:str=Form(None),mobile_default_page:int=Form(None,description="1->nuggets,2->events,3->chats"),default_melody:UploadFile=File(None),event_type:int=Form(None),public_nugget_display:int=Form(None),
+           participant_join_sound:int=Form(None,description="1->Sound On,0->Sound Off"),screen_share_status:int=Form(None,description="1->Enabled,0->Disabled"),virtual_background:int=Form(None,description="1->Enabled,0->Disabled"),host_audio:int=Form(None,description="1->On,0->Off"),host_video:int=Form(None),participant_audio:int=Form(None,description="1->On,0->Off"),participant_video:int=Form(None,description="1->On,0->Off"),melody:int=Form(None),meeting_header_image:UploadFile=File(None),language_id:int=Form(None,description="table 65"),time_zone:str=Form(None,description='get from 64'),date_format:str=Form(None),mobile_default_page:int=Form(None,description="1->nuggets,2->events,3->chats"),
+           default_melody:UploadFile=File(None),event_type:int=Form(None),public_nugget_display:int=Form(None),
            public_event_display:int=Form(None),manual_acc_active_inactive:int=Form(None)):
     if token.strip()=="":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     else:
         access_token=checkToken(token.strip())
-        if access_token==False:
+        if access_token == False:
             return {"sttaus":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
             get_token_details=db.query(ApiTokens).filter(ApiTokens.token==token.strip()).all()
             for res in get_token_details:
                 login_user_id=res.user_id
             user_setting_id=''
+            
             get_user_settings=db.query(UserSettings).filter(UserSettings.status==1,UserSettings.user_id==login_user_id).first()
             if get_user_settings:
                 user_setting_id=get_user_settings.id
@@ -4484,18 +4601,24 @@ async def actionUpdateusersettings(db:Session=Depends(deps.get_db),token:str=For
                 db.add(model)
                 db.commit()
                 user_setting_id=model.id
+                
             if user_setting_id !='':
                 settings=db.query(UserSettings).filter(UserSettings.status==1,UserSettings.id==user_setting_id).first()
                 if settings:
-                    default_melody=[]
+                    default_melody_list=[]
                     edit_melody=db.query(EventMelody).filter(EventMelody.created_by==login_user_id,EventMelody.is_default==1,EventMelody.is_created_by_admin==0).first()
                     if edit_melody:
-                        default_melody.append({"path":edit_melody.path,"type":edit_melody.type,"title":edit_melody.title})
+                        default_melody_list.append({"path":edit_melody.path,"type":edit_melody.type,"title":edit_melody.title})
 
-
-
-                    if default_melody['name']:
-                        pass 
+                    if default_melody:
+                        path='/uploads/eventmelody'
+                        if path:  #Create File Dir
+                            
+                            print("Pending")
+                            pass
+                        else:
+                            return {"status":0,"msg":"Not able to upload"}
+                             
 #--------------------------------------------#-------------------------------------------------#----------------------------------#
 
 
@@ -4528,7 +4651,7 @@ async def actionUpdateusersettings(db:Session=Depends(deps.get_db),token:str=For
                     settings.participant_audio=participant_audio if participant_audio and 0<=participant_audio<=1 else settings.participant_audio
                     settings.participant_video=participant_video if participant_video and 0<=participant_video<=1 else settings.participant_video
                     settings.melody=melody if melody and melody>=0 else settings.melody
-                    settings.meeting_header_image=html.escape(meeting_header_image)
+                    settings.meeting_header_image=meeting_header_image
                     settings.language_id=language_id if language_id and language_id>0 else settings.language_id
                     settings.time_zone=time_zone if time_zone and time_zone>0 else settings.time_zone
                     settings.date_format=date_format if date_format!="" and date_format!=None else settings.date_format
@@ -4541,14 +4664,16 @@ async def actionUpdateusersettings(db:Session=Depends(deps.get_db),token:str=For
                     db.commit()
 
                     return {"status":1,"msg":"Success","url":meeting_header_image,"default_melody":default_melody if default_melody else None}
+                
                 return {"status":0,"msg":"Faild"}
+            
             return {"status":0,"msg":"Faild"}
 
 
 #  56. Get Event Melody
 
-@router.post("/actionGeteventmelody")
-async def actionGeteventmelody(db:Session=Depends(deps.get_db),token:str=Form(...)):
+@router.post("/geteventmelody")
+async def geteventmelody(db:Session=Depends(deps.get_db),token:str=Form(...)):
     if token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     else:
@@ -4559,25 +4684,28 @@ async def actionGeteventmelody(db:Session=Depends(deps.get_db),token:str=Form(..
         else:
             login_user_id=0
             get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
-            login_user_id=get_token_details.user_id
+            login_user_id=get_token_details.user_id if get_token_details else None
 
             result_list=[]
             getEventMelody = db.query(EventMelody).filter(or_(and_(EventMelody.status == 1, EventMelody.is_created_by_admin == 1),
                 and_(EventMelody.status == 1, EventMelody.is_default == 1, EventMelody.is_created_by_admin == 0, EventMelody.created_by == login_user_id))).all()
+            
             if getEventMelody:
                 result_list = []
                 for melody in getEventMelody:
-                    result_list.append({'id': melody.id, 'title': html.escape(melody.title), 'path': html.escape(melody.path)})
-                reply = {'status': 1, 'msg': 'Success', 'melody': result_list}
+                    result_list.append({'id': melody.id, 'title': melody.title if melody.title else "", 'path': melody.path if melody.path else ""})
+                
+                return {'status': 1, 'msg': 'Success', 'melody': result_list}
+            
             else:
-                reply = {'status': 0, 'msg': 'Failed', 'melody': []}
-            return json.dumps(reply)
+                return {'status': 0, 'msg': 'Failed', 'melody': []}
+                
     
 
 # 57. Block Multiple user
 
-@router.post("/actionBlockmultipleuser")
-async def actionBlockmultipleuser(db:Session=Depends(deps.get_db),token:str=Form(...),user_id:str=Form(...,description="example 1,2,3")):
+@router.post("/blockmultipleuser")
+async def blockmultipleuser(db:Session=Depends(deps.get_db),token:str=Form(...),user_id:str=Form(...,description="example [1,2,3]")):
     if token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     else:
@@ -4588,19 +4716,22 @@ async def actionBlockmultipleuser(db:Session=Depends(deps.get_db),token:str=Form
         else:
             login_user_id=0
             get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
-            login_user_id=get_token_details.user_id
+            login_user_id=get_token_details.user_id if get_token_details else None
 
-            userlist = [int(i) for i in user_id.split(',')]
+            userlist = json.loads(user_id) if user_id else None
             if userlist:
 
-            # userlist = json.loads(user_id)
                 update = False
                 for user_id in userlist:
                     # Update existing friend request status to blocked
-                    db.query(MyFriends).filter(or_(
-                        and_(MyFriends.sender_id == login_user_id, MyFriends.receiver_id == user_id),
-                        and_(MyFriends.sender_id == user_id, MyFriends.receiver_id == login_user_id)
-                    )).update({'request_status': 3, 'status_date': datetime.now(), 'status': 0})
+                    update_exist_frnd=db.query(MyFriends).filter(or_(
+                                        MyFriends.sender_id == login_user_id,
+                                        MyFriends.sender_id == user_id
+                                    )).filter(or_(
+                                        MyFriends.receiver_id == login_user_id,
+                                        MyFriends.receiver_id == user_id
+                                    )).update({"status": 0})
+                    db.commit()
                     
                     # Create new friend request with status blocked
                     model = MyFriends(sender_id=login_user_id, receiver_id=user_id, request_date=datetime.now(), request_status=3, status_date=datetime.now(), status=1)
@@ -4610,29 +4741,25 @@ async def actionBlockmultipleuser(db:Session=Depends(deps.get_db),token:str=Form
                         update = True
 
                     # Remove blocked user from groups
-                    subquery1 = db.query(FriendGroups).filter(and_(FriendGroups.status == 1, FriendGroups.created_by == login_user_id)).with_entities(FriendGroups.id).subquery()
-                    subquery2 = db.query(FriendGroups).filter(and_(FriendGroups.status == 1, FriendGroups.created_by == user_id)).with_entities(FriendGroups.id).subquery()
-                    query = db.query(FriendGroupMembers).filter(or_(
-                        FriendGroupMembers.user_id == user_id,
-                        FriendGroupMembers.user_id == login_user_id
-                    ), FriendGroupMembers.group_id.in_([subquery1, subquery2]))
-                    for group_member in query:
-                        db.delete(group_member)
-                
+                    get_frnd_group=db.query(FriendGroups).filter(FriendGroups.status == 1,or_(FriendGroups.created_by == login_user_id,FriendGroups.created_by == user_id)).all()
+                    frnd_grp_ids=[frnd_gp.id for frnd_gp in  get_frnd_group]
+                    
+                    del_frnd_group=db.query(FriendGroupMembers).filter(or_(FriendGroupMembers.user_id == user_id,FriendGroupMembers.user_id == login_user_id),FriendGroupMembers.group_id.in_(frnd_grp_ids)).delete()
+                    db.commit()
+                    
                 if update:
-                    reply = {"status": 1, "msg": "Success"}
+                    return {"status": 1, "msg": "Success"}
                 else:
-                    reply = {"status": 0, "msg": "Failed to update. Please try again."}
+                    return {"status": 0, "msg": "Failed to update. Please try again."}
             else:
-                reply = {"status": 0, "msg": "User ID missing."}
+                return {"status": 0, "msg": "User ID missing."}
                            
-        return json.dumps(reply)
     
 
 #58. Global Search Events
 
-@router.post("/actionGlobalsearchevents")
-async def actionGlobalsearchevents(db:Session=Depends(deps.get_db),token:str=Form(...),search_key:str=Form(...),page_number:int=Form(1)):
+@router.post("/globalsearchevents")
+async def globalsearchevents(db:Session=Depends(deps.get_db),token:str=Form(...),search_key:str=Form(...),page_number:int=Form(1)):
 
     if token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
@@ -4644,9 +4771,9 @@ async def actionGlobalsearchevents(db:Session=Depends(deps.get_db),token:str=For
         else:
             login_user_id=0
             get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
-            login_user_id=get_token_details.user_id
+            login_user_id=get_token_details.user_id if get_token_details else None
 
-            search_key=search_key.strip()
+            search_key=search_key.strip() if search_key else ''
 
             current_page_no=int(page_number)
 

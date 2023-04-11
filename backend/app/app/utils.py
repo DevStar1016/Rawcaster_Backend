@@ -17,9 +17,10 @@ from pyfcm import FCMNotification
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 import base64
 from operator import itemgetter
-
-
-
+from urllib.parse import urlparse, urlunparse
+import mimetypes
+from PIL import Image
+import os,boto3
 
 
 async def send_email(to_mail, subject, message):
@@ -47,6 +48,24 @@ async def send_email(to_mail, subject, message):
     await fm.send_message(message)
     return ({"msg": "Email has been sent"})
     
+    
+
+def sendSMS(mobile_no,message):
+    # Create an SNS client
+    
+    sns = boto3.client('sns',aws_access_key_id='AKIAYFYE6EFYFBWQRGPB',aws_secret_access_key="7HlZXvuVccwoOnVb7HuTVTZ4YeZGvBCy5thSJ6KO", region_name='us-west-2')  # Replace 'us-west-2' with your desired AWS region
+
+    # Send the SMS
+    response = sns.publish(
+        PhoneNumber=mobile_no,
+        Message=message
+    )
+    # Check if the SMS was sent successfully
+    if response['ResponseMetadata']['HTTPStatusCode'] == 200:
+        print(f'SMS sent successfully to {mobile_no} with message ID: {response["MessageId"]}')
+    else:
+        print('Failed to send SMS')   
+
 
 def common_date(date, without_time=None):
 
@@ -270,7 +289,148 @@ def addNotificationSmsEmail(db,user,email_detail,login_user_id):
 def get_nugget_detail(db,nugget_id,login_user_id):
     nugget_detail=[]
     is_downloadable=0
+    
+    get_nuggets=db.query(Nuggets).filter(Nuggets.id == nugget_id).first()
+    
+    if get_nuggets:
+        total_likes=db.query(NuggetsLikes).filter(NuggetsLikes.user_id == login_user_id,NuggetsLikes.nugget_id == nugget_id).distinct().count()
+        total_comments=db.query(NuggetsComments).filter(NuggetsComments.nugget_id == nugget_id,NuggetsComments.status == 1).distinct().count()
+        total_views=db.query(NuggetView).filter(NuggetView.nugget_id == nugget_id,NuggetView.user_id == login_user_id).distinct().count()
+        total_pollvote=db.query(NuggetPollVoted).filter(NuggetPollVoted.user_id == login_user_id,NuggetPollVoted.nugget_id == nugget_id).distinct().count()
+        
+        attachments=[]
+        poll_options=[]
+        
+        # Nugget Attachments
+        nugget_attachment=db.query(NuggetsAttachment).filter(NuggetsAttachment.nugget_id == get_nuggets.nuggets_id,NuggetsAttachment.status == 1)
+        get_nugget_attachment_count=nugget_attachment.count()
+        
+        get_nugget_attachment=nugget_attachment.all()
+        
+        if get_nugget_attachment:
+            for nug_attach in get_nugget_attachment:
+                attachments.append({"media_id":nug_attach.id,
+                                    "media_type":nug_attach.media_type if nug_attach.media_type else "",
+                                    "media_file_type":nug_attach.media_file_type if nug_attach.media_file_type else "",
+                                    "path":nug_attach.path if nug_attach.path else ""
+                                    })
+        
+        # Nuggets Poll Option
+        get_nugget_poll_option=db.query(NuggetPollOption).filter(NuggetPollOption.nuggets_master_id == get_nuggets.nuggets_id,NuggetPollOption.status == 1).all()
+        if get_nugget_poll_option:
+            for poll_nugg in get_nugget_poll_option:
+                poll_options.append({"option_id":poll_nugg.id,
+                                     "option_name":poll_nugg.option_name if poll_nugg.option_name else "",
+                                     "option_percentage":poll_nugg.poll_vote_percentage if poll_nugg.poll_vote_percentage else "",
+                                     "votes":poll_nugg.votes if poll_nugg.votes else 0})
+        
+        shared_with={}
+        shared_detail=[]
+        
+        if get_nuggets.user_id == login_user_id:  # only when nugget owner
+            get_share_nuggets=db.query(NuggetsShareWith).filter(NuggetsShareWith.nuggets_id == nugget_id).all()
+            if get_share_nuggets:
+                shared_group_ids=[]
+                type=0
+                
+                for share_nug in get_share_nuggets:
+                    type=share_nug.type
+                    shared_group_ids.append(share_nug.share_with)
+                
+                if type == 1:
+                    friend_groups=db.query(FriendGroups.group_name,FriendGroups.group_icon).filter(FriendGroups.id.in_(shared_group_ids)).all()
+                    for frnd_group in friend_groups:
+                        shared_detail.append({"name":frnd_group.group_name if frnd_group.group_name else "",
+                                              "img":frnd_group.group_icon if frnd_group.group_icon else ""
+                                            })
 
+                elif type == 2:
+                    friend_groups=db.query(User.display_name,User.profile_img).filter(User.id.in_(shared_group_ids)).all()
+                    for frnd_gp in friend_groups:
+                        shared_detail.append({"name":frnd_gp.display_name if frnd_gp.display_name else "","img":frnd_gp.profile_img if frnd_gp.profile_img else ""})
+                
+            shared_group_list=[]
+            shared_friends_list=[]
+            
+            if get_nuggets.share_type == 3 or get_nuggets.share_type == 4 or get_nuggets.share_type == 5:
+                for shares in get_share_nuggets:
+                    if shares.type == 1:
+                        shared_group_list.append(shares.share_with)
+                    if shares.type == 2:
+                        shared_group_list.append(shares.share_with)
+            
+            shared_with.update({"shared_friends_list":shared_friends_list,"shared_group_list":shared_group_list})
+        
+        following=db.query(FollowUser).filter(FollowUser.follower_userid == login_user_id,FollowUser.following_userid == get_nuggets.user_id).count()
+        follow_count=db.query(FollowUser).filter(FollowUser.following_userid == get_nuggets.user_id).count()
+        
+        
+        nugget_like=False
+        nugget_view=False
+        checklike=db.query(NuggetsLikes).filter(NuggetsLikes.nugget_id == get_nuggets.id,NuggetsLikes.user_id == login_user_id).first()
+        checkview=db.query(NuggetView).filter(NuggetView.nugget_id == get_nuggets.id,NuggetView.user_id == login_user_id).first()
+        
+        if checklike:
+            nugget_like=True
+        if checkview:
+            nugget_view=True
+        
+        if login_user_id == get_nuggets.user_id:
+            following=1
+        
+        voted=db.query(NuggetPollVoted).filter(NuggetPollVoted.nugget_id == get_nuggets.id,NuggetPollVoted.user_id == login_user_id).count()
+        saved=db.query(NuggetsSave).filter(NuggetsSave.nugget_id == get_nuggets.id,NuggetsSave.user_id == login_user_id).count()
+        
+        if get_nuggets.share_type == 1:
+            if following == 1:
+                is_downloadable=1
+            
+            else:
+                get_friend_requests=db.query(MyFriends).filter(or_(MyFriends.receiver_id == get_nuggets.user_id,MyFriends.receiver_id == login_user_id),or_(MyFriends.sender_id == login_user_id,MyFriends.sender_id == get_nuggets.user_id),MyFriends.status == 1,MyFriends.request_status == 1).order_by(MyFriends.id.desc()).first()
+                
+                if get_friend_requests:
+                    is_downloadable=1
+        else:
+            is_downloadable=1
+        
+        nuggets_details={
+                    "nugget_id":get_nuggets.id,
+                    "content":get_nuggets.nuggets_master.content,
+                    "metadata":get_nuggets.nuggets_master._metadata,
+                    "created_date":common_date(get_nuggets.created_date) if get_nuggets.created_date else "",
+                    "user_id":get_nuggets.user_id,
+                    "user_ref_id":(get_nuggets.user.user_ref_id if get_nuggets.user.user_ref_id else "") if get_nuggets.user_id else "",
+                    "type":get_nuggets.type if get_nuggets.type else "",
+                    "original_user_id":get_nuggets.nuggets_master.user.id,
+                    "original_user_name":get_nuggets.nuggets_master.user.display_name,
+                    "original_user_image":get_nuggets.nuggets_master.user.profile_img,
+                    "user_name":get_nuggets.user.display_name,
+                    "user_image":get_nuggets.user.profile_img,
+                    "liked":nugget_like,
+                    "viewed":nugget_view,
+                    "following": True if following > 0 else False,
+                    "follow_count":follow_count,
+                    "total_likes":total_likes,
+                    "total_comments":total_comments,
+                    "total_views":total_views,
+                    "total_media":get_nugget_attachment_count,
+                    "share_type":get_nuggets.share_type if get_nuggets.share_type else "",
+                    "media_list":attachments,
+                    "is_nugget_owner": 1 if get_nuggets.user_id == login_user_id else 0,
+                    "is_master_nugget_owner": 1 if get_nuggets.nuggets_master.user_id == login_user_id else 0,
+                    "shared_detail":shared_detail,
+                    "shared_with":shared_with,
+                    "is_downloadable":is_downloadable,
+                    "poll_option":poll_options,
+                    "poll_duration":get_nuggets.nuggets_master.poll_duration if get_nuggets.nuggets_master.poll_duration else "" if get_nuggets.nuggets_id else "",
+                    "voted":voted,
+                    "total_vote":total_pollvote,
+                    "saved":saved
+                    }
+        return nuggets_details
+
+        
+            
 def getGroupids(db,login_user_id):
     group_ids=[]
     
@@ -368,25 +528,26 @@ def getFollowings(db,user_id):
 
 
 def NuggetAccessCheck(db,login_user_id,nugget_id):
+    
     group_ids=getGroupids(db,login_user_id)
+    
     requested_by=None
     request_status=1
     response_type=1
     search_key=None
     my_friends_req=get_friend_requests(db,login_user_id,requested_by,request_status,response_type)
     my_friends=my_friends_req['accepted']
- 
+   
     my_followings=getFollowings(db,login_user_id)
     type=None
     rawid=GetRawcasterUserID(db,type)
     
     criteria = db.query(Nuggets)
-    criteria = criteria.join(User, Nuggets.user_id == User.id, isouter=True)
     criteria = criteria.join(NuggetsMaster, Nuggets.nuggets_id == NuggetsMaster.id, isouter=True)
     criteria = criteria.join(NuggetsShareWith, Nuggets.id == NuggetsShareWith.nuggets_id, isouter=True)
     criteria = criteria.join(NuggetView, Nuggets.id == NuggetView.nugget_id, isouter=True)
     criteria = criteria.filter(Nuggets.status == 1, Nuggets.nugget_status == 1, NuggetsMaster.status == 1, Nuggets.id == nugget_id)
-    criteria = criteria.filter(or_(
+    criteria = criteria.filter(Nuggets.user_id == User.id,or_(
         Nuggets.user_id == login_user_id,
         and_(Nuggets.share_type == 1),
         and_(Nuggets.share_type == 2, Nuggets.user_id == login_user_id),
@@ -441,10 +602,19 @@ def nuggetNotifcationEmail(db,nugget_id):
     if nugget_id:
         get_nugget=db.query(Nuggets).filter_by(id = nugget_id,status =1).first()
         if get_nugget:
-            print("Pending")
+            postedUserName=(get_nugget.user.display_name if get_nugget.user.display_name else "") if get_nugget.user_id else ""
+            profilePic=(get_nugget.user.profile_img if get_nugget.user.profile_img else "") if get_nugget.user_id else ""
+            postedDate=get_nugget.created_date if get_nugget.created_date else ""
+            username=f"{get_nugget.user.first_name if get_nugget.user.first_name else ''} {get_nugget.user.last_name if get_nugget.user.last_name else ''}" if get_nugget.user_id else ""
+            sms_message=f"{username} shares New Nugget in rawcaster.com"
             
+            body=''
             
+            invite_url=inviteBaseurl()
+            nuggetId=base64.b64encode(str(nugget_id).encode('utf-8'))
+            meetingUrl=f"{invite_url}share/index.php?id={nuggetId}"
             
+            return sms_message,body
     
         
 def get_ip():
@@ -631,6 +801,7 @@ def MutualFriends(db,login_user_id,user_id):
             return {"status":0,"msg":"Mutual Friends failed"}
     return mutual_friends
 
+
 def IsAccountVerified(db,user_id):
     status=False
     get_user=db.query(User).filter(User.id == user_id).first()
@@ -655,13 +826,14 @@ def GetHashTags(content):
 
 
 def StoreHashTags(db,nugget):
-    get_nugget=db.query(Nuggets).filter(Nuggets.id == nugget['id']).first()
+    
+    get_nugget=db.query(Nuggets).filter(Nuggets.id == nugget).first()
     
     if get_nugget.nuggets_master.content and get_nugget.nuggets_master.content != '':
         tags=GetHashTags(get_nugget.nuggets_master.content)
         
         deleteresult=db.query(NuggetHashTags).filter_by(nugget_id = get_nugget.id).delete()
-        db.commi()
+        db.commit()
         
         if tags:
             for tag in tags:
@@ -810,6 +982,44 @@ def eventPostNotifcationEmail(db,event_id):
         exit()
 
 
+def compressImage(source,path):
+    webroot_path = os.path.abspath(os.path.dirname(__file__))
+    destination= os.path.join(webroot_path, path)
+
+    image = Image.open(source)
+    image.save('compressed_image.jpg', optimize=True, quality=50)
+    # Resize the image
+    image.thumbnail((800, 800))
+    image.save('resized_image.jpg')
+    image.close()
+    
+    return image,destination
+
+
+
+# def compressImage(source,path):
+#     mime_type = mimetypes.guess_type(source)[0]
+#     destination=''
+#     if mime_type:
+#         if mime_type == 'image/jpeg':
+#             image=Image.open(source)
+#             if hasattr(image, '_getexif'):
+#                 exif = image._getexif()
+#                 if exif is not None and 274 in exif:
+#                     orientation = exif[274]
+#                     if orientation == 3:
+#                         image = image.rotate(180)
+#                     elif orientation == 6:
+#                         image = image.rotate(270)
+#                     elif orientation == 8:
+#                         image = image.rotate(90)
+
+#         elif mime_type == 'image/gif':
+#             image=
+            
+            
+
+
 def get_event_detail(db,event_id,login_user_id):
     event={}
     event_details=db.query(Events).filter_by(id = event_id).first()
@@ -867,32 +1077,51 @@ def get_event_detail(db,event_id,login_user_id):
     return event
 
 
-                   
 def defaultimage(flag):
-    url=''
+    url = ''
     if flag == 'profile_img':
-        url = ('/uploads/user/default.png', 'https')
+        url_parts = urlparse('/uploads/user/default.png')
+        url_parts = url_parts._replace(scheme='https')
+        url = urlunparse(url_parts)
     elif flag == 'cover_img':
-        url = ('/uploads/user/default_cover.png', 'https')
+        url_parts = urlparse('/uploads/user/default_cover.png')
+        url_parts = url_parts._replace(scheme='https')
+        url = urlunparse(url_parts)
     elif flag == 'group_icon':
-        url = ('/uploads/group/default.png', 'https')
+        url_parts = urlparse('/uploads/group/default.png')
+        url_parts = url_parts._replace(scheme='https')
+        url = urlunparse(url_parts)
     elif flag == 'event_banner':
-        url =('/uploads/eventbanner/eventbanner_default.jpg', 'https')
+        url_parts = urlparse('/uploads/eventbanner/eventbanner_default.jpg')
+        url_parts = url_parts._replace(scheme='https')
+        url = urlunparse(url_parts)
     elif flag == 'talkshow':
-        url = ('/uploads/eventbanner/talkshowbanner_default.jpg', 'https')
+        url_parts = urlparse('/uploads/eventbanner/talkshowbanner_default.jpg')
+        url_parts = url_parts._replace(scheme='https')
+        url = urlunparse(url_parts)
     elif flag == 'live':
-        url = ('/uploads/eventbanner/livebanner_default.jpg', 'https')
-    
+        url_parts = urlparse('/uploads/eventbanner/livebanner_default.jpg')
+        url_parts = url_parts._replace(scheme='https')
+        url = urlunparse(url_parts)
+        
     return url
+
+
 
 
 def GetGroupDetails(db,id):
     members=[]
     memberlist=[]
+    
     friendGroup=db.query(FriendGroups).filter(FriendGroups.status == 1,FriendGroups.id == id).first()
     if friendGroup:
-        friendGroupMembers=db.query(FriendGroupMembers).filter(FriendGroupMembers.group_id == friendGroup.id).all()
-        members.append(friendGroup.id)
+        friendGroupMember=db.query(FriendGroupMembers).filter(FriendGroupMembers.group_id == friendGroup.id)
+        
+        friendGroupMembers=friendGroupMember.all()
+        friend_group_count=friendGroupMember.count()
+        
+        members.append(friendGroup.created_by)
+        
         memberlist.append({
                             "user_id":friendGroup.created_by if friendGroup.created_by else "",
                             "email_id":friendGroup.user.email_id if friendGroup.created_by else "",
@@ -902,30 +1131,30 @@ def GetGroupDetails(db,id):
                             "gender":friendGroup.user.gender if friendGroup.created_by else "",
                             "profile_img":friendGroup.user.profile_img if friendGroup.created_by else ""
                         })
-        membercount=1
+        
         if friendGroupMembers:
             for frnd_group in friendGroupMembers:
-                members.append(frnd_group.id)
+                members.append(frnd_group.user_id)
+                
                 memberlist.append({
-                            "user_id":friendGroup.user_id if friendGroup.user_id else "",
-                            "email_id":friendGroup.user.email_id if friendGroup.user_id else "",
-                            "first_name":friendGroup.user.first_name if friendGroup.user_id else "",
-                            "last_name":friendGroup.user.last_name if friendGroup.user_id else "",
-                            "display_name":friendGroup.user.display_name if friendGroup.user_id else "",
-                            "gender":friendGroup.user.gender if friendGroup.user_id else "",
-                            "profile_img":friendGroup.user.profile_img if friendGroup.user_id else "",
-                            "last_seen":friendGroup.user.last_seen if friendGroup.user_id else "",
+                            "user_id":frnd_group.user_id if frnd_group.user_id else "",
+                            "email_id":frnd_group.user.email_id if frnd_group.user_id else "",
+                            "first_name":frnd_group.user.first_name if frnd_group.user_id else "",
+                            "last_name":frnd_group.user.last_name if frnd_group.user_id else "",
+                            "display_name":frnd_group.user.display_name if frnd_group.user_id else "",
+                            "gender":frnd_group.user.gender if frnd_group.user_id else "",
+                            "profile_img":frnd_group.user.profile_img if frnd_group.user_id else "",
+                            "last_seen":frnd_group.user.last_seen if frnd_group.user_id else "",
                             "online":"",
                             "typing":0
                            
                         })
-                membercount= membercount+1
                 
         group_details={
                         "group_id":friendGroup.id,
                         "group_name":friendGroup.group_name,
                         "group_icon":friendGroup.group_icon,
-                        "group_member_count":membercount,
+                        "group_member_count":friend_group_count,
                         "group_owner":friendGroup.created_by,
                         "chat_enabled":friendGroup.chat_enabled,
                         "group_type":1,
@@ -1206,7 +1435,7 @@ def getModelError(errors):
                 reply=err
         
         return reply
-            
+
 
 def ChangeReferralExpiryDate(db,referrerid):
     referrer=db.query(User).filter(User.id == referrerid).first()
