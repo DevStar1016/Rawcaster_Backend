@@ -15,9 +15,38 @@ from gtts import gTTS
 from playsound import playsound
 from profanityfilter import ProfanityFilter
 from moviepy.video.io.VideoFileClip import VideoFileClip
+import boto3    
 
 router = APIRouter() 
 
+
+access_key="AKIAYFYE6EFYG6RJOPMF"
+access_secret="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"
+
+from io import BytesIO
+
+@router.post('/upload')
+async def upload_image(image: UploadFile = File(...)):
+    # bucket_name = event['bucket_name']
+    # file_name = event['file_name']
+    import boto3
+    import csv
+    import io
+    s3Client = boto3.client('s3', aws_access_key_id=access_key,aws_secret_access_key=access_secret)
+    def lambda_handler(event, context): 
+        #Get our bucket and file name
+        bucket = event['Records'][0]['s3']['bucket']['name']
+        key = event['Records'][0]['s3']['object']['key']
+    
+        #Get our object 
+        response = s3Client.get_object(Bucket=bucket, Key=key)
+        #Process the data
+        data = response['Body'].read().decode('utf-8')
+        reader = csv.reader(io.StringlO(data))
+        next(reader)
+        for row in reader: 
+            print(str.format("Year - {Year, Mileage - Price - {}", row[0], row[1], row[2]))
+    
 
 # 1 Video Spliting
 @router.post("/video_split")

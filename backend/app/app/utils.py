@@ -187,8 +187,11 @@ def pushNotify(db,user_ids,details,login_user_id):
                 
     return True
 
+
 def encryptionString():
     return 'rawcaster@!@#$QWERTxcvbn'
+
+
 
 def friendRequestNotifcationEmail(db,senderId,receiverId,flag):   # flag = 1 Friend Request Received flag = 2 Friend Request Accepted
     if senderId != "" and receiverId != "":
@@ -212,7 +215,8 @@ def friendRequestNotifcationEmail(db,senderId,receiverId,flag):   # flag = 1 Fri
                 subject="New Connection Request"
                 invite_url=inviteBaseurl()
                 encrypt_string=encryptionString()
-                url_path=base64.b64encode(f"{senderId}{encrypt_string}")
+                senderId=f'{senderId}'
+                url_path=base64.b64encode(senderId.encode('utf-8') + encrypt_string.encode('utf-8'))
                 url=f"{invite_url}signin/{url_path}/connectionrequest"
                 
                 body=""  # Pending
@@ -231,7 +235,7 @@ def friendRequestNotifcationEmail(db,senderId,receiverId,flag):   # flag = 1 Fri
                 subject="Connection Accepted Notification"
                 invite_url=inviteBaseurl()
                 encrypt_string=encryptionString()
-                url_path=base64.b64encode(f"{senderId}{encrypt_string}")
+                url_path=base64.b64encode(senderId.encode('utf-8') + encrypt_string.encode('utf-8'))
                 url=f"{invite_url}signin/{url_path}/connectionrequest"
                 
                 body =''
@@ -239,6 +243,9 @@ def friendRequestNotifcationEmail(db,senderId,receiverId,flag):   # flag = 1 Fri
         return sms_message,body  
     else:
         print("Invalid Parameters")
+        
+        
+        
                 
 def addNotificationSmsEmail(db,user,email_detail,login_user_id):
     sms_message = email_detail['sms_message'] if email_detail['sms_message'] else ""
@@ -924,7 +931,7 @@ def ProfilePreference(db,myid,otherid,field,value):
 #     return [limit, offset,total_pages]
 
 
-def get_pagination(row_count=0, current_page_no=1, default_page_size=10):
+def get_pagination(row_count, current_page_no, default_page_size):
     
     current_page_no = current_page_no
     

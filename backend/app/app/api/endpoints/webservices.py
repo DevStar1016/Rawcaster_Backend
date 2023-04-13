@@ -6,7 +6,7 @@ from app.utils import *
 from app.api import deps
 from sqlalchemy.orm import Session,joinedload
 from datetime import datetime,date,time
-from sqlalchemy import func,case,text
+from sqlalchemy import func,case,text,distinct
 import re
 import base64
 import json
@@ -15,7 +15,8 @@ from gtts import gTTS
 from playsound import playsound
 from profanityfilter import ProfanityFilter
 from moviepy.video.io.VideoFileClip import VideoFileClip
-import math,pytz
+import math,pytz,sys
+import boto3
 
 router = APIRouter() 
 
@@ -946,7 +947,18 @@ async def updatemyprofile(db:Session=Depends(deps.get_db),token:str=Form(None),n
                     db.commit()
                     
                     # Image Part Pending
-                    
+                    if profile_image:
+                        s3 = boto3.client('s3', aws_access_key_id='',aws_secret_access_key='')
+                        bucket_name=""
+                        file_name = profile_image.filename
+                        # Upload the file to S3 bucket
+                        file_upload=s3.upload_file(profile_image, bucket_name, file_name)
+
+                        return 'File uploaded successfully to S3'
+
+                                                    
+                                                        
+                        
                     
                     # Get Updated User Profile
                     get_user=db.query(User).filter(User.id ==login_user_id).first()
@@ -1121,7 +1133,7 @@ async def sendfriendrequests(db:Session=Depends(deps.get_db),token:str=Form(None
         return {"status":-1,"msg":"Auth Code is missing"}
     
     else:
-        access_token=checkToken(token.strip())
+        access_token=checkToken(db,token.strip())
         auth_text=token.strip()
         
         if checkAuthCode(auth_code,auth_text.strip()) == False:
@@ -1139,7 +1151,8 @@ async def sendfriendrequests(db:Session=Depends(deps.get_db),token:str=Form(None
                 return {"status":-1,"msg":"Users list is missing"}
             else:
                 
-                del user_ids[login_user_id]
+                user_ids=[uid for uid in user_ids if uid != get_token_details.user.user_ref_id]
+               
                 
                 if user_ids == "" or user_ids == None:
                     return {"status":0,"msg":"Please provide a valid users list"}
@@ -1150,21 +1163,26 @@ async def sendfriendrequests(db:Session=Depends(deps.get_db),token:str=Form(None
                     
                     for user in user_ids:
                         users=db.query(User).filter(User.user_ref_id == user).first()
-                        
+                        user_list=[]
                         if users:
+                        
                             user_id=users.id
-                            request_status=[0,1,3]
-                            get_my_friends=db.query(MyFriends).filter(MyFriends.status == 1,MyFriends.request_status.in_(request_status),or_(MyFriends.sender_id == login_user_id,MyFriends.sender_id == user),or_(MyFriends.sender_id == user,MyFriends.receiver_id == login_user_id)).order_by(MyFriends.id.desc())
-                            
+                            user_list.append(user_id)
+                     
+                            request_statuss=[0,1,3]
+                            get_my_friends=db.query(MyFriends).filter(and_(MyFriends.status == 1,MyFriends.request_status.in_(request_statuss)),or_(and_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == user_id),and_(MyFriends.sender_id == user_id,MyFriends.receiver_id == login_user_id))).order_by(MyFriends.id.desc())
                             get_friend_request=get_my_friends.first()
                             
+                            
                             if not get_friend_request:
-                                get_user=db.query(User).filter(User.id == user).first()
+                                
+                                get_user=db.query(User).filter(User.id == user_id).first()
                                 
                                 if get_user:
-                                    add_my_friends=MyFriends(sender_id=login_user_id,receiver_id=user,request_date=datetime.now(),request_status=0,status_date=None,status=1)
+                                    add_my_friends=MyFriends(sender_id=login_user_id,receiver_id=user_id,request_date=datetime.now(),request_status=0,status_date=None,status=1)
                                     db.add(add_my_friends)
                                     db.commit()
+                                    
                                     
                                     if add_my_friends:
                                         add_notification=Insertnotification(db,user_id,login_user_id,11,login_user_id)
@@ -1174,21 +1192,22 @@ async def sendfriendrequests(db:Session=Depends(deps.get_db),token:str=Form(None
                                         message_details={}
                                         message_details.update({"message":f"{hostname} Sent a connection request","data":{"refer_id":add_my_friends.id,"type":"friend_request"},"type":"friend_request"})
 
-                                        push_notification=pushNotify(db,user,message_details,login_user_id)
+                                        push_notification=pushNotify(db,user_list,message_details,login_user_id)
                                         
                                         body=''
                                         sms_message=''
-                                        sms_message,body= friendRequestNotifcationEmail(db,login_user_id,user,1)
+                                        sms_message,body= friendRequestNotifcationEmail(db,login_user_id,user_id,1)
                                         
                                         subject='Rawcaster - Connection Request'
                                         email_detail = {"subject": subject, "mail_message": body, "sms_message": sms_message, "type": "friend_request"}
-                                        send_notification=addNotificationSmsEmail(db,user,email_detail,login_user_id)
+                                        send_notification=addNotificationSmsEmail(db,user_list,email_detail,login_user_id)
                     if friend_request_ids:
                         return {"status":1,"msg":"Connection request sent successfully","friend_request_ids":friend_request_ids}
                 
                     else:
                         return {"status":0,"msg":"Failed to send Connection request","friend_request_ids":friend_request_ids}
-                        
+                    
+
 
 
 
@@ -1948,7 +1967,7 @@ async def deletefriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None)
 # 25. Add Nuggets
 @router.post("/addnuggets")
 async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),content:str=Form(None),share_type:int=Form(None),share_with:str=Form(None,description='friends":[1,2,3],"groups":[1,2,3]}'),
-                     nuggets_media:UploadFile=File(...),poll_option:str=Form(None),poll_duration:str=Form(None),metadata:str=Form(None)):
+                     nuggets_media:UploadFile=File(None),poll_option:str=Form(None),poll_duration:str=Form(None),metadata:str=Form(None)):
                          
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
@@ -1956,6 +1975,8 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),conten
         return {"status": 0, "msg": "Sorry! Nuggets content or Media can not be empty."}
     elif share_type == None:
         return {"status": 0, "msg": "Sorry! Share type can not be empty."}
+    elif nuggets_media == None:
+        return {"status": 0, "msg": "Nugget Media is missing"}
         
     else:
         access_token=checkToken(db,token)
@@ -2147,8 +2168,7 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
                 login_user_id=get_token_details.user_id
                 get_user_settings=db.query(UserSettings).filter(UserSettings.user_id == login_user_id).first()
                 if get_user_settings:
-                    user_public_nugget_display_setting=get_user_settings.public_nugget_display
-                
+                    user_public_nugget_display_setting = get_user_settings.public_nugget_display
             
             current_page_no=page_number
             
@@ -2163,29 +2183,41 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
             type=None
             raw_id =GetRawcasterUserID(db,type)
             
-            get_nuggets=db.query(Nuggets).join(NuggetsMaster,isouter=True).filter(Nuggets.nuggets_id == NuggetsMaster.id,Nuggets.status == 1,Nuggets.nugget_status == 1,NuggetsMaster.status == 1)
-            
-            if search_key and search_key != "":
+            get_nuggets = db.query(Nuggets).select_from(Nuggets)\
+                .join(User, Nuggets.user_id==User.id, isouter=True)\
+                .join(NuggetsMaster, Nuggets.nuggets_id==NuggetsMaster.id, isouter=True)\
+                .join(NuggetPollVoted, NuggetPollVoted.nugget_id==Nuggets.id, isouter=True)\
+                .join(NuggetsLikes, (Nuggets.id==NuggetsLikes.nugget_id) & (NuggetsLikes.status==1), isouter=True)\
+                .join(NuggetsComments, (Nuggets.id==NuggetsComments.nugget_id) & (NuggetsComments.status==1), isouter=True)\
+                .join(NuggetsShareWith, Nuggets.id==NuggetsShareWith.nuggets_id, isouter=True)\
+                .join(NuggetView, Nuggets.id==NuggetView.nugget_id, isouter=True)\
+                .join(NuggetsSave, Nuggets.id==NuggetsSave.nugget_id, isouter=True)\
+                .filter(Nuggets.status==1)\
+                .filter(Nuggets.nugget_status==1)\
+                .filter(NuggetsMaster.status==1)\
+                .group_by(Nuggets.id)
+                
+            if search_key:
                 get_nuggets=get_nuggets.filter(or_(NuggetsMaster.content.like(search_key),User.display_name.like(search_key),User.first_name.like(search_key),User.last_name.like(search_key),))
             
             if access_token == 'RAWCAST':  # When Customer not login
                 get_nuggets=get_nuggets.filter(Nuggets.share_type == 1)
                 
                 if nugget_type == 1:  # Video Nugget
-                    get_nuggets=get_nuggets.join(NuggetsAttachment,NuggetsMaster.id == NuggetsAttachment.nugget_id,isouter=True)
+                    get_nuggets=get_nuggets.join(NuggetsAttachment,NuggetsMaster.id == NuggetsAttachment.nugget_id)
                     get_nuggets=get_nuggets.filter(NuggetsAttachment.media_type == 'video')
             
                 elif nugget_type == 2:  # Other type 
                     get_nuggets=get_nuggets.join(NuggetsAttachment,Nuggets.nuggets_id == NuggetsAttachment.nugget_id,isouter=True)
                     get_nuggets=get_nuggets.filter(or_(NuggetsAttachment.media_type == None,NuggetsAttachment.media_type == 'image',NuggetsAttachment.media_type == 'audio'))
 
-            if my_nuggets == 1: 
+            elif my_nuggets == 1: 
                 get_nuggets=get_nuggets.filter(Nuggets.user_id == login_user_id)
                 
-            if saved == 1:
-                get_nuggets=get_nuggets.join(NuggetsSave,Nuggets.id == NuggetsSave.nugget_id,isouter=True).filter(NuggetsSave.user_id == login_user_id)
+            elif saved == 1:
+                get_nuggets=get_nuggets.filter(NuggetsSave.user_id == login_user_id)
                 
-            if user_id:
+            elif user_id:
                 get_nuggets=get_nuggets.filter(Nuggets.user_id == user_id)
             
                 if login_user_id != user_id:
@@ -2212,10 +2244,10 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
                     get_nuggets=get_nuggets.filter(or_(Nuggets.user_id == login_user_id,Nuggets.user_id.in_(my_followers)),Nuggets.share_type != 2)
                         
                 elif user_public_nugget_display_setting == 0 :  # Rawcaster
-                    get_nuggets=get_nuggets.filter(or_(Nuggets.user_id == login_user_id,Nuggets.user_id == raw_id))
+                    get_nuggets=get_nuggets.filter(or_(and_(Nuggets.user_id == login_user_id),and_(Nuggets.user_id == raw_id)))
                    
                 elif user_public_nugget_display_setting == 1:   # Public
-                    get_nuggets=get_nuggets.outerjoin(NuggetsShareWith,Nuggets.id == NuggetsShareWith.nuggets_id).filter( or_(
+                    get_nuggets=get_nuggets.filter( or_(
                                 Nuggets.user_id == login_user_id,
                                 and_(Nuggets.share_type == 1),
                                 and_(Nuggets.share_type == 2, Nuggets.user_id == login_user_id),
@@ -2227,7 +2259,7 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
                             ))
                     
                 elif user_public_nugget_display_setting == 2:  # All Connections
-                    get_nuggets=get_nuggets.filter(or_(Nuggets.user_id == login_user_id,and_(Nuggets.user_id.in_(my_friends),Nuggets.share_type != 2)))
+                    get_nuggets=get_nuggets.filter(or_(and_(Nuggets.user_id == login_user_id),and_(Nuggets.user_id.in_(my_friends),Nuggets.share_type != 2)))
 
                 elif user_public_nugget_display_setting == 3:   # Specific Connections
                     my_friends=[]  # Selected Connections id's
@@ -2242,8 +2274,8 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
                     get_nuggets=get_nuggets.filter(or_(Nuggets.user_id == login_user_id),and_((Nuggets.user_id.in_(my_followers),Nuggets.share_type != 2)))
                 
                 elif user_public_nugget_display_setting == 4:  # All Groups
-                    get_nuggets=get_nuggets.join(FriendGroupMembers,FriendGroups,isouter=True).filter(Nuggets.user_id == FriendGroupMembers.user_id)
-                    get_nuggets=get_nuggets.filter(FriendGroupMembers.group_id == FriendGroups.id,FriendGroups.status == 1)
+                    get_nuggets=get_nuggets.join(FriendGroupMembers,Nuggets.user_id == FriendGroupMembers.user_id,isouter=True).filter(Nuggets.user_id == FriendGroupMembers.user_id)
+                    get_nuggets=get_nuggets.filter(FriendGroups,FriendGroupMembers.group_id == FriendGroups.id).filter(FriendGroups.status == 1)
                     get_nuggets=get_nuggets.filter(or_(Nuggets.user_id == login_user_id,and_(FriendGroups.created_by == login_user_id,Nuggets.share_type != 2)))
                     
                 elif user_public_nugget_display_setting == 5:  # Specific Groups
@@ -2254,8 +2286,8 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
                             my_friends.append(group_list.groupid)
                     
                     
-                    get_nuggets=get_nuggets.join(FriendGroupMembers).filter(Nuggets.user_id == FriendGroupMembers.user_id)
-                    get_nuggets=get_nuggets.join(FriendGroups).filter(FriendGroupMembers.group_id == FriendGroups.id,FriendGroups.status == 1)
+                    get_nuggets=get_nuggets.join(FriendGroupMembers,Nuggets.user_id == FriendGroupMembers.user_id)
+                    get_nuggets=get_nuggets.join(FriendGroups,FriendGroupMembers.group_id == FriendGroups.id).filter(FriendGroups.status == 1)
                     
                     get_nuggets=get_nuggets.filter(or_(Nuggets.user_id == login_user_id,and_(FriendGroups.id.in_(my_friends),Nuggets.share_type != 2)))
                     
@@ -2346,17 +2378,12 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
                     follow_count=db.query(FollowUser).filter(FollowUser.following_userid == nuggets.user_id).count()
                     
                     nugget_like=False
-                    # nugget_view=False
                     
                     checklike=db.query(NuggetsLikes).filter(NuggetsLikes.nugget_id == nuggets.id,NuggetsLikes.user_id == login_user_id).first()
-                    # checkview=db.query(NuggetView).filter(NuggetView.nugget_id == nuggets.id,NuggetView.user_id == login_user_id).first()
                     
                     if checklike:
                         nugget_like=True
                         
-                    # if checkview:
-                    #     nugget_view=True
-                    
                     if login_user_id == nuggets.user_id :
                         following = 1
                     
@@ -2387,7 +2414,7 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
                                         "nugget_id":nuggets.id,
                                         "content":nuggets.nuggets_master.content,
                                         "metadata":nuggets.nuggets_master._metadata,
-                                        "created_date":nuggets.created_date,
+                                        "created_date":common_date(nuggets.created_date) if nuggets.created_date else '',
                                         "user_id":nuggets.user_id,
                                         "user_ref_id":nuggets.user.user_ref_id,
                                         "type":nuggets.type,
@@ -2541,7 +2568,6 @@ async def deletenugget(db:Session=Depends(deps.get_db),token:str=Form(None),nugg
                 
 
 
-
 # 29. Nugget Comment List
 @router.post("/nuggetcommentlist")
 async def nuggetcommentlist(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(None)):
@@ -2570,41 +2596,47 @@ async def nuggetcommentlist(db:Session=Depends(deps.get_db),token:str=Form(None)
                 
             check_nuggets=db.query(Nuggets).filter_by(id = nugget_id).first()
             if check_nuggets:
-                commentlist=db.query(NuggetsComments).filter(NuggetsComments.id == NuggetsCommentsLikes.comment_id).filter(NuggetsCommentsLikes.user_id == login_user_id,NuggetsComments.nugget_id == check_nuggets.id)
-                commentlist=commentlist.filter(NuggetsComments.parent_id == None).group_by(NuggetsComments.id).order_by(NuggetsComments.modified_date.asc()).all()
-                
+                commentlist=(db.query(NuggetsComments,
+                        NuggetsCommentsLikes.user_id.label('liked')
+                    ).outerjoin(NuggetsCommentsLikes, (NuggetsCommentsLikes.comment_id == NuggetsComments.id) & (NuggetsCommentsLikes.user_id == login_user_id)).filter(NuggetsComments.nugget_id == check_nuggets.id)
+                    .filter(NuggetsComments.parent_id == None)
+                    .group_by(NuggetsComments.id).order_by(NuggetsComments.modified_date.asc()).all())
+                result_list=[]
                 if commentlist:
                     count=0
                     for comment in commentlist:
-                        get_cmt_likes=db.query(NuggetsCommentsLikes).filter(NuggetsCommentsLikes.comment_id == comment.id)
-                        get_cmt_like=get_cmt_likes.all()
                         total_like=0
+                        get_cmt_likes=db.query(NuggetsCommentsLikes).filter(NuggetsCommentsLikes.comment_id == comment["NuggetsComments"].id)
+                        get_cmt_like=get_cmt_likes.all()
+                        
                         if get_cmt_like:
                             total_like=get_cmt_likes.count()
                             
-                        result_list=[]
+                        
                         result_list.append({
-                                            "comment_id":comment.id,
-                                            "user_id":comment.user_id,
-                                            "editable":True if comment.user_id == login_user_id else False,
-                                            "name":comment.user.display_name,
-                                            "profile_image":comment.user.profile_img,
-                                            "comment":comment.content,
-                                            "commented_date":comment.created_date,
-                                            "liked":True if comment.liked > 0 else False,
+                                            "comment_id":comment["NuggetsComments"].id,
+                                            "user_id":comment["NuggetsComments"].user_id,
+                                            "editable":True if comment["NuggetsComments"].user_id == login_user_id else False,
+                                            "name":comment["NuggetsComments"].user.display_name,
+                                            "profile_image":comment["NuggetsComments"].user.profile_img,
+                                            "comment":comment["NuggetsComments"].content,
+                                            "commented_date":comment["NuggetsComments"].created_date,
+                                            "liked":True if comment["liked"] and comment["liked"]> 0 else False,
                                             "like_count":total_like
                                         })
                         replyarray=[]
                         
-                        if get_cmt_like:
-                            replycount=0
+                        get_cmt_like=db.query(NuggetsComments).filter(NuggetsComments.parent_id==comment["NuggetsComments"].id,NuggetsComments.status==1).all()
+                        if get_cmt_like:                        
                             for reply in get_cmt_like:
                                 like=False
-                                if total_like > 0:
-                                    for likes in reply:
-                                        if likes.user_id == login_user_id:
-                                            like=True
+                                likes=db.query(NuggetsCommentsLikes).filter(NuggetsCommentsLikes.nugget_id==nugget_id,NuggetsCommentsLikes.comment_id==reply.id)
 
+                                if like:
+                                    user_like=likes.filter(NuggetsCommentsLikes.user_id==reply.user_id).first()
+                                    if user_like:
+                                        like=True
+                                total_like=likes.count()
                                 replyarray.append({
                                                     "comment_id":reply.id,
                                                     "user_id":reply.user_id,
@@ -2616,7 +2648,7 @@ async def nuggetcommentlist(db:Session=Depends(deps.get_db),token:str=Form(None)
                                                     "liked":like,
                                                     "like_count":total_like
                                                 })
-
+                                
                         result_list.append({"reply":replyarray})
                     
                     return {"status":1,"msg":"Success","comments":result_list}
@@ -2624,15 +2656,12 @@ async def nuggetcommentlist(db:Session=Depends(deps.get_db),token:str=Form(None)
                     return {"status":0,"msg":"No Comments"}
                     
             else:
-                return {"status":0,"msg":"Invalid Nugget id"}
-            
-            
-                
+                return {"status":0,"msg":"Invalid Nugget id"}       
 
 # 30. Add or Reply Nugget Comment
 @router.post("/addnuggetcomment")
 async def addnuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(None),type:int=Form(None,description="1-comment,2-reply"),nugget_id:int=Form(None),
-                           comment_id:int=Form(None),comment:str=Form(...)):
+                           comment_id:int=Form(None),comment:str=Form(None)):
     
     
     
@@ -2644,6 +2673,8 @@ async def addnuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(None),
     
     elif type == 2 and not comment_id:
         return {"status":0,"msg":"comment id required"}
+    elif comment == None or comment.strip() == '':
+        return {"status":0,"msg":"comment is missing"}
     
     else:
         access_token=checkToken(db,token)
@@ -2872,7 +2903,7 @@ async def nuggetandcommentlikeeduserlist(db:Session=Depends(deps.get_db),token:s
                 else:
                     return {"status":0,"msg":"Invalid Nugget id"}
             else:
-                check_nuggets_comment=db.query(NuggetsComments).filter_by(NuggetsComments.id==id,NuggetsComments.status==1).first()
+                check_nuggets_comment=db.query(NuggetsComments).filter(NuggetsComments.id==id,NuggetsComments.status==1).first()
                 if check_nuggets_comment:
                     access_check=NuggetAccessCheck(db,login_user_id,check_nuggets_comment.nugget_id)
                     if not access_check:
@@ -2883,7 +2914,7 @@ async def nuggetandcommentlikeeduserlist(db:Session=Depends(deps.get_db),token:s
             
             if likelist:
                 friendlist=get_friend_requests(db,login_user_id,None,None,1)
-                friends = friendlist.pending + friendlist.accepted + friendlist.blocked
+                friends = friendlist["pending"] + friendlist["accepted"] + friendlist["blocked"]
                 count=0
 
                 for likes in likelist:
@@ -3215,7 +3246,7 @@ async def sharenugget(db:Session=Depends(deps.get_db),token:str=Form(None),nugge
 
 # 37. Get individual nugget detail
 @router.post("/getnuggetdetail")
-async def getnuggetdetail(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(...)):
+async def getnuggetdetail(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(None)):
     if token== None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif nugget_id == None:
@@ -3784,15 +3815,15 @@ async def listevents(db:Session=Depends(deps.get_db),token:str=Form(None),user_i
                                             "type":event.type,
                                             "event_type_id":event.event_type_id,
                                             "event_layout_id":event.event_layout_id,
-                                            "message":event.description,
-                                            "start_date_time":event.start_date_time,
-                                            "start_date":event.start_date_time,
-                                            "start_time":event.start_date_time,
+                                            "message":event.description if event.description else "",
+                                            "start_date_time":common_date(event.start_date_time) if event.created_at else "",
+                                            "start_date":common_date(event.start_date_time) if event.created_at else "",
+                                            "start_time":common_date(event.start_date_time) if event.created_at else "",
                                             "duration":event.duration,
-                                            "no_of_participants":event.no_of_participants,
-                                            "banner_image":event.cover_img,
+                                            "no_of_participants":event.no_of_participants if event.no_of_participants else "",
+                                            "banner_image":event.cover_img if event.cover_img else "",
                                             "is_host":1 if event.created_by else 0,
-                                            "created_at":event.created_at,
+                                            "created_at":common_date(event.created_at) if event.created_at else "",
                                             "original_user_name":event.user.display_name,
                                             "original_user_id":event.user.id,
                                             "original_user_image":event.user.profile_img,
@@ -3801,7 +3832,8 @@ async def listevents(db:Session=Depends(deps.get_db),token:str=Form(None),user_i
                                             "join_before_host":event.join_before_host if event.join_before_host == 1 or event.join_before_host == 0 else join_before_host,
                                             "sound_notify":event.sound_notify if event.sound_notify == 0 or event.sound_notify == 0 else sound_notify,
                                             "user_screenshare": event.user_screenshare if event.user_screenshare ==1 or event.user_screenshare == 0 else user_screenshare,
-                                            "melodies":{"path":default_melody.path,"type":default_melody.type,"is_default":None},
+                                            "melodies":{"path":default_melody.path,"type":default_melody.type,"is_default":default_melody.event_id},
+                                            
                                             "default_host_audio":default_host_audio if default_host_audio else None,
                                             "default_host_video":default_host_video if default_host_video else None,
                                             "default_guest_audio":default_guest_audio if default_guest_audio else None,
@@ -3880,8 +3912,8 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                         event_start_date:date=Form(None),event_start_time:time=Form(None),
                         event_message:str=Form(None),
                         event_participants:int=Form(None,description="max no of participants"),
-                        event_duration:timedelta=Form(None,description="Duration of Event hh:mm"),
-                        event_layout:int=Form(NotImplementedError),
+                        event_duration:time=Form(None,description="Duration of Event hh:mm"),
+                        event_layout:int=Form(None),
                         
                         event_melody_id:int=Form(None,description="Event melody id (56 api table)"),
                         event_melody:UploadFile=File(None),
@@ -5214,13 +5246,14 @@ async def nuggetabusereport(db:Session=Depends(deps.get_db),token:str=Form(None)
         get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
         login_user_id=get_token_details.user_id
 
-        access_check=NuggetAccessCheck(login_user_id,nugget_id)
-        if access_check:
+        access_check=NuggetAccessCheck(db,login_user_id,nugget_id)
+        if not access_check:
             return {"status":0,"msg":"Unauthorized access"}
         report=db.query(NuggetReport).filter(NuggetReport.user_id==login_user_id,NuggetReport.nugget_id==nugget_id).first()
 
         if not report:
             nugget=db.query(Nuggets).filter(Nuggets.id==nugget_id).first()
+            print(nugget.id,"fh")
 
             if nugget:
                 nuggetreport = NuggetReport(user_id=login_user_id,
@@ -5229,12 +5262,14 @@ async def nuggetabusereport(db:Session=Depends(deps.get_db),token:str=Form(None)
                                 reported_date=datetime.now())
                 db.add(nuggetreport)
                 db.commit()
-                db.execute(nuggetreport)
+                
                 return {"status":1,"msg":"Thanks for the reporting, we will take the action"}
             else:
                 return {"status":0,"msg":"Nugget ID not correct"}
         else:
             {"status":0,"msg":"You have already reported this nugget posting."}
+
+
 
 # 61. Read Message
 
@@ -5477,7 +5512,7 @@ async def getlanguagelist(db:Session=Depends(deps.get_db)):
 # 66  Profile Details Display preference update (Only Group)
 
 @router.post("/grouplistupdate")
-async def grouplistupdate(db:Session=Depends(deps.get_db),token:str=Form(None),profile_field_name:int=Form(None),groupid:str=Form(...,description="example 1,2,3")):
+async def grouplistupdate(db:Session=Depends(deps.get_db),token:str=Form(None),profile_field_name:int=Form(None),groupid:str=Form(None,description="example 1,2,3")):
 
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
@@ -5551,7 +5586,7 @@ async def getfaq(db:Session=Depends(deps.get_db)):
 
 # 69. open nuggets details
 @router.post('/getopennuggetdetail')
-async def getopennuggetdetail(db:Session=Depends(deps.get_db),nugget_id:int=Form(...)):
+async def getopennuggetdetail(db:Session=Depends(deps.get_db),nugget_id:int=Form(None)):
     if nugget_id == None:
         return {"status":0,"msg":"Nugget id is missing"}
     else:
@@ -5749,7 +5784,7 @@ async def followandunfollow(db:Session=Depends(deps.get_db),token:str=Form(None)
 
 # 71 Get follower and following list
 @router.post("/getfollowlist")
-async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),user_id:int=Form(None),type:int=Form(...,description="1->follower,2->following"),search_key:str=Form(None),page_number:int=Form(default=1)):
+async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),user_id:int=Form(None),type:int=Form(None,description="1->follower,2->following"),search_key:str=Form(None),page_number:int=Form(default=1)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif type == None:
@@ -5940,7 +5975,7 @@ async def getreferrallist(db:Session=Depends(deps.get_db),token:str=Form(None),p
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
-            get_token_details=db.query(ApiTokens).filter_by(token == access_token).first()
+            get_token_details=db.query(ApiTokens).filter_by(token = access_token).first()
             
             login_user_id=get_token_details.user_id 
             
@@ -5985,16 +6020,22 @@ async def getreferrallist(db:Session=Depends(deps.get_db),token:str=Form(None),p
                                         })
                 
                 return {"status":1,"msg":"Success","referral_count":referral_count,"referral_needed_count":referral_need_count,"total_pages":total_pages,"current_page_no":current_page_no,"referral_list":result_list}
-                    
-                
+            
+
+
+
 # 74. Create Live Event
 
 @router.post("/addliveevent")
-async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_title:str=Form(None),event_type:int=Form(...),event_start_date:date=Form(...),event_start_time:time=Form(...),event_banner:UploadFile=File(...),event_invite_mails:str=Form(None,description="example abc@mail.com,xyz@gmail.com"),event_invite_groups:str=Form(None,description="example [14,27,32]"),event_invite_friends:str=Form(None,description="example [5,7,3]")):
+async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_title:str=Form(None),event_type:int=Form(None),event_start_date:date=Form(None),event_start_time:time=Form(None),event_banner:UploadFile=File(None),event_invite_mails:str=Form(None,description="example abc@mail.com,xyz@gmail.com"),event_invite_groups:str=Form(None,description="example [14,27,32]"),event_invite_friends:str=Form(None,description="example [5,7,3]")):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    if not token:
-        return {"status":0,"msg":"Token is missing"}
+   
+    elif event_type == None:
+        return {"status":0,"msg":"Event type is missing"}
+    elif event_banner == None:
+        return {"status":0,"msg":"Event Banner is missing"}
+        
     else:
         access_token=checkToken(db,token)
         
@@ -6015,12 +6056,18 @@ async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),even
             event_start_time=event_start_time if event_start_time else None
 
             event_invite_custom=event_invite_mails if event_invite_mails and event_invite_mails.strip() != '' else None
+            if event_invite_custom:
+                event_invite_custom=[int(i) for i in event_invite_custom.split(",")]
             event_invite_groups=event_invite_groups if event_invite_groups and event_invite_groups.strip() != '' else None
+            if event_invite_groups:
+                event_invite_groups=[int(i) for i in event_invite_groups.split(",")]
             event_invite_friends=event_invite_friends if event_invite_friends and event_invite_friends.strip() != '' else None
+            if event_invite_friends:
+                event_invite_friends=[int(i) for i in event_invite_friends.split(",")]
             
-            event_invite_custom= event_invite_custom.split(',') if event_invite_custom else None
-            event_invite_groups= json.loads(event_invite_groups) if event_invite_groups else None
-            event_invite_friends=json.loads(event_invite_friends) if event_invite_friends else None
+            # event_invite_custom= event_invite_custom.split(',') if event_invite_custom else None
+            # event_invite_groups= json.loads(event_invite_groups) if event_invite_groups else None
+            # event_invite_friends=json.loads(event_invite_friends) if event_invite_friends else None
             
             if not event_title:
                 return {"status":0,"msg":"Live event title cant be blank."}
@@ -6078,6 +6125,7 @@ async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),even
 
 
                     if event_invite_friends:
+                        print()
                         for value in event_invite_friends:
                             invite_friends = EventInvitations(type = 1,event_id = new_event.id,user_id = value,invite_sent = 0,
                                                             created_at = datetime.now(),created_by = login_user_id)
@@ -6142,20 +6190,26 @@ async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),even
                 else:
                     return {"status":0,'msg':"Event cant be created."}
 
-               
-
-    
 # 75.Edit Live Event
 
 @router.post("/editliveevent")
-async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_id:int=Form(None),event_title:str=Form(...),event_type:int=Form(None),event_start_date:date=Form(...),event_start_time:time=Form(...),event_banner:UploadFile=File(...),
+async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_id:int=Form(None),event_title:str=Form(None),event_type:int=Form(None),event_start_date:date=Form(None),event_start_time:time=Form(None),event_banner:UploadFile=File(None),
                               event_invite_mails:list=Form(None,description="Example abc@mail.com,def@mail.com"),event_invite_groups:list=Form(None,description="Example 1,2,3"),event_invite_friends:list=Form(None,description="Example 1,2,3"),delete_invite_mails:str=Form(None,description=" Example abc@mail.com,def@mail.com"),
                               delete_invite_groups:list=Form(None,description="Example 1,2,3"),delete_invite_friends:list=Form(None,description="Example 2,3,4")):
     
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    if event_id == None:
+    elif event_title == None or event_title.strip()=="":
+        return {"status":0,"msg":"Event Title cant be blank"}
+    elif event_start_date == None:
+        return {"status":0,"msg":"Event start date is missing"}
+    elif event_start_time == None:
+        return {"status":0,"msg":"Event start time is missing"}
+    elif event_id == None:
         return {"status":0,"msg":"Event ID cant be blank"}
+    elif event_banner == None:
+        return {"status":0,"msg":"Event Banner is missing"}
+        
     else:
         access_token=checkToken(db,token)
         
@@ -6177,21 +6231,32 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
             event_start_date=event_start_date if event_start_date else None
             event_start_time=event_start_time  if event_start_time else None
 
-            event_invite_custom=event_invite_mails if len(event_invite_mails)>0 else None
-            event_invite_groups=event_invite_groups if len(event_invite_groups)>0 else None
-            event_invite_friends=event_invite_friends if len(event_invite_friends)>0 else None
+            event_invite_custom=event_invite_mails if event_invite_mails and len(event_invite_mails)>0 else None
+            if event_invite_custom:
+                event_invite_custom=[int(i) for i in event_invite_custom[0].split(",") if i.strip()!="" ]
+            event_invite_groups=event_invite_groups if event_invite_groups and len(event_invite_groups)>0 else None
+            if event_invite_groups:
+                event_invite_groups=[int(i) for i in event_invite_groups[0].split(",") if i.strip()!="" ]
+            event_invite_friends=event_invite_friends if event_invite_friends and len(event_invite_friends)>0 else None
+            if event_invite_friends:
+                event_invite_friends=[int(i) for i in event_invite_friends[0].split(",") if i.strip()!="" ]
+        
 
-            delete_invite_custom=delete_invite_mails if len(delete_invite_mails)>0 else None
-            delete_invite_groups=delete_invite_groups if len(delete_invite_groups)>0 else None
-            delete_invite_friends=delete_invite_friends if len(delete_invite_friends)>0 else None
+            delete_invite_custom=delete_invite_mails if delete_invite_mails and len(delete_invite_mails)>0 else None
+            if delete_invite_custom:
+                delete_invite_custom=[int(i) for i in delete_invite_custom[0].split(",") if i.strip()!="" ]
+            delete_invite_groups=delete_invite_groups if delete_invite_groups and len(delete_invite_groups)>0 else None
+            if delete_invite_groups:
+                delete_invite_groups=[int(i) for i in delete_invite_groups[0].split(",") if i.strip()!="" ]
 
-            delete_invite_custom=[int(i) for i in delete_invite_mails.split(',')]
-            delete_invite_groups=[int(i) for i in delete_invite_groups.split(',')]
-            delete_invite_friends=[int(i) for i in delete_invite_friends.split(',')]
+            delete_invite_friends=delete_invite_friends if delete_invite_friends and len(delete_invite_friends)>0 else None
+            if delete_invite_friends:
+               delete_invite_friends=[int(i) for i in delete_invite_friends[0].split(",") if i.strip()!="" ]
 
-            event_invite_custom=[int(i) for i in event_invite_friends.split(',')]
-            event_invite_groups=[int(i) for i in event_invite_groups.split(',')]
-            event_invite_friends=[int(i) for i in event_invite_friends.split(',')]
+            
+                
+             
+            
 
             event_exist=db.query(Events).filter(Events.id==event_id,Events.created_by==login_user_id).count()
             if event_exist==0:
@@ -6223,14 +6288,14 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
                 old_start_datetime=edit_event.start_date_time
                 edit_event.title = event_title
                 edit_event.event_type_id = event_type
-                edit_event.start_date_time = event_start_date+" "+event_start_time
+                edit_event.start_date_time = str(event_start_date)+" "+str(event_start_time)
 
                 db.commit()
-                totalfriends=[]
+                totalfriend=[]
 
                 if event_type==1:
-                    totalfriends=get_friend_requests(login_user_id,requested_by=None,request_status=1,response_type=1,search_key=None)
-                    totalfriends.append(totalfriends.accepted)
+                    totalfriends=get_friend_requests(db,login_user_id,requested_by=None,request_status=1,response_type=1)
+                    totalfriend.append(totalfriends["accepted"])
                 if old_start_datetime !=edit_event.start_date_time:
                     is_event_changed=1
                 
@@ -6246,25 +6311,27 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
                 if is_event_changed==1:
                     db.query(EventInvitations).filter(EventInvitations.event_id == event_id).first().update({"is_changed":1})
                     db.commit()
-                if event_invite_friends :
+                if event_invite_friends and len(event_invite_friends)>0 :
                     for value in event_invite_friends:
-                        invite_friends = EventInvitations(type = 1,event_id = event_id,user_id = value,invite_sent = 0,
+                        invite_friends = EventInvitations(type = 1,event_id = event_id,user_id = int(value),invite_sent = 0,
                                                         created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S'),created_by = login_user_id)
                         db.add(invite_friends)
                         db.commit()
-                        if value not in totalfriends:
-                            totalfriends.append(value)
-                if event_invite_groups:
-                    invite_friends = EventInvitations(type = 2,event_id = event_id,user_id = value,invite_sent = 0,
+                        if value not in totalfriend:
+                            print(value)
+                            totalfriend.append(value)
+                if len(event_invite_groups)>0 :
+                    
+                    invite_friends = EventInvitations(type = 2,event_id = event_id,user_id = int(value),invite_sent = 0,
                                                         created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S'),created_by = login_user_id)
                     db.add(invite_friends)
                     db.commit()
 
-                    getgroupmember=db.query(FriendGroupMembers).filter(FriendGroupMembers.group_id==value).all()
+                    getgroupmember=db.query(FriendGroupMembers).filter(FriendGroupMembers.group_id==int(value)).all()
                     if getgroupmember:
                         for member in getgroupmember:
-                            if member.user_id not in totalfriends:
-                                totalfriends.append(member.user_id)
+                            if member.user_id not in totalfriend:
+                                totalfriend.append(member.user_id)
                 link=inviteBaseurl()+""+'join/talkshow/'+edit_event.ref_id
                 subject = 'Rawcaster - Event Invitation'
                 content = f'''
@@ -6274,34 +6341,32 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
                     Regards,<br />Administration Team<br /><a href="https://rawcaster.com/">Rawcaster.com</a> LLC
                 '''
                 body=""  #-----Yii function
-                if event_invite_custom:
+                if event_invite_custom and len(event_invite_custom)>0:
                     for value in event_invite_custom:
-                        invite_friends=EventInvitations(type = 3,event_id = event_id,user_id = value,invite_sent = 0,
-                                                        created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S'),created_by = login_user_id)
-                        db.add(invite_friends)
-                        db.commit()
-                        to=value
-                        send_mail=await send_email(db,to,subject,body)
+                        if value.strip()!="":
+                            invite_friends=EventInvitations(type = 3,event_id = event_id,user_id = int(value),invite_sent = 0,
+                                                            created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S'),created_by = login_user_id)
+                            db.add(invite_friends)
+                            db.commit()
+                            to=int(value)
+                            send_mail=await send_email(db,to,subject,body)
 
 
-                event=get_event_detail(event_id,login_user_id)
+                event=get_event_detail(db,event_id,login_user_id)
                 message_detail=[]
-                if totalfriends and len(totalfriends)>0:
-                    for users in totalfriends:
-                        Insertnotification(users,login_user_id,10,edit_event.id)
-                    message_detail.append({'message':"Updated the Event","data":{"refer_id":edit_event.id,"type":"edit_event"},"type":"events"})
-                    pushNotify(totalfriends,message_detail,login_user_id)
+                if totalfriend and len(totalfriend)>0:
+                    for users in totalfriend:
+                        Insertnotification(db,users,login_user_id,10,edit_event.id)
+                    message_detail={'message':"Updated the Event","data":{"refer_id":edit_event.id,"type":"edit_event"},"type":"events"}
+                    pushNotify(db,totalfriend,message_detail,login_user_id)
 
                     sms_message=f"""
                                 Hi,greetings from Rawcaster.com.
                                 You have been invited by {hostname} to an event titled {event_title}.
                                 Use the following link to join the Rawcaster event. {link}"""
-                    email_detail={"subject":subject,"mail_message":body,"sms_message":sms_message,"type":events}
-                    addNotificationSmsEmail(totalfriends,email_detail,login_user_id)
-                return {"status":1,"msg":"Event Updated successfully !","ref_id":edit_event.ref_id,"event_detail":event}       
-                
-                
-                
+                    email_detail={"subject":subject,"mail_message":body,"sms_message":sms_message,"type":"events"}
+                    addNotificationSmsEmail(db,totalfriend,email_detail,login_user_id)
+                return {"status":1,"msg":"Event Updated successfully !","ref_id":edit_event.ref_id,"event_detail":event}          
          
 # 76. Add Go Live Event
 
@@ -6420,13 +6485,13 @@ async def enablegoliveevent(db:Session=Depends(deps.get_db),token:str=Form(None)
 # 78 actionGetinfluencercategory
 
 @router.post("/getinfluencercategory")
-async def getinfluencercategory(db:Session=Depends(deps.get_db),token:str=Form(None),auth_code:str=Form(...,description="auth_code + token")):
-    if token.strip()=="" or token.strip()==None:
+async def getinfluencercategory(db:Session=Depends(deps.get_db),token:str=Form(None),auth_code:str=Form(None,description="auth_code + token")):
+    if token == None or token.strip()=='':
         return {"status":-1,"msg":"Sorry! your login session expired. please login again"}
-    elif auth_code.strip()=="" or auth_code.strip() ==None:
+    
+    elif auth_code==None or auth_code.strip() =='':
         return {"status":-1,"msg":"Auth Code is missing"}
-    if not token:
-        return {"status":0,"msg":"Token is missing"}
+    
     else:
         result_list=[]
         access_token=checkToken(token.strip())
@@ -6451,19 +6516,28 @@ async def getinfluencercategory(db:Session=Depends(deps.get_db),token:str=Form(N
 
 #79 actionSocialmedialogin
 @router.post("/socialmedialogin")
-async def socialmedialogin(db:Session=Depends(deps.get_db),signin_type:int=Form(...,description="2->Apple,3->Twitter,4->Instagram,5->Google"),
-                                 first_name:str=Form(...),last_name:str=Form(None),dispaly_name:str=Form(None),gender:int=Form(None,description="1->Male,2->Female"),
+async def socialmedialogin(db:Session=Depends(deps.get_db),signin_type:int=Form(None,description="2->Apple,3->Twitter,4->Instagram,5->Google"),
+                                 first_name:str=Form(None),last_name:str=Form(None),dispaly_name:str=Form(None),gender:int=Form(None,description="1->Male,2->Female"),
                                  dob:date=Form(None),email_id:str=Form(None),country_code:int=Form(None),mobile_no:int=Form(None),geo_location:str=Form(None),
-                                 latitude:str=Form(None),longitude:str=Form(None),ref_id:str=Form(None),auth_code:str=Form(...,description="SALT+email_id"),device_id:str=Form(None,description="Uniq like IMEI number"),
+                                 latitude:str=Form(None),longitude:str=Form(None),ref_id:str=Form(None),auth_code:str=Form(None,description="SALT+email_id"),device_id:str=Form(None,description="Uniq like IMEI number"),
                                  push_id:str=Form(None),device_type:int=Form(None,description="1->Android,2->IOS,3->Web"),
-                                 auth_codes:str=Form(...,description="SALT+username"),voip_token:str=Form(None),app_type:int=Form(...,description="1->Android,2->IOS"),password:str=Form(...),login_from:str=Form(None),signup_social_ref_id:str=Form(None)):
+                                 auth_codes:str=Form(None,description="SALT+username"),voip_token:str=Form(None),app_type:int=Form(None,description="1->Android,2->IOS"),password:str=Form(None),login_from:str=Form(None),signup_social_ref_id:str=Form(None)):
     
     if auth_code.strip() =="" or auth_code.strip() ==None:
         return {"status":0,"msg":"Auth Code is missing"}
     elif first_name.strip()=="" or first_name.strip()==None:
         return {"status":0,"msg":"Please provide your first name"}
-    elif signin_type<=1:
+    elif signin_type and signin_type <= 1:
         return {"status":0,"msg":"signin type is missing"}
+    elif first_name == None or first_name.strip() == '':
+        return {"status":0,"msg":"First Name is missing"}
+    elif auth_code == None or auth_code.strip() == '':
+        return {"status":0,"msg":"Auth code is missing"}
+    elif app_type == None:
+        return {"status":0,"msg":"App type is missing"}
+    elif password == None or password.strip() == "":
+        return {"status":0,"msg":"Password is missing"}
+        
     else:
         mobile_no=mobile_no if mobile_no.strip() !="" or mobile_no.strip()!=None else None
 
@@ -6592,19 +6666,25 @@ async def socialmedialogin(db:Session=Depends(deps.get_db),signin_type:int=Form(
                 myfriend=MyFriends(sender_id=rawcaster_support_id,receiver_id=model.id,request_date=datetime.now(),request_status=1,status_date=None,status=1)
                 db.add(myfriend)
                 db.commit()
-            password=hash_password(password)
+            
+            password = hashlib.sha1(password.encode()).hexdigest()
             if email_id=='':
                 email_id=mobile_no
             reply=login(email_id,password,device_type,device_id,push_id,login_from,voip_token,app_type)
         
-    return json.dumps(reply)
+    return reply
 
 
 
 
 # 80  actionInfluencerlist
 @router.post("/influencerlist")
-async def influencerlist(db:Session=Depends(deps.get_db),token:str=Form(None),search_key:str=Form(None),auth_code:str=Form(...,description="SALT+token"),category:int=Form(None,description="influencer category"),page_number:int=Form(None)):
+async def influencerlist(db:Session=Depends(deps.get_db),token:str=Form(None),search_key:str=Form(None),auth_code:str=Form(None,description="SALT+token"),category:int=Form(None,description="influencer category"),page_number:int=Form(default=1)):
+    if token == None or token.strip() == '':
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again"}
+    elif auth_code == None or auth_code.strip() == '':
+        return {"status":0,"msg":"Auth code is missing"}
+        
     access_token=checkToken(db,token)
     auth_code=auth_code.strip()
 
@@ -6613,76 +6693,82 @@ async def influencerlist(db:Session=Depends(deps.get_db),token:str=Form(None),se
         return {"status":0,"msg":"Authentication failed!"}
     else:
         login_user_id=0
-        get_token_details=db.query(ApiTokens).filter(ApiTokens.token==access_token.strip()).all()
-        for res in get_token_details:
-            login_user_id=res.user_id
-        api_search_key=search_key if search_key.strip()!=None or search_key.strip()!="" else None
-        api_category=api_category if api_category>0 else None
-        current_page_no=current_page_no if current_page_no>0 else 1
-        criteria = db.query(User.id, User.influencer_category, User.bio_data, User.email_id, User.user_ref_id, User.first_name, User.last_name, User.display_name, User.gender, User.profile_img, User.user_status_id, User.geo_location, FollowUser.id.label('follow_id')).outerjoin(FollowUser, and_(FollowUser.following_userid == User.id, FollowUser.follower_userid == login_user_id)).filter(User.status == 1).filter(User.id != login_user_id).filter(FollowUser.id == None).first()
+        get_token_details=db.query(ApiTokens).filter(ApiTokens.token==token).first()
+        if get_token_details:
+            login_user_id=get_token_details.user_id
+        api_search_key=search_key if search_key!=None and (search_key.strip()!=None or search_key.strip()!="") else None
+        api_category=category if category !=None and category>0 else None
+        current_page_no=page_number if page_number>0 else 1
         
+        criteria = db.query(User.id, User.influencer_category, User.bio_data, User.email_id, User.user_ref_id, User.first_name, User.last_name, User.display_name, User.gender, User.profile_img, User.user_status_id, User.geo_location, FollowUser.id.label('follow_id'))
+        criteria = criteria.join(FollowUser, and_(FollowUser.following_userid == User.id, FollowUser.follower_userid == login_user_id), isouter=True)
+        criteria = criteria.filter(User.status == 1)
+        criteria = criteria.filter(User.id != login_user_id)
+        criteria = criteria.filter(FollowUser.id == None)
+                
         #Omit blocked users
 
-        get_all_blocked_users=get_friend_requests(login_user_id,requested_by=None,request_status=3,response_type=1,search_key=None)
-        blocked_users=get_all_blocked_users.blocked
+        get_all_blocked_users=get_friend_requests(db,login_user_id,requested_by=None,request_status=3,response_type=1)
+        blocked_users=get_all_blocked_users["blocked"]
         if blocked_users:
-            criteria.filter(User.status == 1).filter(User.id != login_user_id).filter(~User.id.in_(blocked_users))
-        if api_search_key.strip() !='':
+            criteria.filter(User.status == 1).filter(User.id != login_user_id,User.id.in_(blocked_users))
+        if api_search_key !=None and api_search_key.strip() !='':
             criteria.filter(User.status == 1).filter(and_(
-    or_(User.email_id.like("%" + api_search_key + "%"),
-        User.mobile_no.like("%" + api_search_key + "%"),
-        User.display_name.like("%" + api_search_key + "%"),
-        User.first_name.like("%" + api_search_key + "%"),
-        User.last_name.like("%" + api_search_key + "%"),
-        User.first_name.concat(" ", User.last_name).like("%" + api_search_key + "%"))))
+            or_(User.email_id.like("%" + api_search_key + "%"),
+                User.mobile_no.like("%" + api_search_key + "%"),
+                User.display_name.like("%" + api_search_key + "%"),
+                User.first_name.like("%" + api_search_key + "%"),
+                User.last_name.like("%" + api_search_key + "%"),
+                User.first_name.concat(" ", User.last_name).like("%" + api_search_key + "%"))))
         
-        if api_category !='' or api_category !=None:
-            criteria.filter(User.status == 1).filter(User.id != login_user_id).filter(User.influencer_category.like("%" + api_category + "%"))
+        if api_category !=None and api_category !='':
+            criteria.filter(User.status == 1,User.id != login_user_id).filter(User.influencer_category.like("%" + api_category + "%"))
         get_row_count=criteria.count()
+        
         if get_row_count <1:
             return {"status":0,"msg":"No Result found"}
         else:
-            default_page_size=24
+            default_page_size = 24
             result_list=[]
-            total_pages,offset,limit=get_pagination(get_row_count,current_page_no,default_page_size)
-            criteria.limit(limit)
-            criteria.offset(offset)
-            criteria.order_by(User.first_name.desc())
-            get_result=criteria.all()
-            for res in get_result:
-                influencer_category=[]
-                follow_count=db.query(FollowUser).filter(FollowUser.following_userid==res.id).count()
-                if res.influencer_category!='':
-                    influencer_category = db.query(InfluencerCategory).filter(InfluencerCategory.id.in_(res.influencer_category)).all()
-                result_list.append({
-                'user_id': res.id,
-                'user_ref_id': res.user_ref_id,
-                'email_id': html.escape(res.email_id) if res.email_id != '' else '',
-                'first_name': html.escape(res.first_name) if res.first_name != '' else '',
-                'last_name': html.escape(res.last_name) if res.last_name != '' else '',
-                'display_name': html.escape(res.display_name) if res.display_name != '' else '',
-                'gender': res.gender if res.gender != '' else '',
-                'profile_img': html.escape(res.profile_img) if res.profile_img != '' else '',
-                'follow': True if hasattr(res, 'follow_id') and res.follow_id != '' else False,
-                'location': html.escape(res.geo_location) if hasattr(res, 'geo_location') and res.geo_location != '' else '',
-                'followers': follow_count,
-                'category': [influencer.name for influencer in influencer_category],
-                'user_status_id': res.user_status_id,
-                'bio': html.escape(res.bio_data) if res.bio_data != '' and res.bio_data is not None else None
+            limit,offset,total_pages=get_pagination(get_row_count,current_page_no,default_page_size)
+            criteria=criteria.order_by(User.first_name.asc())
             
-                })
-            return {"status":1,"msg":"Success","total_pages":total_pages,"current_page_no":current_page_no,"users_list":result_list}           
-                  
-                  
+            get_result=criteria.limit(limit).offset(offset).all()
+           
+            for res in get_result:
+                influencer_category = []
+                follow_count = db.query(FollowUser).filter_by(following_userid=res.id).count()
+                if res.influencer_category:
+                    influencer_category = db.query(InfluencerCategory).filter(InfluencerCategory.id.in_(res.influencer_category.split(','))).all()
+                
+                result_list.append({
+                    'user_id': res.id,
+                    'user_ref_id': res.user_ref_id,
+                    'email_id': res.email_id if res.email_id and res.email_id != '' else '',
+                    'first_name': res.first_name if res.first_name and res.first_name != '' else '',
+                    'last_name': res.last_name if res.last_name and res.last_name != '' else '',
+                    'display_name': res.display_name if res.display_name and res.display_name != '' else '',
+                    'gender': res.gender if res.gender and res.gender != '' else '',
+                    'profile_img':res.profile_img if res.profile_img and res.profile_img != '' else '',
+                    'follow': True if hasattr(res, 'follow_id') and res.follow_id != '' else False,
+                    'location': res.geo_location if hasattr(res, 'geo_location') and res.geo_location != '' else '',
+                    'followers': follow_count,
+                    'category': [influencer.name for influencer in influencer_category] if influencer_category else '' ,
+                    'user_status_id': res.user_status_id,
+                    'bio': res.bio_data if res.bio_data != '' and res.bio_data !=None else None
+                
+                    })
+            return {"status":1,"msg":"Success","total_pages":total_pages,"current_page_no":current_page_no,"users_list":result_list}  
                         
 # 81. Influencer Follow
 
 @router.post("/influencerfollow")
-async def influencerfollow(db:Session=Depends(deps.get_db),token:str=Form(None),auth_code:str=Form(...,description="SALT+ Token"),follow_userid:str=Form(None,description='["RA286164941105720824",”RA286164941105720957”]')):
-    if token.strip() == "":
+async def influencerfollow(db:Session=Depends(deps.get_db),token:str=Form(None),auth_code:str=Form(None,description="SALT+ Token"),follow_userid:str=Form(None,description='["RA286164941105720824",”RA286164941105720957”]')):
+    if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    if not token:
-        return {"status":0,"msg":"Token is missing"}
+    if auth_code == None or auth_code.strip() == '':
+        return {"status":0,"msg":"Auth code is missing"}
+        
     else:
         if checkAuthCode(db,token) == False:
             return {"status":0,"msg":"Authentication failed!"}
@@ -6766,11 +6852,14 @@ async def influencerfollow(db:Session=Depends(deps.get_db),token:str=Form(None),
 # 82. Poll Vote
 
 @router.post("/pollvote")
-async def pollvote(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(...),poll_option_id:int=Form(...)):
-    if token.strip() == "":
+async def pollvote(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(None),poll_option_id:int=Form(None)):
+    if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    if not token:
-        return {"status":0,"msg":"Token is missing"}
+    elif nugget_id == None:
+        return {"status":0,"msg":"Nugget ID is missing"}
+    elif poll_option_id == None:
+        return {"status":0,"msg":"Poll option is missing"}
+        
     else:
         if checkAuthCode(db,token) == False:
             return {"status":0,"msg":"Authentication failed!"}
@@ -6820,11 +6909,13 @@ async def pollvote(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_i
 # 83.Tags List
 
 @router.post("/tagslist")
-async def tagslist(db:Session=Depends(deps.get_db),token:str=Form(None),search_tag:str=Form(None),auth_code:str=Form(...),page_number:int=Form(default=1)):
-    if not token:
-        return {"status":0,"msg":"Token is missing"}
-    if token.strip() == "":
+async def tagslist(db:Session=Depends(deps.get_db),token:str=Form(None),search_tag:str=Form(None),auth_code:str=Form(None),page_number:int=Form(default=1)):
+   
+    if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    elif auth_code == None:
+        return {"status":0,"msg":"Authcode is missing"}
+        
     else:
         if checkAuthCode(db,token) == False:
             return {"status":0,"msg":"Authentication failed!"}
@@ -6903,19 +6994,16 @@ async def tagslist(db:Session=Depends(deps.get_db),token:str=Form(None),search_t
 # 84. Save And Unsave Nugget
 @router.post("/saveandunsavenugget")
 async def saveandunsavenugget(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(None),save:int=Form(None,description="1-save,2-unsave")):
-    if not token:
-        return {"status":0,"msg":"Token is missing"}
-    if not nugget_id:
+    if token== None or token.strip() == "":
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    if nugget_id == None:
         return {"status":0,"msg":"Nugget Id is required"}
     if not save:
         return {"status":0,"msg":"Save flag is missing"}
     if save != 1 and save != 2:
         return {"status":0,"msg":"Save flag is invalid"}
     
-    if token.strip() == "":
-        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     else:
-        
             
         if checkAuthCode(db,token) == False:
             return {"status":0,"msg":"Authentication failed!"}
