@@ -5356,8 +5356,8 @@ async def eventjoinvalidation(db:Session=Depends(deps.get_db),token:str=Form(Non
 
                             # check results
                             if not checkgroupshare and userid != event.created_by:
-                                reply = {"status": 0, "msg": "Your are not allowed to join this event. Please contact the Host 1"}
-                                return json.dumps(reply)
+                                return {"status": 0, "msg": "Your are not allowed to join this event. Please contact the Host 1"}
+                                
                 else:
                     checksgare=db.query(EventInvitations).filter(EventInvitations.event_id==event.id,EventInvitations.type==3,EventInvitations.invite_mail==emailid).first()
                     if not checksgare:
@@ -5593,10 +5593,6 @@ async def getopennuggetdetail(db:Session=Depends(deps.get_db),nugget_id:int=Form
         check_nuggets=db.query(Nuggets).filter(Nuggets.id==nugget_id,Nuggets.share_type==1).count()
         if check_nuggets>0:
             nugget_detail=[]
-            t = aliased(Nuggets)
-            likes = aliased(Nuggets)
-            comments = aliased(Nuggets)
-            share_with = aliased(Nuggets)
 
             # construct the query
             get_nugget = db.query(t.id,t.nuggets_id,t.user_id,t.type,t.share_type,
@@ -5646,9 +5642,9 @@ async def getopennuggetdetail(db:Session=Depends(deps.get_db),nugget_id:int=Form
                         'comment_id': comment.id,
                         'user_id': comment.user_id,
                         'editable': False,
-                        'name': html.escape(comment.user.display_name),
-                        'profile_image': html.escape(comment.user.profile_img),
-                        'comment': html.escape(comment.content),
+                        'name': comment.user.display_name,
+                        'profile_image': comment.user.profile_img,
+                        'comment': comment.content,
                         'commented_date': comment.created_date,
                         'liked': True if comment.liked > 0 else False,
                         'like_count': total_like,
@@ -5668,9 +5664,9 @@ async def getopennuggetdetail(db:Session=Depends(deps.get_db),nugget_id:int=Form
                                 'comment_id': reply.id,
                                 'user_id': reply.user_id,
                                 'editable': False,
-                                'name': html.escape(reply.user.display_name),
-                                'profile_image': html.escape(reply.user.profile_img),
-                                'comment': html.escape(reply.content),
+                                'name': reply.user.display_name,
+                                'profile_image': reply.user.profile_img,
+                                'comment': reply.content,
                                 'commented_date': reply.created_date,
                                 'liked': like,
                                 'like_count': total_like,
@@ -5683,15 +5679,15 @@ async def getopennuggetdetail(db:Session=Depends(deps.get_db),nugget_id:int=Form
 
                 nugget_detail = {
                     'nugget_id': get_nugget.id,
-                    'content': html.escape(get_nugget.nuggets.content),
+                    'content': get_nugget.nuggets.content,
                     'metadata': get_nugget.nuggets.metadata,
                     'created_date': get_nugget.created_date,
                     'user_id': get_nugget.user_id,
                     'type': get_nugget.type,
                     # 'original_user_name': get_nugget.nuggets.user.display_name,
-                    'original_user_image': html.escape(get_nugget.nuggets.user.profile_img),
-                    'user_name': html.escape(get_nugget.user.display_name),
-                    'user_image': html.escape(get_nugget.user.profile_img),
+                    'original_user_image': get_nugget.nuggets.user.profile_img,
+                    'user_name': get_nugget.user.display_name,
+                    'user_image': get_nugget.user.profile_img,
                     'liked': False,
                     'total_likes': int(total_likes),
                     'total_comments': int(total_comments),
@@ -5705,11 +5701,9 @@ async def getopennuggetdetail(db:Session=Depends(deps.get_db),nugget_id:int=Form
                     }
 
                 
-                reply = {"status": 1, "msg": "success", "nugget_detail": nugget_detail}
+                return {"status": 1, "msg": "success", "nugget_detail": nugget_detail}
             else:
-                reply = {"status": 0, "msg": "Invalid nugget id"}
-
-    return json.dumps(reply)
+                return {"status": 0, "msg": "Invalid nugget id"}
 
 
 
@@ -5782,6 +5776,7 @@ async def followandunfollow(db:Session=Depends(deps.get_db),token:str=Form(None)
                             
             
 
+#-----------------last 3 parameters check-------------------------#
 # 71 Get follower and following list
 @router.post("/getfollowlist")
 async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),user_id:int=Form(None),type:int=Form(None,description="1->follower,2->following"),search_key:str=Form(None),page_number:int=Form(default=1)):
@@ -5800,44 +5795,11 @@ async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),use
                 login_user_id=res.user_id
 
         current_page_no = page_number
-        
+
         get_follow_user =db.query(FollowUser)
-
+      
         if type == 1:   # Followers
-            get_follow_user = db.query(FollowUser, 
-                (db.query(func.count(FollowUser.id))
-                    .filter(FollowUser.follower_userid == User.id,
-                            FollowUser.following_userid == login_user_id)
-                    .order_by(FollowUser.id)
-                    .limit(1)
-                )
-            ).join(User).filter(FollowUser.following_userid == User.id)
             
-            # query = select(['fu.*', '(SELECT COUNT(ff.id) FROM follow_user ff WHERE (ff.follower_userid = user.id AND ff.following_userid = :login_user_id) ORDER BY ff.id LIMIT 1) AS following']).select_from('your_table AS fu')
-            # result = session.query(query).params(login_user_id=123).all()
-            
-            # subq = db.query(FollowUser.id).filter(Table1.column1 == 'value1').subquery()
-            # get_follow_user=get_follow_user.join(User,FollowUser.following_userid == User.id,isouter=True).filter(FollowUser.follower_userid == User.id,FollowUser.following_userid == login_user_id)
-            
-            
-            # following_subquery = (
-            #     db.query(FollowUser).with_entities(func.count(FollowUser.id)).filter(
-            #         FollowUser.follower_userid == User.id,
-            #         FollowUser.following_userid == login_user_id,
-            #     )
-            #     .order_by(FollowUser.id)
-            #     .limit(1)
-            #     .correlate(User)
-            #     .label('following')
-            # )
-
-            # get_follow_user = (
-            #     db.query(FollowUser)
-            #     .with_entities(FollowUser, following_subquery)
-            #     .join(User, User.id == FollowUser.following_userid)
-            #     .options(aliased(User).load_only('display_name', 'profile_img'))
-            # )
-
             if not user_id:
                 get_follow_user = get_follow_user.filter(FollowUser.follower_userid == login_user_id)
             
@@ -5845,32 +5807,12 @@ async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),use
                 get_follow_user = get_follow_user.filter_by(FollowUser.follower_userid == user_id)
                 
         else:  # Following
-            get_follow_user=get_follow_user.join(User,FollowUser.following_userid == User.id,isouter=True).filter(FollowUser.follower_userid == login_user_id,FollowUser.following_userid == User.id)
-            
-            # following_subquery = (
-            #     db.query(FollowUser)
-            #     .with_entities(func.count(FollowUser.id))
-            #     .filter(
-            #         FollowUser.following_userid == User.id,
-            #         FollowUser.follower_userid == login_user_id,
-            #     )
-            #     .order_by(FollowUser.id)
-            #     .limit(1)
-            #     .correlate(User)
-            #     .label('following')
-            # )
-
-            # criteria = (
-            #     db.query(FollowUser)
-            #     .with_entities(FollowUser, following_subquery)
-            #     .join(User, User.id == FollowUser.follower_userid)
-            #     .options(aliased(User).load_only('display_name', 'profile_img'))
-            # )
-
             if not user_id:
-                get_follow_user = get_follow_user.filter(FollowUser.following_userid == login_user_id)
+                get_follow_user=get_follow_user.filter(FollowUser.following_userid==login_user_id,FollowUser.status==1)
             else:
                 get_follow_user = get_follow_user.filter(FollowUser.following_userid == user_id)
+
+            
             
             
             if search_key and search_key.strip() != '':
@@ -5886,45 +5828,54 @@ async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),use
                 reply = {"status": 0, "msg": "No Result found"}
             else:
                 default_page_size = 50
-                total_pages, offset, limit = get_pagination(get_row_count, current_page_no, default_page_size)
+                limit,offset,total_pages = get_pagination(get_row_count, current_page_no, default_page_size)
                 
                 get_result = get_follow_user.limit(limit).offset(offset).all()
-               
+                
                 result_list = []
+                i=0
+                
                 for follow in get_result:
+                   
+                #     result_list.append(follow)
+                # return result_list
+                    
                     if type == 1:
+                        followback=db.query(FollowUser).filter(and_(FollowUser.follower_userid==follow.following_userid , FollowUser.following_userid==follow.follower_userid),FollowUser.status==1).first()
                         friend_details = {
-                            'user_id': follow.followingUser.id if follow.followingUser.id != '' else '',
-                            'user_ref_id': follow.followingUser.user_ref_id if follow.followingUser.user_ref_id != '' else '',
-                            'email_id': follow.followingUser.email_id if follow.followingUser.email_id != '' else '',
-                            'first_name': follow.followingUser.first_name if follow.followingUser.first_name != '' else '',
-                            'last_name': follow.followingUser.last_name if follow.followingUser.last_name != '' else '',
-                            'display_name': follow.followingUser.display_name if follow.followingUser.display_name != '' else '',
-                            'gender': follow.followingUser.gender if follow.followingUser.gender != '' else '',
-                            'profile_img': follow.followingUser.profile_img if follow.followingUser.profile_img != '' else '',
-                            'online': ProfilePreference(db,login_user_id, follow.followingUser.id, 'online_status', follow.followingUser.online),
-                            'last_seen': follow.followingUser.last_seen if follow.followingUser.last_seen != '' else '',
-                            'follow': True if follow.following != 0 else False,
+                            'user_id': follow.user2.id if follow.user2.id != '' else '',
+                            'user_ref_id': follow.user2.user_ref_id if follow.user2.user_ref_id != '' else '',
+                            'email_id': follow.user2.email_id if follow.user2.email_id != '' else '',
+                            'first_name': follow.user2.first_name if follow.user2.first_name != '' else '',
+                            'last_name': follow.user2.last_name if follow.user2.last_name != '' else '',
+                            'display_name': follow.user2.display_name if follow.user2.display_name != '' else '',
+                            'gender': follow.user2.gender if follow.user2.gender != '' else '',
+                            'profile_img': follow.user2.profile_img if follow.user2.profile_img != '' else '',
+                            # 'online': ProfilePreference(db,login_user_id, follow.user2.id, 'online_status', follow.followingUser.online),
+                            # 'last_seen': follow.user2.last_seen if follow.user2.last_seen != '' else '',
+                            'follow': True if followback else False
                         }
                     else:
+                        
+                        followback=db.query(FollowUser).filter(and_(FollowUser.follower_userid==follow.following_userid , FollowUser.following_userid==follow.follower_userid),FollowUser.status == 1).first()
                         friend_details = {
-                            'user_id': follow.followerUser.id if follow.followerUser.id != '' else '',
-                            'user_ref_id': follow.followerUser.user_ref_id if follow.followerUser.user_ref_id != '' else '',
-                            'email_id': follow.followerUser.email_id if follow.followerUser.email_id != '' else '',
-                            'first_name': follow.followerUser.first_name if follow.followerUser.first_name != '' else '',
-                            'last_name': follow.followerUser.last_name if follow.followerUser.last_name != '' else '',
-                            'display_name': follow.followerUser.display_name if follow.followerUser.display_name != '' else '',
-                            'gender': follow.followerUser.gender if follow.followerUser.gender != '' else '',
-                            'profile_img': follow.followerUser.profile_img if follow.followerUser.profile_img != '' else '',
-                            'online': ProfilePreference(db,login_user_id, follow.followerUser.id, 'online_status', follow.followerUser.online),
-                            'last_seen': follow.followerUser.last_seen if follow.followerUser.last_seen != '' else '',
-                            'follow': True if follow.following != 0 else False,
+                            'user_id': follow.user1.id if follow.user1.id != '' else '',
+                            'user_ref_id':follow.user1.user_ref_id if follow.user1.user_ref_id != '' else '',
+                            'email_id': follow.user1.email_id if follow.user1.email_id != '' else '',
+                            'first_name': follow.user1.first_name if follow.user1.first_name != '' else '',
+                            'last_name': follow.user1.last_name if follow.user1.last_name != '' else '',
+                            'display_name': follow.user1.display_name if follow.user1.display_name != '' else '',
+                            'gender': follow.user1.gender if follow.user1.gender != '' else '',
+                            'profile_img': follow.user1.profile_img if follow.user1.profile_img != '' else '',
+                            # 'online': ProfilePreference(db,login_user_id, follow.user1.id, 'online_status', follow.followerUser.online),
+                            # 'last_seen': follow.user1.last_seen if follow.user1.last_seen != '' else '',
+                            'follow': True if followback else False
                         }
+                        i=i+1
                     result_list.append(friend_details)
 
-                reply = {'status': 1, 'msg': 'Success', 'follow_count': get_row_count, 'total_pages': total_pages, 'current_page_no': current_page_no, 'follow_list': result_list}
+                return {'status': 1, 'msg': 'Success', 'follow_count': get_row_count, 'total_pages': total_pages, 'current_page_no': current_page_no, 'follow_list': result_list}
 
-        return json.dumps(reply)
     
     
     
@@ -6367,8 +6318,8 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
                     email_detail={"subject":subject,"mail_message":body,"sms_message":sms_message,"type":"events"}
                     addNotificationSmsEmail(db,totalfriend,email_detail,login_user_id)
                 return {"status":1,"msg":"Event Updated successfully !","ref_id":edit_event.ref_id,"event_detail":event}          
-         
-# 76. Add Go Live Event
+     
+  # 76. Add Go Live Event
 
 @router.post("/addgoliveevent")
 async def addgoliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_title:str=Form(None),event_type:int=Form(None)):
@@ -6380,15 +6331,12 @@ async def addgoliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),ev
         return {"status":0,"msg":"Go live event type cant be blank."}
         
     else:
-        if checkAuthCode(db,token) == False:
-            return {"status":0,"msg":"Authentication failed!"}
-        else:
             access_token=checkToken(db,token)
             
             if access_token == False:
                 return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
             else:
-                get_token_details=db.query(ApiTokens).filter_by(token == access_token).first()
+                get_token_details=db.query(ApiTokens).filter_by(token = access_token).first()
                 
                 login_user_id=get_token_details.user_id         
                 
@@ -6415,8 +6363,11 @@ async def addgoliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),ev
                     user=db.query(User).filter(User.id == login_user_id).first()
                     userstatus=db.query(UserStatusMaster).filter(UserStatusMaster.id == user.user_status_id).first()
                     
-                    duration=userstatus.max_event_duration if userstatus.max_event_duration else 1 * 3600
-                    duration = time.strftime("%H:%M:%S", time.gmtime(duration))
+                    duration = timedelta(seconds=userstatus.max_event_duration * 3600) if userstatus.max_event_duration else 1*3600
+                    hours, remainder = divmod(duration.seconds, 3600)
+                    minutes, seconds = divmod(remainder, 60)
+                    duration_str = f"{hours}:{minutes}:{seconds}"
+                    print(duration_str)
                     
                     reference_id=f"RC{random.randint(1,499)}{int(datetime.now().timestamp())}"
 
@@ -6431,9 +6382,10 @@ async def addgoliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),ev
                     
                     else:
                         return {"status":0,",msg":"Go Live event cant be created."}
-                 
-                 
-      # 77 Enable golive event
+      
+
+
+ # 77 Enable golive event
 
 @router.post('/enablegoliveevent')
 async def enablegoliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_id:int=Form(None)):
@@ -6482,6 +6434,8 @@ async def enablegoliveevent(db:Session=Depends(deps.get_db),token:str=Form(None)
                 return {"status":0,"msg":"Go Live event not able to enable."}
             
 
+
+
 # 78 actionGetinfluencercategory
 
 @router.post("/getinfluencercategory")
@@ -6494,7 +6448,7 @@ async def getinfluencercategory(db:Session=Depends(deps.get_db),token:str=Form(N
     
     else:
         result_list=[]
-        access_token=checkToken(token.strip())
+        access_token=checkToken(db,token.strip())
         auth_code=auth_code.strip()
 
         auth_text=token.strip()
@@ -6510,8 +6464,11 @@ async def getinfluencercategory(db:Session=Depends(deps.get_db),token:str=Form(N
                     return {"status":0,"msg":"No result found!"}
                 else:
                     for category in GetInfluencerCategory:
-                        result_list.append({"id":category.id,"name":category.name})
+                        result_list.append({"id":category.id,"name":category.name if category.name and (category.name !=None or category.name!='') else None})
                     return {"status":1,"msg":"Success","influencer_category":result_list}
+                
+
+
 
 
 #79 actionSocialmedialogin
