@@ -10,13 +10,10 @@ from sqlalchemy import func,case,text,distinct
 import re
 import base64
 import json
-from langdetect import detect
-from gtts import gTTS
-from playsound import playsound
-from profanityfilter import ProfanityFilter
-from moviepy.video.io.VideoFileClip import VideoFileClip
 import math,pytz,sys
 import boto3
+from urllib.parse import urlparse
+
 
 router = APIRouter() 
 
@@ -1344,7 +1341,8 @@ async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(Non
             
             flag=flag if flag else 0
             
-            my_friend_group=db.query(FriendGroups.id,FriendGroups.chat_enabled,FriendGroups.created_by,FriendGroups.group_name,FriendGroups.group_icon,func.count(FriendGroupMembers.id.label("members_count")))
+            my_friend_group=db.query(FriendGroups.id,FriendGroups.chat_enabled,FriendGroups.created_by,FriendGroups.group_name,FriendGroups.group_icon).join(FriendGroupMembers,FriendGroupMembers.group_id == FriendGroups.id,isouter=True)
+            
             my_friend_group=my_friend_group.group_by(FriendGroups.id).filter(FriendGroups.status == 1,or_(FriendGroups.created_by == login_user_id,FriendGroupMembers.user_id == login_user_id))
             # Query Pending
             
@@ -1364,6 +1362,9 @@ async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(Non
                 my_friend_group=my_friend_group.order_by(FriendGroups.group_name.asc()).limit(limit).offset(offset).all()
                 result_list=[]
                 for res in my_friend_group:
+                    get_user=db.query(User).filter(User.id == res.created_by).first()
+                    
+                    gte_frnd_group_count=db.query(FriendGroupMembers).filter(FriendGroupMembers.group_id == res.id).count()
                     grouptype=1
                     groupname=res.group_name
                     
@@ -1372,22 +1373,11 @@ async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(Non
                     
                     if groupname == "My Fans" and res.created_by != login_user_id:
                         groupname=f"Influencer: {(res.user.display_name if res.user.display_name else '') if res.created_by else ''}"
-            
-                    result_list.append({
-                                        "group_id":res.id,
-                                        "group_name":groupname,
-                                        "group_icon":res.group_icon if res.group_icon else "",
-                                        "group_member_count":res.members_count + 1 if res.members_count else 0,
-                                        "group_owner":res.created_by if res.created_by else 0,
-                                        "typing":0,
-                                        "chat_enabled":res.chat_enabled,
-                                        "group_type":grouptype
-                                        })
-                    
+
                     get_group_chat=db.query(GroupChat).filter(GroupChat.status == 1,GroupChat.group_id == res.id).order_by(GroupChat.id.desc()).first()
                     
-                    result_list.append({"last_msg":get_group_chat.message if get_group_chat else "","last_msg_datetime":get_group_chat.sent_datetime if get_group_chat.sent_datetime else "","result_list":3})
-            
+                    result_list.append({})
+                    
                     memberlist=[]
                     members=[]
                     membercount=0
@@ -1395,14 +1385,14 @@ async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(Non
                         members.append(res.created_by)
                         memberlist.append({
                                             "user_id":res.created_by,
-                                            "email_id":res.user.email_id,
-                                            "first_name":res.user.first_name,
-                                            "last_name":res.user.last_name,
-                                            "display_name":res.user.display_name,
-                                            "gender":res.user.gender,
-                                            "profile_img":res.user.profile_img,
-                                            "online":res.user.online,
-                                            "last_seen":res.user.last_seen,
+                                            "email_id":get_user.email_id,
+                                            "first_name":get_user.first_name,
+                                            "last_name":get_user.last_name,
+                                            "display_name":get_user.display_name,
+                                            "gender":get_user.gender,
+                                            "profile_img":get_user.profile_img,
+                                            "online":get_user.online,
+                                            "last_seen":get_user.last_seen,
                                             "typing":0
                                             })
                         
@@ -1421,8 +1411,23 @@ async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(Non
                                             "last_seen":group_member.user.last_seen if group_member.user_id else "",
                                             "typing":0
                                             })
+            
                     
-                    result_list.append({"group_member_ids":members,"group_members_list":memberlist})
+                    result_list.append({
+                                        "group_id":res.id,
+                                        "group_name":groupname,
+                                        "group_icon":res.group_icon if res.group_icon else "",
+                                        "group_member_count":gte_frnd_group_count + 1 if gte_frnd_group_count else 0,
+                                        "group_owner":res.created_by if res.created_by else 0,
+                                        "typing":0,
+                                        "chat_enabled":res.chat_enabled,
+                                        "group_type":grouptype,
+                                        "last_msg":get_group_chat.message if get_group_chat else "",
+                                        "last_msg_datetime":common_date(get_group_chat.sent_datetime) if get_group_chat else "",
+                                        "result_list":3,
+                                        "group_member_ids":members,
+                                        "group_members_list":memberlist
+                                        })
                         
                 return {"status":1,"msg":"Success","group_count":get_row_count,"total_pages":total_pages,"current_page_no":current_page_no,"friend_group_list":result_list}
             
@@ -1513,69 +1518,11 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
                                         my_friends_ids.append(frnds.id)
                     
             # Get Final result after applied all requested conditions    [[[[  SUB QUERY  ]]]]
-            get_my_friends = db.query(MyFriends, FollowUser.id.label('follow_id'),
-                    func.coalesce((db.query(FriendsChat.message)
-                                    .filter(FriendsChat.sent_type == 1)
-                                    .filter(or_(
-                                        and_(
-                                            FriendsChat.sender_id == MyFriends.sender_id,
-                                            FriendsChat.receiver_id == MyFriends.receiver_id
-                                        ),
-                                        and_(
-                                            FriendsChat.sender_id == MyFriends.receiver_id,
-                                            FriendsChat.receiver_id == MyFriends.sender_id
-                                        )
-                                    ))
-                                    .filter(or_(
-                                        and_(
-                                            FriendsChat.sender_id == login_user_id,
-                                            FriendsChat.sender_delete.is_(None)
-                                        ),
-                                        and_(
-                                            FriendsChat.receiver_id == login_user_id,
-                                            FriendsChat.receiver_delete.is_(None)
-                                        )
-                                    ))
-                                    .order_by(FriendsChat.sent_datetime.desc())
-                                    .limit(1)
-                                ), '').label('lastmessage'),
-                    func.coalesce((db.query(FriendsChat.sent_datetime)
-                                    .filter(FriendsChat.sent_type == 1)
-                                    .filter(or_(
-                                        and_(
-                                            FriendsChat.sender_id == MyFriends.sender_id,
-                                            FriendsChat.receiver_id == MyFriends.receiver_id
-                                        ),
-                                        and_(
-                                            FriendsChat.sender_id == MyFriends.receiver_id,
-                                            FriendsChat.receiver_id == MyFriends.sender_id
-                                        )
-                                    ))
-                                    .filter(or_(
-                                        and_(
-                                            FriendsChat.sender_id == login_user_id,
-                                            FriendsChat.sender_delete.is_(None)
-                                        ),
-                                        and_(
-                                            FriendsChat.receiver_id == login_user_id,
-                                            FriendsChat.receiver_delete.is_(None)
-                                        )
-                                    ))
-                                    .order_by(FriendsChat.sent_datetime.desc())
-                                    .limit(1)
-                                ), '').label('lastmsg_datetime')
-                    
-                ).join(User,or_(MyFriends.sender_id == User.id,MyFriends.receiver_id == User.id))\
-                .outerjoin(FollowUser, and_(
-                                            or_(
-                                                FollowUser.following_userid == User.id,
-                                                FollowUser.following_userid == User.id
-                                            ),
-                                            FollowUser.follower_userid == login_user_id
-                                        ))\
-                .filter(MyFriends.status == 1)\
-                .filter(MyFriends.request_status == 1)
-           
+            
+            get_my_friends = db.query(MyFriends).filter(or_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == login_user_id)).filter(MyFriends.status == 1, MyFriends.request_status == 1)
+            
+            get_my_friends=get_my_friends.filter(MyFriends.id.in_(my_friends_ids))
+            
             if search_key:
                 get_my_friends=get_my_friends.filter(or_(User.email_id.like(search_key),User.display_name.like(search_key),User.first_name.like(search_key),User.last_name.like(search_key)))
             
@@ -1596,10 +1543,14 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
                 
                 friendid=0
                 request_frnds=[]
-               
+              
                 for friend_requests in get_my_friends:
-                    if friend_requests['MyFriends'].sender_id == login_user_id:
-                        friendid=friend_requests.user2.id
+                    get_follow_user_id=db.query(FollowUser).filter(or_(FollowUser.following_userid == friend_requests.sender_id,FollowUser.following_userid == friend_requests.receiver_id),FollowUser.follower_userid == login_user_id).first()
+                    
+                    get_last_msg=db.query(FriendsChat).filter(FriendsChat == 1,or_(and_(FriendsChat.sender_id == friend_requests.sender_id,FriendsChat.receiver_id == friend_requests.receiver_id),and_(FriendsChat.sender_id == friend_requests.receiver_id,FriendsChat.receiver_id == friend_requests.sender_id)),or_(and_(FriendsChat.sender_id == login_user_id,FriendsChat.sender_delete == None),and_(FriendsChat.receiver_id == login_user_id,FriendsChat.receiver_delete == None))).order_by(FriendsChat.sent_datetime.desc()).first()
+                   
+                    if friend_requests.sender_id == login_user_id:
+                        friendid=friend_requests.receiver_id
                         
                         online= 1 if friend_requests.user2.app_online == 1 or friend_requests.user2.web_online == 1 else 0
                         status_type="online_status"
@@ -1609,7 +1560,7 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
                                                 "user_ref_id":friend_requests.user2.user_ref_id if friend_requests.receiver_id else "",
                                                 "email_id":friend_requests.user2.email_id if friend_requests.receiver_id else "",
                                                 "first_name":friend_requests.user2.first_name if friend_requests.receiver_id else "",
-                                                "last_name":friend_requests.user2.last_name if friend_requests.receiver_ide else "",
+                                                "last_name":friend_requests.user2.last_name if friend_requests.receiver_id else "",
                                                 "display_name":friend_requests.user2.display_name if friend_requests.receiver_id else "",
                                                 "gender":friend_requests.user2.gender if friend_requests.receiver_id else "",
                                                 "profile_img":friend_requests.user2.profile_img if friend_requests.receiver_id else "",
@@ -1617,17 +1568,17 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
                                                 "last_seen":friend_requests.user2.last_seen if friend_requests.receiver_id else "",
                                                 "typing":0,
                                                 "unreadmsg":0,
-                                                "follow":friend_requests.follow_id if friend_requests.follow_id else "",
-                                                "last_msg":friend_requests.lastmessage if friend_requests.lastmessage else "",
-                                                "last_msg_datetime":friend_requests.lastmsg_datetime if friend_requests.lastmsg_datetime else "",
+                                                "follow":True if get_follow_user_id else False,
+                                                "last_msg":get_last_msg.message if get_last_msg else "",
+                                                "last_msg_datetime":common_date(get_last_msg.sent_datetime) if get_last_msg else None,
                                                 "login_from":friend_login_from,  #  1 - WEB, 2 - APP
                                                 "login_from_app":friend_requests.user2.app_online if friend_requests.receiver_id else "",  # 1 - true, 0 - False
                                                 "login_from_web":friend_requests.user2.web_online if friend_requests.receiver_id else ""   # 1 - true, 0 - False
                                             })
                     else:
-                        friendid=friend_requests.user1.id
+                        friendid=friend_requests.sender_id
                         online=1 if friend_requests.user1.app_online == 1 or friend_requests.user1.web_online == 1 else 0
-                        
+                        status_type='online_status'
                         request_frnds.append({
                                                 "friend_request_id":friend_requests.id if friend_requests.id else "",
                                                 "user_id":friend_requests.user1.id if friend_requests.sender_id else "",
@@ -1642,9 +1593,9 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
                                                 "last_seen":friend_requests.user1.last_seen if friend_requests.sender_id else "",
                                                 "typing":0,
                                                 "unreadmsg":0,
-                                                "follow":friend_requests.follow_id if friend_requests.follow_id else "",
-                                                "last_msg":friend_requests.lastmessage if friend_requests.lastmessage else "",
-                                                "last_msg_datetime":friend_requests.lastmsg_datetime if friend_requests.lastmsg_datetime else "",
+                                                "follow":True if get_follow_user_id else False,
+                                                "last_msg":get_last_msg.message if get_last_msg else "",
+                                                "last_msg_datetime":common_date(get_last_msg.sent_datetime) if get_last_msg else None,
                                                 "login_from":friend_login_from,  #  1 - WEB, 2 - APP
                                                 "login_from_app":friend_requests.user1.app_online if friend_requests.sender_id else "",  # 1 - true, 0 - False
                                                 "login_from_web":friend_requests.user1.web_online if friend_requests.sender_id else ""   # 1 - true, 0 - False
@@ -1975,8 +1926,8 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),conten
         return {"status": 0, "msg": "Sorry! Nuggets content or Media can not be empty."}
     elif share_type == None:
         return {"status": 0, "msg": "Sorry! Share type can not be empty."}
-    elif nuggets_media == None:
-        return {"status": 0, "msg": "Nugget Media is missing"}
+    # elif nuggets_media == None:
+    #     return {"status": 0, "msg": "Nugget Media is missing"}
         
     else:
         access_token=checkToken(db,token)
@@ -2040,6 +1991,8 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),conten
                 if add_nuggets_master:
                     # Poll Option save
                     if poll_option:
+                        poll_option=json.loads(poll_option) if poll_option else []
+                        
                         for option in poll_option:
                             add_NuggetPollOption=NuggetPollOption(nuggets_master_id=add_nuggets_master.id,option_name=option.strip(),
                                                                     created_date=datetime.now(),status=1)
@@ -2930,10 +2883,11 @@ async def nuggetandcommentlikeeduserlist(db:Session=Depends(deps.get_db),token:s
             else:
                 return {"status":0,"msg":"No Likes"}
 
-# 35. Edit Nugget
 
+
+# 35. Edit Nugget
 @router.post("/editnugget")
-async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(None),share_type:int=Form(None),metadata:str=Form(None),content:str=Form(None),delete_media_id:list=Form(None),nuggets_media:UploadFile=File(None),share_with:str=Form(None,description=' {"friends":[1,2,3],"groups":[1,2,3]} ')):
+async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(None),share_type:int=Form(None),metadata:str=Form(None),content:str=Form(None),delete_media_id:str=Form(None,description="[1,2,3]"),nuggets_media:UploadFile=File(None),share_with:str=Form(None,description=' {"friends":[1,2,3],"groups":[1,2,3]} ')):
     if token== None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif nugget_id == None:
@@ -2957,25 +2911,32 @@ async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugg
 
             check_nuggets=db.query(Nuggets).filter_by(id = nugget_id,user_id = login_user_id).first()
             if check_nuggets:
+                content= content if content else ''
                 share_with=json.loads(share_with) if share_with else None
-            
-                allmediacount=db.query(NuggetsAttachment).filter_by(nugget_id=check_nuggets.nuggets_id).count()
 
+                allmediacount=db.query(NuggetsAttachment).filter_by(nugget_id=check_nuggets.nuggets_id).count()
+                delete_media_id=json.loads(delete_media_id) if delete_media_id else []
                 if delete_media_id:
                     getmediacount=db.query(NuggetsAttachment).filter(NuggetsAttachment.nugget_id == check_nuggets.nuggets_id,NuggetsAttachment.id.in_(delete_media_id)).count()
                 
-                if (not delete_media_id) or (getmediacount != len(delete_media_id)):
+                if delete_media_id and (getmediacount != len(delete_media_id)):
                     return {"status": 0, "msg": "Sorry! Invalid image id"}
+                
                 elif (allmediacount == len(delete_media_id)) and (content == '') and ((not ('nuggets_media' in request.files)) or (not request.files['nuggets_media'].filename)):
                     return {"status": 0, "msg": "Sorry! Nuggets content or Media can not be empty...."}
+                
                 elif ((share_type == 3) or (share_type == 4) or (share_type == 5)) and (not share_with):
                     return {"status": 0, "msg": "Sorry! Share with can not be empty."}
+                
                 elif (share_type == 3) and ((not share_with.get('groups')) or (share_with['groups'] == '') or (not share_with['groups'])):
                     return {"status": 0, "msg": "Sorry! Share with groups list missing."}
+                
                 elif (share_type == 4) and ((not share_with.get('friends')) or (share_with['friends'] == '') or (not share_with['friends'])):
                     return {"status": 0, "msg": "Sorry! Share with friends list missing."}
+                
                 elif (share_type == 5) and (((not share_with.get('groups')) or (share_with['groups'] == '') or (not share_with['groups'])) and ((not share_with.get('friends')) or (share_with['friends'] == '') or (not share_with['friends']))):
                     return {"status": 0, "msg": "Sorry! Share with groups or friends list missing."}
+                
                 else:
                     anyissue = 0
                     
@@ -3012,9 +2973,9 @@ async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugg
                                 response_type=1
                                 totalmember=get_friend_requests(db,login_user_id,requested_by,request_status,response_type)
                                 
-                                totalmembers.append(totalmember.accepted)
+                                totalmembers=totalmember['accepted']
                             
-                            update_nugget_master=db.query(NuggetsMaster).filter(NuggetsMaster.id == check_nuggets.nuggets_id).update({"content":content,"metadata":metadata,"modified_date":datetime.now()})
+                            update_nugget_master=db.query(NuggetsMaster).filter(NuggetsMaster.id == check_nuggets.nuggets_id).update({"content":content,"_metadata":metadata,"modified_date":datetime.now()})
                             db.commit()
                             
                             if delete_media_id:
@@ -3070,7 +3031,7 @@ async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugg
                                         user_name=get_user.display_name
                                     
                                     message_detail={"message":"Edited the Nugget",
-                                                    "data":{"refer_id":nugget_id,"type":"edit_nugget","type":"nuggets"}}
+                                                    "data":{"refer_id":nugget_id,"type":"edit_nugget"},"type":"nuggets"}
                                     
                                     push_notify=pushNotify(db,totalmembers,message_detail,login_user_id)                                  
                                     
@@ -3258,7 +3219,7 @@ async def getnuggetdetail(db:Session=Depends(deps.get_db),token:str=Form(None),n
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
-            get_token_details=db.query(ApiTokens).filter_by(token == access_token).first()
+            get_token_details=db.query(ApiTokens).filter_by(token = access_token).first()
             
             login_user_id=get_token_details.user_id
             
@@ -3319,6 +3280,8 @@ async def geteventlayout(db:Session=Depends(deps.get_db),token:str=Form(None)):
                 result_list.append({"id":type.id,"name":type.title if type.title else ''})
             
             return {"status":1,"msg":"Success","event_layouts":result_list}
+
+
 
 
 # 40. Add Event
@@ -5271,8 +5234,8 @@ async def nuggetabusereport(db:Session=Depends(deps.get_db),token:str=Form(None)
 
 
 
-# 61. Read Message
 
+# 61. Read Message
 @router.post("/messageread")
 async def messageread(db:Session=Depends(deps.get_db),token:str=Form(None),senderid:int=Form(None),receiverid:int=Form(None)):
     
@@ -5292,10 +5255,9 @@ async def messageread(db:Session=Depends(deps.get_db),token:str=Form(None),sende
         get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
         login_user_id=get_token_details.user_id
 
-        report = db.query(FriendsChat).filter(FriendsChat.sender_id == senderid,FriendsChat.receiver_id == receiverid,FriendsChat.is_read == 0
-        ).update(is_read=1,read_datetime=datetime.now() )
-
+        report = db.query(FriendsChat).filter(FriendsChat.sender_id == senderid,FriendsChat.receiver_id == receiverid,FriendsChat.is_read == 0).update({"is_read":1,"read_datetime":datetime.now()})
         db.commit()
+        
         if report:
             return {"status":1,"msg":"Success"}
         else:
@@ -5305,138 +5267,143 @@ async def messageread(db:Session=Depends(deps.get_db),token:str=Form(None),sende
         
 #   62.Event Join Validation
 @router.post("/eventjoinvalidation")
-async def eventjoinvalidation(db:Session=Depends(deps.get_db),token:str=Form(None),eventid:int=Form(None),emailid:str=Form(None),name:str=Form(None)):
+async def eventjoinvalidation(db:Session=Depends(deps.get_db),token:str=Form(None),eventid:str=Form(None),emailid:str=Form(None),name:str=Form(None)):
     if eventid == None:
         return {"status":0,"msg":"Event ID Missing"}
     elif emailid == None:
         return {"status":0,"msg":"Email ID Missing"}
-    elif name:
+    elif name == None:
         return {"status":0,"msg":"Name Missing"}
-        
-        
-    result_list = {}
-
-    userdetails=db.query(User).filter(User.email_id==emailid,User.status==1).first()
-    if userdetails:
-        userid=userdetails.id
     else:
-        access_token=0
-        access_token=checkToken(token)
-        get_token_details=db.query(ApiTokens).filter(ApiTokens.token==access_token).all()
-        for res in get_token_details:
-            userid=res.user_id
-        userdetails=db.query(User).filter(User.id==userid,User.status==1).first()
+        userid=0
+        
+        result_list = {}
+
+        userdetails=db.query(User).filter(User.email_id==emailid,User.status==1).first()
         if userdetails:
-            emailid=userdetails.email_id
-#---------#-----------#---------------------------#------------------------------------_#--------------------#
+            userid=userdetails.id
+        else:
+            access_token=0
+            access_token=checkToken(db,token)
+            get_token_details=db.query(ApiTokens).filter(ApiTokens.token==access_token).all()
+            for res in get_token_details:
+                userid=res.user_id
+                
+            userdetails=db.query(User).filter(User.id==userid,User.status==1).first()
+            if userdetails:
+                emailid=userdetails.email_id
+            
+        if eventid.startswith('http') and urlparse(eventid).scheme:
+            url_components = urlparse(eventid)
+            if url_components.path:
+                param = url_components.path.split('/')
+                eventid = param[-1]
 
-        
+        if eventid:
+            event=db.query(Events).filter(Events.ref_id==eventid).first()
+            if event:
+                if (event.event_type_id==2 or event.event_type_id==3) and userid==0:
+                    return {"status":0,"msg":"Please login to join this event."}
+                if event.event_type_id==2:
+                    if userid !=0:
+                        checksgare=db.query(EventInvitations).filter(EventInvitations.event_id==event.id,EventInvitations.type==3,EventInvitations.invite_mail==emailid).first()
+                        if not checksgare:
+                            checkusershare=db.query(EventInvitations).filter(EventInvitations.event_id==event.id,EventInvitations.type==1,EventInvitations.invite_mail==userid).first()
+                            if not checkusershare:
+                                checkgroupsharequery = db.query(EventInvitations.group_id).\
+                                join(FriendGroupMembers, FriendGroupMembers.group_id==EventInvitations.group_id).\
+                                join(User, User.id==FriendGroupMembers.user_id).\
+                                filter(EventInvitations.event_id == event.id, EventInvitations.type == 2, User.email_id == emailid)
+                                checkgroupshare = checkgroupsharequery.all()
 
-                      #Location code here
+                                # check results
+                                if not checkgroupshare and userid != event.created_by:
+                                    return {"status": 0, "msg": "Your are not allowed to join this event. Please contact the Host 1"}
+                                    
+                    else:
+                        checksgare=db.query(EventInvitations).filter(EventInvitations.event_id==event.id,EventInvitations.type==3,EventInvitations.invite_mail==emailid).first()
+                        if not checksgare:
+                            return {"status":0,"msg":"Your are not allowed to join this event. Please contact the Host 2"}
+                if event.event_type_id ==3:
+                    follow=db.query(FollowUser).filter(FollowUser.follower_userid==userid,FollowUser.following_userid==event.created_by)
+                    if not follow and userid != event.created_by:
+                        return {"status":0,"msg":"Your are not allowed to join this event. Please contact the Host"}
+                
+                waiting_room = 0
+                join_before_host = 0
+                sound_notify = 0
+                user_screenshare = 0
 
-        
-#----------------#--------------------------____#----------------------___#_-----________--------###############
+                settings = db.query(UserSettings).filter_by(user_id=event.created_by).first()
 
-    if eventid:
-        event=db.query(Events).filter(Events.ref_id==eventid).first()
-        if event:
-            if (event.event_type_id==2 or event.event_type_id==3) and userid==0:
-                return {"status":0,"msg":"Please login to join this event."}
-            if event.event_type_id==2:
-                if userid !=0:
-                    checksgare=db.query(EventInvitations).filter(EventInvitations.event_id==event.id,EventInvitations.type==3,EventInvitations.invite_mail==emailid).first()
-                    if not checksgare:
-                        checkusershare=db.query(EventInvitations).filter(EventInvitations.event_id==event.id,EventInvitations.type==1,EventInvitations.invite_mail==userid).first()
-                        if not checkusershare:
-                            checkgroupsharequery = db.query(EventInvitations.group_id).\
-                            join(FriendGroupMembers, FriendGroupMembers.group_id==EventInvitations.group_id).\
-                            join(User, User.id==FriendGroupMembers.user_id).\
-                            filter(EventInvitations.event_id == event.id, EventInvitations.type == 2, User.email_id == emailid)
-                            checkgroupshare = checkgroupsharequery.all()
+                if settings:
+                    waiting_room = settings.waiting_room
+                    join_before_host = settings.join_before_host
+                    sound_notify = settings.participant_join_sound
+                    user_screenshare = settings.screen_share_status
+                    
+                default_melody=db.query(EventMelody).filter(EventMelody.id==event.event_melody_id).first()               
 
-                            # check results
-                            if not checkgroupshare and userid != event.created_by:
-                                return {"status": 0, "msg": "Your are not allowed to join this event. Please contact the Host 1"}
-                                
+                result_list.update({
+                                    "event_id":event.id,
+                                    "event_name":event.title,
+                                    "reference_id":event.ref_id,
+                                    "type":event.type,
+                                    "event_type_id":event.event_type_id,
+                                    "event_layout_id":event.event_layout_id,
+                                    "message": event.description,
+                                    "start_date_time": event.start_date_time,
+                                    "start_date":datetime.strptime(str(event.start_date_time), '%Y-%m-%d %H:%M:%S').strftime('%b %d'),
+                                    "start_time":datetime.strptime(str(event.start_date_time), '%Y-%m-%d %H:%M:%S').strftime('%I:%M %p'),
+                                    "duration":event.duration,
+                                    "no_of_participants":event.no_of_participants,
+                                    "banner_image":event.cover_img,
+                                    "is_host":1 if userid == event.created_by else 0,
+                                    "created_at":datetime.strptime(str(event.created_at), '%Y-%m-%d %H:%M:%S').strftime('%Y-%m-%d %I:%M %p'),
+                                    "original_user_name":event.user.display_name,
+                                    "original_user_id":event.user.id,
+                                    "original_user_image": event.user.profile_img,
+                                    "waiting_room": event.waiting_room if event.waiting_room == 1 or event.waiting_room == 0 else waiting_room,
+                                    "join_before_host": event.join_before_host if event.join_before_host == 1 or event.join_before_host == 0 else join_before_host,
+                                    "sound_notify": event.sound_notify if event.sound_notify == 1 or event.sound_notify == 0 else sound_notify,
+                                    "user_screenshare":event.user_screenshare if event.user_screenshare == 1 or event.user_screenshare == 0 else user_screenshare,
+                                    "melodies":{"path":default_melody.path,"type":default_melody.type,"is_default":default_melody.event_id is None}
+                                })
+          
+            
+                
+                if 'eventDefaultAvs' in event and event['eventDefaultAvs']:
+                    for defaultav in event['eventDefaultAvs']:
+                        result_list.update({"default_host_audio":defaultav['default_host_audio'],
+                                            "default_host_video":defaultav['default_host_video'],
+                                            "default_guest_audio":defaultav['default_guest_audio'],
+                                            "default_guest_video":defaultav['default_guest_video']
+                                            })
+            
+
+                userdetail = {}
+
+                if userid != 0:
+                    userdetail.update({ "id":userid,
+                                        "email":userdetails['email_id'],
+                                        "name":userdetails['display_name'],
+                                        "profile_image":userdetails['profile_img'],
+                                        "user_status_type":userdetails['user_status_id']
+                                     })
+            
                 else:
-                    checksgare=db.query(EventInvitations).filter(EventInvitations.event_id==event.id,EventInvitations.type==3,EventInvitations.invite_mail==emailid).first()
-                    if not checksgare:
-                        return {"status":0,"msg":"Your are not allowed to join this event. Please contact the Host 2"}
-            if event.event_type_id ==3:
-                follow=db.query(FollowUser).filter(FollowUser.follower_userid==userid,FollowUser.following_userid==event.created_by)
-                if not follow and userid != event.created_by:
-                    return {"status":0,"msg":"Your are not allowed to join this event. Please contact the Host"}
+                    userdetail.update({ "id":random.randint(100, 999),
+                                        "email":emailid,
+                                        "name":name,
+                                        "profile_image":defaultimage('profile_img'),
+                                        "user_status_type":1
+                                     })
+                
+                return {"status":1,"msg":"Success","event":result_list,"user":userdetail}
             
-            waiting_room = 0
-            join_before_host = 0
-            sound_notify = 0
-            user_screenshare = 0
-
-            settings = db.query(UserSettings).filter_by(user_id=event.created_by).first()
-
-            if settings:
-                waiting_room = settings.waiting_room
-                join_before_host = settings.join_before_host
-                sound_notify = settings.participant_join_sound
-                user_screenshare = settings.screen_share_status
-
-            result_list['event_id'] = event.id
-            result_list['event_name'] = event.title
-            result_list['reference_id'] = event.ref_id
-            result_list['type'] = event.type
-            result_list['event_type_id'] = event.event_type_id
-            result_list['event_layout_id'] = event.event_layout_id
-            result_list['message'] = event.description
-            result_list['start_date_time'] = event.start_date_time
-            result_list['start_date'] = datetime.strptime(event.start_date_time, '%Y-%m-%d %H:%M:%S').strftime('%b %d')
-            result_list['start_time'] = datetime.strptime(event.start_date_time, '%Y-%m-%d %H:%M:%S').strftime('%I:%M %p')
-            result_list['duration'] = event.duration
-            result_list['no_of_participants'] = event.no_of_participants
-            result_list['banner_image'] = event.cover_img
-            result_list['is_host'] = 1 if userid == event.created_by else 0
-            result_list['created_at'] = datetime.datetime.strptime(event.created_at, '%Y-%m-%d %H:%M:%S').strftime('%Y-%m-%d %I:%M %p')
-            result_list['original_user_name'] = event.createdBy.display_name
-            result_list['original_user_id'] = event.createdBy.id
-            result_list['original_user_image'] = event.createdBy.profile_img
-
-            result_list['waiting_room'] = event.waiting_room if event.waiting_room == 1 or event.waiting_room == 0 else waiting_room
-            result_list['join_before_host'] = event.join_before_host if event.join_before_host == 1 or event.join_before_host == 0 else join_before_host
-            result_list['sound_notify'] = event.sound_notify if event.sound_notify == 1 or event.sound_notify == 0 else sound_notify
-            result_list['user_screenshare'] = event.user_screenshare if event.user_screenshare == 1 or event.user_screenshare == 0 else user_screenshare
+            return {"status":0,"msg":"Event ID Not Correct"}
         
-            default_melody=db.query(EventMelody).filter(EventMelody.id==event.event_melody_id).first()
-            if default_melody and default_melody !=" ":
-                if default_melody:
-                    # result_list['melodies'] = {}
-                    result_list['melodies']['path'] = default_melody.path
-                    result_list['melodies']['type'] = default_melody.type
-                    result_list['melodies']['is_default'] = default_melody.event_id is None
-            
-
-            if 'eventDefaultAvs' in event and event['eventDefaultAvs']:
-                for defaultav in event['eventDefaultAvs']:
-                    result_list['default_host_audio'] = defaultav['default_host_audio']
-                    result_list['default_host_video'] = defaultav['default_host_video']
-                    result_list['default_guest_audio'] = defaultav['default_guest_audio']
-                    result_list['default_guest_video'] = defaultav['default_guest_video']
-
-            userdetail = {}
-
-            if userid != 0:
-                userdetail['id'] = userid
-                userdetail['email'] = userdetails['email_id']
-                userdetail['name'] = userdetails['display_name']
-                userdetail['profile_image'] = userdetails['profile_img']
-                userdetail['user_status_type'] = userdetails['user_status_id']
-            else:
-                userdetail['id'] = random.randint(100, 999)
-                userdetail['email'] = emailid
-                userdetail['name'] = name
-                userdetail['profile_image'] = defaultimage('profile_img')
-                userdetail['user_status_type'] = 1
-            return {"status":1,"msg":"Success","event":result_list,"user":userdetail}
-        return {"status":0,"msg":"Event ID Not Correct"}
-    return {"status":0 ,"msg":"Event ID Missing"}
+        return {"status":0 ,"msg":"Event ID Missing"}
 
 
 # 63. Get Event Details
@@ -6007,27 +5974,30 @@ async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),even
             event_start_time=event_start_time if event_start_time else None
 
             event_invite_custom=event_invite_mails if event_invite_mails and event_invite_mails.strip() != '' else None
+            
             if event_invite_custom:
                 event_invite_custom=[int(i) for i in event_invite_custom.split(",")]
+            
             event_invite_groups=event_invite_groups if event_invite_groups and event_invite_groups.strip() != '' else None
             if event_invite_groups:
                 event_invite_groups=[int(i) for i in event_invite_groups.split(",")]
+            
             event_invite_friends=event_invite_friends if event_invite_friends and event_invite_friends.strip() != '' else None
             if event_invite_friends:
-                event_invite_friends=[int(i) for i in event_invite_friends.split(",")]
-            
-            # event_invite_custom= event_invite_custom.split(',') if event_invite_custom else None
-            # event_invite_groups= json.loads(event_invite_groups) if event_invite_groups else None
-            # event_invite_friends=json.loads(event_invite_friends) if event_invite_friends else None
+                event_invite_friends=json.loads(event_invite_friends) if event_invite_friends else []
             
             if not event_title:
                 return {"status":0,"msg":"Live event title cant be blank."}
+            
             elif not event_type:
                 return {"status":0,"msg":"Live event type cant be blank."}
+            
             elif not event_start_date:
                 return {"status":0,"msg":"Live event start date cant be blank."}
+            
             elif not event_start_time:
                 return {"status":0,"msg":"Live event start time cant be blank."}
+            
             else:
                 setting=db.query(UserSettings).filter(UserSettings.user_id == login_user_id).first()
                 img_flag='talkshow'
@@ -6076,13 +6046,12 @@ async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),even
 
 
                     if event_invite_friends:
-                        print()
                         for value in event_invite_friends:
                             invite_friends = EventInvitations(type = 1,event_id = new_event.id,user_id = value,invite_sent = 0,
                                                             created_at = datetime.now(),created_by = login_user_id)
                             db.add(invite_friends)
                             db.commit()
-                            if value not in totalfriends:
+                            if value not in totalfriend:
                                 totalfriend.append(value)
                     
                     if event_invite_groups:
@@ -6141,12 +6110,13 @@ async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),even
                 else:
                     return {"status":0,'msg':"Event cant be created."}
 
-# 75.Edit Live Event
 
+
+# 75.Edit Live Event
 @router.post("/editliveevent")
 async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_id:int=Form(None),event_title:str=Form(None),event_type:int=Form(None),event_start_date:date=Form(None),event_start_time:time=Form(None),event_banner:UploadFile=File(None),
-                              event_invite_mails:list=Form(None,description="Example abc@mail.com,def@mail.com"),event_invite_groups:list=Form(None,description="Example 1,2,3"),event_invite_friends:list=Form(None,description="Example 1,2,3"),delete_invite_mails:str=Form(None,description=" Example abc@mail.com,def@mail.com"),
-                              delete_invite_groups:list=Form(None,description="Example 1,2,3"),delete_invite_friends:list=Form(None,description="Example 2,3,4")):
+                              event_invite_mails:str=Form(None,description="Example abc@mail.com,def@mail.com"),event_invite_groups:str=Form(None,description="Example 1,2,3"),event_invite_friends:str=Form(None,description="Example 1,2,3"),delete_invite_mails:str=Form(None,description=" Example abc@mail.com,def@mail.com"),
+                              delete_invite_groups:str=Form(None,description="Example 1,2,3"),delete_invite_friends:str=Form(None,description="Example 2,3,4")):
     
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
@@ -6182,33 +6152,18 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
             event_start_date=event_start_date if event_start_date else None
             event_start_time=event_start_time  if event_start_time else None
 
-            event_invite_custom=event_invite_mails if event_invite_mails and len(event_invite_mails)>0 else None
-            if event_invite_custom:
-                event_invite_custom=[int(i) for i in event_invite_custom[0].split(",") if i.strip()!="" ]
-            event_invite_groups=event_invite_groups if event_invite_groups and len(event_invite_groups)>0 else None
-            if event_invite_groups:
-                event_invite_groups=[int(i) for i in event_invite_groups[0].split(",") if i.strip()!="" ]
-            event_invite_friends=event_invite_friends if event_invite_friends and len(event_invite_friends)>0 else None
-            if event_invite_friends:
-                event_invite_friends=[int(i) for i in event_invite_friends[0].split(",") if i.strip()!="" ]
-        
-
-            delete_invite_custom=delete_invite_mails if delete_invite_mails and len(delete_invite_mails)>0 else None
-            if delete_invite_custom:
-                delete_invite_custom=[int(i) for i in delete_invite_custom[0].split(",") if i.strip()!="" ]
-            delete_invite_groups=delete_invite_groups if delete_invite_groups and len(delete_invite_groups)>0 else None
-            if delete_invite_groups:
-                delete_invite_groups=[int(i) for i in delete_invite_groups[0].split(",") if i.strip()!="" ]
-
-            delete_invite_friends=delete_invite_friends if delete_invite_friends and len(delete_invite_friends)>0 else None
-            if delete_invite_friends:
-               delete_invite_friends=[int(i) for i in delete_invite_friends[0].split(",") if i.strip()!="" ]
-
+            event_invite_custom=event_invite_mails.split(",") if event_invite_mails else ''
             
-                
-             
+            event_invite_groups=json.loads(event_invite_groups) if event_invite_groups else []
             
+            event_invite_friends=json.loads(event_invite_friends) if event_invite_friends else []
 
+            delete_invite_custom=delete_invite_mails.split(",") if delete_invite_mails else ''
+          
+            delete_invite_groups=json.loads(delete_invite_groups) if delete_invite_groups else []
+            
+            delete_invite_friends=json.loads(delete_invite_friends) if delete_invite_friends else []
+          
             event_exist=db.query(Events).filter(Events.id==event_id,Events.created_by==login_user_id).count()
             if event_exist==0:
                 return {"status":0,"msg":"Invalid Event ID."}
@@ -6260,7 +6215,7 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
 
 
                 if is_event_changed==1:
-                    db.query(EventInvitations).filter(EventInvitations.event_id == event_id).first().update({"is_changed":1})
+                    db.query(EventInvitations).filter(EventInvitations.event_id == event_id).update({"is_changed":1})
                     db.commit()
                 if event_invite_friends and len(event_invite_friends)>0 :
                     for value in event_invite_friends:
@@ -6271,18 +6226,20 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
                         if value not in totalfriend:
                             print(value)
                             totalfriend.append(value)
+                            
                 if len(event_invite_groups)>0 :
-                    
-                    invite_friends = EventInvitations(type = 2,event_id = event_id,user_id = int(value),invite_sent = 0,
-                                                        created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S'),created_by = login_user_id)
-                    db.add(invite_friends)
-                    db.commit()
+                    for value in event_invite_groups:
+                        invite_friends = EventInvitations(type = 2,event_id = event_id,user_id = int(value),invite_sent = 0,
+                                                            created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S'),created_by = login_user_id)
+                        db.add(invite_friends)
+                        db.commit()
 
-                    getgroupmember=db.query(FriendGroupMembers).filter(FriendGroupMembers.group_id==int(value)).all()
-                    if getgroupmember:
-                        for member in getgroupmember:
-                            if member.user_id not in totalfriend:
-                                totalfriend.append(member.user_id)
+                        getgroupmember=db.query(FriendGroupMembers).filter(FriendGroupMembers.group_id==int(value)).all()
+                        if getgroupmember:
+                            for member in getgroupmember:
+                                if member.user_id not in totalfriend:
+                                    totalfriend.append(member.user_id)
+                                    
                 link=inviteBaseurl()+""+'join/talkshow/'+edit_event.ref_id
                 subject = 'Rawcaster - Event Invitation'
                 content = f'''
@@ -6291,17 +6248,20 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
                     Use the following link to join the Rawcaster talkshow.<br/>{link}<br/><br/>
                     Regards,<br />Administration Team<br /><a href="https://rawcaster.com/">Rawcaster.com</a> LLC
                 '''
-                body=""  #-----Yii function
-                if event_invite_custom and len(event_invite_custom)>0:
+                body=""  
+                if event_invite_custom and len(event_invite_custom) > 0 :
                     for value in event_invite_custom:
+                        
                         if value.strip()!="":
-                            invite_friends=EventInvitations(type = 3,event_id = event_id,user_id = int(value),invite_sent = 0,
+                            invite_friends=EventInvitations(type = 3,event_id = event_id,invite_mail = value,invite_sent = 0,
                                                             created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S'),created_by = login_user_id)
                             db.add(invite_friends)
                             db.commit()
-                            to=int(value)
-                            send_mail=await send_email(db,to,subject,body)
-
+                            to=value
+                            try:
+                                send_mail=await send_email(db,to,subject,body)
+                            except:
+                                pass
 
                 event=get_event_detail(db,event_id,login_user_id)
                 message_detail=[]

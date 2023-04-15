@@ -434,7 +434,7 @@ def get_nugget_detail(db,nugget_id,login_user_id):
                     "poll_duration":get_nuggets.nuggets_master.poll_duration if get_nuggets.nuggets_master.poll_duration else "" if get_nuggets.nuggets_id else "",
                     "voted":voted,
                     "total_vote":total_pollvote,
-                    "saved":saved
+                    "saved":True if saved else False
                     }
         return nuggets_details
 
@@ -1225,17 +1225,18 @@ def SendOtp(db,user_id,signup_type):
 
 def ProfilePreference(db,myid,otherid,field,value):
     settings=db.query(UserSettings).filter(UserSettings.user_id == otherid).first()
-    if settings and settings.field:
-        if settings.field==0:
+    if hasattr(settings, field):
+        if getattr(settings, field) == 0:
             return ""
-        elif settings.field==1:
+        elif getattr(settings, field) == 1:
             return value
-        elif settings.field==2:
+        elif getattr(settings, field) == 2:
             if FriendsandGroupPermission(db,myid,otherid,1):
                 return value
             else:
                 return ""
-        elif settings.field==3:
+            
+        elif getattr(settings, field) == 3:
             lists=[]
             online_group_list=db.query(UserProfileDisplayGroup.groupid).filter(UserProfileDisplayGroup.user_id==otherid,UserProfileDisplayGroup.profile_id==field).all()
             if online_group_list:
