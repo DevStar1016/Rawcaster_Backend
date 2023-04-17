@@ -13,7 +13,7 @@ import json
 import math,pytz,sys
 import boto3
 from urllib.parse import urlparse
-
+from PIL import Image
 
 router = APIRouter() 
 
@@ -945,9 +945,17 @@ async def updatemyprofile(db:Session=Depends(deps.get_db),token:str=Form(None),n
                     
                     # Image Part Pending
                     if profile_image:
+                        path= '/uploads/user'
+                        
                         s3 = boto3.client('s3', aws_access_key_id='',aws_secret_access_key='')
                         bucket_name=""
                         file_name = profile_image.filename
+                        ext = os.path.splitext(file_name)[-1].lower()
+                        extensions=["jpeg", "jpg", "png"]
+                        if ext in extensions:
+                            return {"status":0,"msg":'"Profile Image format does not support"'}
+                        # Compress Image
+                        profile_image.save("compressed.jpg", optimize=True, quality=50)
                         # Upload the file to S3 bucket
                         file_upload=s3.upload_file(profile_image, bucket_name, file_name)
 
@@ -1344,7 +1352,6 @@ async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(Non
             my_friend_group=db.query(FriendGroups.id,FriendGroups.chat_enabled,FriendGroups.created_by,FriendGroups.group_name,FriendGroups.group_icon).join(FriendGroupMembers,FriendGroupMembers.group_id == FriendGroups.id,isouter=True)
             
             my_friend_group=my_friend_group.group_by(FriendGroups.id).filter(FriendGroups.status == 1,or_(FriendGroups.created_by == login_user_id,FriendGroupMembers.user_id == login_user_id))
-            # Query Pending
             
             if search_key and search_key.strip() == "":
                 my_friend_group=my_friend_group.filter(FriendGroups.group_name.like(search_key+"%"))
@@ -5268,6 +5275,8 @@ async def messageread(db:Session=Depends(deps.get_db),token:str=Form(None),sende
 #   62.Event Join Validation
 @router.post("/eventjoinvalidation")
 async def eventjoinvalidation(db:Session=Depends(deps.get_db),token:str=Form(None),eventid:str=Form(None),emailid:str=Form(None),name:str=Form(None)):
+    if token == None  or token.strip() == '':
+        return {"status":0,"msg":"Token Missing"}
     if eventid == None:
         return {"status":0,"msg":"Event ID Missing"}
     elif emailid == None:
@@ -5343,7 +5352,13 @@ async def eventjoinvalidation(db:Session=Depends(deps.get_db),token:str=Form(Non
                     user_screenshare = settings.screen_share_status
                     
                 default_melody=db.query(EventMelody).filter(EventMelody.id==event.event_melody_id).first()               
-
+                melody={}
+                if default_melody:
+                    melody={"path":default_melody.path,"type":default_melody.type,"is_default":default_melody.event_id is None}
+                # Default AVs
+                get_event_default_avs= db.query(EventDefaultAv).filter(EventDefaultAv.event_id == event.id).order_by(EventDefaultAv.id.desc()).first()
+                
+                
                 result_list.update({
                                     "event_id":event.id,
                                     "event_name":event.title,
@@ -5367,28 +5382,21 @@ async def eventjoinvalidation(db:Session=Depends(deps.get_db),token:str=Form(Non
                                     "join_before_host": event.join_before_host if event.join_before_host == 1 or event.join_before_host == 0 else join_before_host,
                                     "sound_notify": event.sound_notify if event.sound_notify == 1 or event.sound_notify == 0 else sound_notify,
                                     "user_screenshare":event.user_screenshare if event.user_screenshare == 1 or event.user_screenshare == 0 else user_screenshare,
-                                    "melodies":{"path":default_melody.path,"type":default_melody.type,"is_default":default_melody.event_id is None}
+                                    "melodies":melody,
+                                    "default_host_audio":(True if get_event_default_avs.default_host_audio else False)if get_event_default_avs else False,
+                                    "default_host_video":(True if get_event_default_avs.default_host_video else False)if get_event_default_avs else False,
+                                    "default_guest_audio":(True if get_event_default_avs.default_guest_audio else False)if get_event_default_avs else False,
+                                    "default_guest_video":(True if get_event_default_avs.default_guest_video else False)if get_event_default_avs else False,
                                 })
-          
-            
-                
-                if 'eventDefaultAvs' in event and event['eventDefaultAvs']:
-                    for defaultav in event['eventDefaultAvs']:
-                        result_list.update({"default_host_audio":defaultav['default_host_audio'],
-                                            "default_host_video":defaultav['default_host_video'],
-                                            "default_guest_audio":defaultav['default_guest_audio'],
-                                            "default_guest_video":defaultav['default_guest_video']
-                                            })
-            
 
                 userdetail = {}
 
                 if userid != 0:
                     userdetail.update({ "id":userid,
-                                        "email":userdetails['email_id'],
-                                        "name":userdetails['display_name'],
-                                        "profile_image":userdetails['profile_img'],
-                                        "user_status_type":userdetails['user_status_id']
+                                        "email":userdetails.email_id,
+                                        "name":userdetails.display_name,
+                                        "profile_image":userdetails.profile_img,
+                                        "user_status_type":userdetails.user_status_id
                                      })
             
                 else:
@@ -5408,33 +5416,34 @@ async def eventjoinvalidation(db:Session=Depends(deps.get_db),token:str=Form(Non
 
 # 63. Get Event Details
 @router.post("/geteventdetails")
-async def geteventdetails(db:Session=Depends(deps.get_db),eventid:int=Form(None)):
+async def geteventdetails(db:Session=Depends(deps.get_db),eventid:str=Form(None)):
+    # Event Id - ref_id
     if eventid == None:
         return {"status":0 ,"msg":"Event ID Missing"}
         
     result_list={}
-    result=[]
-    if eventid:
-        event=db.query(Events).filter(Events.ref_id==eventid,Events.event_type_id==1).first()
-        if event:
-            result_list['event_name'] = event.title
-            result_list['reference_id'] = event.ref_id
-            result_list['message'] = event.description
-            result_list['start_date_time'] = event.start_date_time
-            result_list['start_date'] = event.start_date_time.strftime('%b %d')
-            result_list['start_time'] = event.start_date_time.strftime('%I:%M %p')
-            result_list['duration'] = event.duration
-            result_list['no_of_participants'] = event.no_of_participants
-            result_list['banner_image'] =event.cover_img
-            result_list['original_user_name'] = event.createdBy.display_name
-            result_list['original_user_image'] = event.createdBy.profile_img
-            result.append(result_list)
-
-            return {"status":1,"msg":"Success","event":result}
-        else:
-            {"status":0,"msg":"Event ID Not Correct"}
+    
+    event=db.query(Events).filter(Events.ref_id == eventid,Events.event_type_id == 1).first()
+    if event:
+        result_list.update({
+                            "event_name":event.title if event.title else "",
+                            "reference_id":event.ref_id if event.ref_id else "",
+                            "message":event.description if event.description else "",
+                            "start_date_time":common_date(event.start_date_time) if event.start_date_time else "",
+                            "start_date":event.start_date_time.strftime('%b %d'),
+                            "start_time":event.start_date_time.strftime('%I:%M %p'),
+                            "duration":event.duration if event.duration else "",
+                            "no_of_participants":event.no_of_participants if event.no_of_participants else 0,
+                            "banner_image":event.cover_img if event.cover_img else "",
+                            "original_user_name":event.user.display_name if event.created_by else "",
+                            "original_user_image":event.user.profile_img if event.created_by else ""
+                            })
+        
+        return {"status":1,"msg":"Success","event":result_list}
+    
     else:
-        return {"status":0,"msg":"Event ID Missing"}
+        return {"status":0,"msg":"Event ID Not Correct"}
+    
 
 
 
@@ -5479,7 +5488,7 @@ async def getlanguagelist(db:Session=Depends(deps.get_db)):
 # 66  Profile Details Display preference update (Only Group)
 
 @router.post("/grouplistupdate")
-async def grouplistupdate(db:Session=Depends(deps.get_db),token:str=Form(None),profile_field_name:int=Form(None),groupid:str=Form(None,description="example 1,2,3")):
+async def grouplistupdate(db:Session=Depends(deps.get_db),token:str=Form(None),profile_field_name:str=Form(None),groupid:str=Form(None,description="example [1,2,3]")):
 
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
@@ -5498,10 +5507,10 @@ async def grouplistupdate(db:Session=Depends(deps.get_db),token:str=Form(None),p
         get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
         login_user_id=get_token_details.user_id
         parameter_id=profile_field_name
-
-        groupid=[int(i) for i in groupid.split(',')]
-
-        if len(groupid)>1:
+        
+        groupid=json.loads(groupid) if groupid else []
+    
+        if len(groupid) > 1:
             db.query(UserProfileDisplayGroup).filter(and_(UserProfileDisplayGroup.profile_id==parameter_id,UserProfileDisplayGroup.user_id==login_user_id)).delete()
             gcount=len(groupid)
             listtype=type
@@ -5558,116 +5567,79 @@ async def getopennuggetdetail(db:Session=Depends(deps.get_db),nugget_id:int=Form
         return {"status":0,"msg":"Nugget id is missing"}
     else:
         check_nuggets=db.query(Nuggets).filter(Nuggets.id==nugget_id,Nuggets.share_type==1).count()
-        if check_nuggets>0:
-            nugget_detail=[]
+        if check_nuggets > 0:
+            nugget_detail={}
+            
 
             # construct the query
-            get_nugget = db.query(t.id,t.nuggets_id,t.user_id,t.type,t.share_type,
-                t.created_date,t.nugget_status,t.status,
-                func.count(likes.id.distinct()).label('total_likes'),
-                func.count(comments.id.distinct()).label('total_comments')
-            ).join(Nuggets, Nuggets.nuggets_id == t.nuggets_id).\
-            join(likes, likes.nugget_id == t.id, isouter=True).\
-            join(comments, comments.nugget_id == t.id, isouter=True).\
-            join(share_with, share_with.nuggets_id == t.id, isouter=True).\
-            filter(t.id == nugget_id).first()
-
-
+            get_nugget=db.query(Nuggets).\
+                join(NuggetsMaster,Nuggets.nuggets_id == NuggetsMaster.id).\
+                join(NuggetsShareWith,NuggetsShareWith.nuggets_id == Nuggets.id,isouter=True).\
+                filter(Nuggets.id == nugget_id).first()
+            
             if get_nugget:
-                total_likes = get_nugget.total_likes if get_nugget.total_likes else 0
-                total_comments = get_nugget.total_comments if get_nugget.total_comments else 0
-                img_count = 0
-                attachments = []
-
-                if get_nugget.nuggets.nuggetsAttachments:
-                    for attachmentdetails in get_nugget.nuggets.nuggetsAttachments:
-                        if attachmentdetails.status == 1:
-                            attachments.append({
-                                'media_id': attachmentdetails.id,
-                                'media_type': attachmentdetails.media_type,
-                                'media_file_type': attachmentdetails.media_file_type,
-                                'path': attachmentdetails.path
-                            })
-                            img_count += 1
+                total_likes=db.query(NuggetsLikes).filter(NuggetsLikes.nugget_id == get_nugget.id,NuggetsLikes.status == 1).count()
+                total_comments=db.query(NuggetsComments).filter(NuggetsComments.nugget_id == get_nugget.id,NuggetsComments.status == 1).count()
                 
-                shared_with=[]
-                result_list=[]
-                count=0
-                commentlist = db.query(NuggetsComments).options(joinedload(NuggetsComments.likes))\
-                .filter(NuggetsComments.nugget_id == nugget_id)\
-                .filter(NuggetsComments.parent_id == None)\
-                .group_by(NuggetsComments.id)\
-                .order_by(NuggetsComments.modified_date.asc())\
-                .all()
-
-                if commentlist:
-                    for comment in commentlist:
-                        if comment.nuggetsCommentsLikes:
-                            total_like = len(comment.nuggetsCommentsLikes)
-
-                        result_list.append({
-                        'comment_id': comment.id,
-                        'user_id': comment.user_id,
-                        'editable': False,
-                        'name': comment.user.display_name,
-                        'profile_image': comment.user.profile_img,
-                        'comment': comment.content,
-                        'commented_date': comment.created_date,
-                        'liked': True if comment.liked > 0 else False,
-                        'like_count': total_like,
-                    })
-
-                    replyarray = []
-                    
-                    if comment.nuggetsComments:
-                        replycount = 0
-                        for reply in comment.nuggetsComments:
-                            total_like = 0
-                            like = False
-                            if reply.nuggetsCommentsLikes:
-                                total_like = len(reply.nuggetsCommentsLikes)
-                                
-                            replyarray.append({
-                                'comment_id': reply.id,
-                                'user_id': reply.user_id,
-                                'editable': False,
-                                'name': reply.user.display_name,
-                                'profile_image': reply.user.profile_img,
-                                'comment': reply.content,
-                                'commented_date': reply.created_date,
-                                'liked': like,
-                                'like_count': total_like,
+                attachments = []
+                get_nugget_attachemnt=db.query(NuggetsAttachment).filter(NuggetsAttachment.nugget_id == get_nugget.nuggets_id)
+                get_attachemnt=get_nugget_attachemnt.all()
+                get_attachemnt_count=get_nugget_attachemnt.count()
+                if get_attachemnt:
+                    for attch in get_attachemnt:
+                        if attch.status == 1:
+                            attachments.append({
+                                'media_id': attch.id,
+                                'media_type': attch.media_type,
+                                'media_file_type': attch.media_file_type,
+                                'path': attch.path
                             })
                             
-                            replycount += 1
-
-                    result_list[count]['reply'] = replyarray
-                    count += 1
-
-                nugget_detail = {
-                    'nugget_id': get_nugget.id,
-                    'content': get_nugget.nuggets.content,
-                    'metadata': get_nugget.nuggets.metadata,
-                    'created_date': get_nugget.created_date,
-                    'user_id': get_nugget.user_id,
-                    'type': get_nugget.type,
-                    # 'original_user_name': get_nugget.nuggets.user.display_name,
-                    'original_user_image': get_nugget.nuggets.user.profile_img,
-                    'user_name': get_nugget.user.display_name,
-                    'user_image': get_nugget.user.profile_img,
-                    'liked': False,
-                    'total_likes': int(total_likes),
-                    'total_comments': int(total_comments),
-                    'total_media': img_count,
-                    'share_type': get_nugget.share_type,
-                    'media_list': attachments,
-                    # 'is_nugget_owner': 1 if get_nugget.user_id == login_user_id else 0,
-                    # 'is_master_nugget_owner': 1 if get_nugget.nuggets.user_id == login_user_id else 0,
-                    'shared_with': shared_with,
-                    'comments': result_list
-                    }
-
+               
+                shared_with=[]
+                result_list=[]
                 
+                commentlist=db.query(NuggetsComments).join(NuggetsCommentsLikes,NuggetsCommentsLikes.comment_id == NuggetsComments.id ,isouter=True).\
+                    filter(NuggetsComments.nugget_id == nugget_id,NuggetsComments.parent_id == None).group_by(NuggetsComments.id).order_by(NuggetsComments.modified_date.asc()).all()
+                
+                
+                if commentlist:
+                    for comment in commentlist:
+                        tot_likes=db.query(NuggetsCommentsLikes).filter(NuggetsCommentsLikes.comment_id == comment.id).count()
+                        
+                        total_like = tot_likes
+
+                        result_list.append({
+                                    'comment_id': comment.id,
+                                    'user_id': comment.user_id,
+                                    'editable': False,
+                                    'name': comment.user.display_name,
+                                    'profile_image': comment.user.profile_img,
+                                    'comment': comment.content,
+                                    'commented_date': comment.created_date,
+                                    'liked': True if comment.liked > 0 else False,
+                                    'like_count': total_like,
+                                })
+                
+                nugget_detail.update({"nugget_id":get_nugget.id,
+                                    "content":get_nugget.nuggets_master.content,
+                                    "metadata":get_nugget.nuggets_master._metadata,
+                                    "created_date":common_date(get_nugget.created_date) if get_nugget.created_date else "",
+                                    "user_id":get_nugget.user_id if get_nugget.user_id else "",
+                                    "type":get_nugget.type if get_nugget.type else "",
+                                    "original_user_image":get_nugget.nuggets_master.user.profile_img,
+                                    "user_name":get_nugget.user.display_name,
+                                    "user_image":get_nugget.user.profile_img,
+                                    "liked":False,
+                                    "total_likes":total_likes,
+                                    "total_comments":total_comments,
+                                    "total_media":get_attachemnt_count,
+                                    "share_type":get_nugget.share_type if get_nugget.share_type else "",
+                                    "media_list":attachments,
+                                    "shared_with":shared_with,
+                                    "comments":result_list
+                                })
+
                 return {"status": 1, "msg": "success", "nugget_detail": nugget_detail}
             else:
                 return {"status": 0, "msg": "Invalid nugget id"}
@@ -5677,7 +5649,7 @@ async def getopennuggetdetail(db:Session=Depends(deps.get_db),nugget_id:int=Form
 
 # 70. Get User Settings
 @router.post("/followandunfollow")
-async def followandunfollow(db:Session=Depends(deps.get_db),token:str=Form(None),follow_userid:int=Form(None),type:int=Form(None,description="1-Follow,2-unfollow")):
+async def followandunfollow(db:Session=Depends(deps.get_db),token:str=Form(None),follow_userid:str=Form(None),type:int=Form(None,description="1-Follow,2-unfollow")):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     if follow_userid == None: 
@@ -5692,7 +5664,7 @@ async def followandunfollow(db:Session=Depends(deps.get_db),token:str=Form(None)
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
-            get_token_details=db.query(ApiTokens).filter_by(token == access_token).first()
+            get_token_details=db.query(ApiTokens).filter_by(token = access_token).first()
             
             login_user_id=get_token_details.user_id 
 
@@ -5702,7 +5674,7 @@ async def followandunfollow(db:Session=Depends(deps.get_db),token:str=Form(None)
                 
                 get_user_detail=db.query(User).filter(User.id == follow_userid,User.status == 1).first()
                 
-                follow_user=db.query(FollowUser).filter(FollowUser.follower_userid == login_user_id,FollowUser.following_userid == follow_userid).first()
+                follow_user=db.query(FollowUser).filter(or_(FollowUser.follower_userid == login_user_id,FollowUser.following_userid == follow_userid)).first()
                 
                 friend_groups=db.query(FriendGroups).filter(FriendGroups.group_name == "My Fans",FriendGroups.created_by == follow_userid).first()
                 
@@ -5727,7 +5699,7 @@ async def followandunfollow(db:Session=Depends(deps.get_db),token:str=Form(None)
                         del_friend_group_member=db.query(FriendGroupMembers).filter(FriendGroupMembers.group_id == friend_groups.id,FriendGroupMembers.user_id == login_user_id).delete()
                         db.commit()
                     
-                    msg=f"{follow_user.user2.display_name} not influencing you"
+                    msg=f"{follow_user.user2.display_name if follow_user else ''} not influencing you"
                     
                     del_follow_user=db.query(FollowUser).filter(FollowUser.follower_userid == login_user_id,FollowUser.following_userid == follow_userid).delete()
                     db.commit()
@@ -5771,7 +5743,7 @@ async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),use
                 get_follow_user = get_follow_user.filter(FollowUser.follower_userid == login_user_id)
             
             else:
-                get_follow_user = get_follow_user.filter_by(FollowUser.follower_userid == user_id)
+                get_follow_user = get_follow_user.filter_by(follower_userid = user_id)
                 
         else:  # Following
             if not user_id:
@@ -5779,69 +5751,64 @@ async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),use
             else:
                 get_follow_user = get_follow_user.filter(FollowUser.following_userid == user_id)
 
+        if search_key and search_key.strip() != '':
+            get_follow_user = get_follow_user.filter(or_(User.email_id.like('%'+search_key+'%'), 
+                                        User.display_name.like('%'+search_key+'%'),
+                                        User.first_name.like('%'+search_key+'%'),
+                                        User.last_name.like('%'+search_key+'%'),
+                                        func.concat(User.first_name, ' ', User.last_name).like('%'+search_key+'%')))
             
+        get_row_count = get_follow_user.count()
+        
+        if get_row_count < 1:
+            return {"status": 0, "msg": "No Result found"}
+        else:
+            default_page_size = 50
+            limit,offset,total_pages = get_pagination(get_row_count, current_page_no, default_page_size)
             
+            get_result = get_follow_user.limit(limit).offset(offset).all()
             
-            if search_key and search_key.strip() != '':
-                get_follow_user = get_follow_user.filter(or_(User.email_id.like('%'+search_key+'%'), 
-                                            User.display_name.like('%'+search_key+'%'),
-                                            User.first_name.like('%'+search_key+'%'),
-                                            User.last_name.like('%'+search_key+'%'),
-                                            func.concat(User.first_name, ' ', User.last_name).like('%'+search_key+'%')))
-                
-            get_row_count = get_follow_user.count()
+            result_list = []
+            i=0
             
-            if get_row_count < 1:
-                reply = {"status": 0, "msg": "No Result found"}
-            else:
-                default_page_size = 50
-                limit,offset,total_pages = get_pagination(get_row_count, current_page_no, default_page_size)
+            for follow in get_result:
                 
-                get_result = get_follow_user.limit(limit).offset(offset).all()
-                
-                result_list = []
-                i=0
-                
-                for follow in get_result:
-                   
-                #     result_list.append(follow)
-                # return result_list
+                if type == 1:
+                    followback=db.query(FollowUser).filter(and_(FollowUser.follower_userid==follow.following_userid , FollowUser.following_userid==follow.follower_userid),FollowUser.status==1).first()
                     
-                    if type == 1:
-                        followback=db.query(FollowUser).filter(and_(FollowUser.follower_userid==follow.following_userid , FollowUser.following_userid==follow.follower_userid),FollowUser.status==1).first()
-                        friend_details = {
-                            'user_id': follow.user2.id if follow.user2.id != '' else '',
-                            'user_ref_id': follow.user2.user_ref_id if follow.user2.user_ref_id != '' else '',
-                            'email_id': follow.user2.email_id if follow.user2.email_id != '' else '',
-                            'first_name': follow.user2.first_name if follow.user2.first_name != '' else '',
-                            'last_name': follow.user2.last_name if follow.user2.last_name != '' else '',
-                            'display_name': follow.user2.display_name if follow.user2.display_name != '' else '',
-                            'gender': follow.user2.gender if follow.user2.gender != '' else '',
-                            'profile_img': follow.user2.profile_img if follow.user2.profile_img != '' else '',
-                            # 'online': ProfilePreference(db,login_user_id, follow.user2.id, 'online_status', follow.followingUser.online),
-                            # 'last_seen': follow.user2.last_seen if follow.user2.last_seen != '' else '',
-                            'follow': True if followback else False
-                        }
-                    else:
-                        
-                        followback=db.query(FollowUser).filter(and_(FollowUser.follower_userid==follow.following_userid , FollowUser.following_userid==follow.follower_userid),FollowUser.status == 1).first()
-                        friend_details = {
-                            'user_id': follow.user1.id if follow.user1.id != '' else '',
-                            'user_ref_id':follow.user1.user_ref_id if follow.user1.user_ref_id != '' else '',
-                            'email_id': follow.user1.email_id if follow.user1.email_id != '' else '',
-                            'first_name': follow.user1.first_name if follow.user1.first_name != '' else '',
-                            'last_name': follow.user1.last_name if follow.user1.last_name != '' else '',
-                            'display_name': follow.user1.display_name if follow.user1.display_name != '' else '',
-                            'gender': follow.user1.gender if follow.user1.gender != '' else '',
-                            'profile_img': follow.user1.profile_img if follow.user1.profile_img != '' else '',
-                            # 'online': ProfilePreference(db,login_user_id, follow.user1.id, 'online_status', follow.followerUser.online),
-                            # 'last_seen': follow.user1.last_seen if follow.user1.last_seen != '' else '',
-                            'follow': True if followback else False
-                        }
-                        i=i+1
-                    result_list.append(friend_details)
+                    friend_details = {
+                        'user_id': follow.user2.id if follow.user2.id != '' else '',
+                        'user_ref_id': follow.user2.user_ref_id if follow.user2.user_ref_id != '' else '',
+                        'email_id': follow.user2.email_id if follow.user2.email_id != '' else '',
+                        'first_name': follow.user2.first_name if follow.user2.first_name != '' else '',
+                        'last_name': follow.user2.last_name if follow.user2.last_name != '' else '',
+                        'display_name': follow.user2.display_name if follow.user2.display_name != '' else '',
+                        'gender': follow.user2.gender if follow.user2.gender != '' else '',
+                        'profile_img': follow.user2.profile_img if follow.user2.profile_img != '' else '',
+                        'online': ProfilePreference(db,login_user_id, follow.user2.id, 'online_status', follow.user2.online),
+                        'last_seen': common_date(follow.user2.last_seen) if follow.user2.last_seen != '' else '',
+                        'follow': True if followback else False   
+                    }
+                else:
+                    
+                    followback=db.query(FollowUser).filter(and_(FollowUser.follower_userid==follow.following_userid , FollowUser.following_userid==follow.follower_userid),FollowUser.status == 1).first()
+                    friend_details = {
+                        'user_id': follow.user1.id if follow.user1.id != '' else '',
+                        'user_ref_id':follow.user1.user_ref_id if follow.user1.user_ref_id != '' else '',
+                        'email_id': follow.user1.email_id if follow.user1.email_id != '' else '',
+                        'first_name': follow.user1.first_name if follow.user1.first_name != '' else '',
+                        'last_name': follow.user1.last_name if follow.user1.last_name != '' else '',
+                        'display_name': follow.user1.display_name if follow.user1.display_name != '' else '',
+                        'gender': follow.user1.gender if follow.user1.gender != '' else '',
+                        'profile_img': follow.user1.profile_img if follow.user1.profile_img != '' else '',
+                        'online': ProfilePreference(db,login_user_id, follow.user1.id, 'online_status', follow.user1.online),
+                        'last_seen': common_date(follow.user1.last_seen) if follow.user1.last_seen != '' else '',
+                        'follow': True if followback else False
+                    }
+                    i=i+1
+                result_list.append(friend_details)
 
-                return {'status': 1, 'msg': 'Success', 'follow_count': get_row_count, 'total_pages': total_pages, 'current_page_no': current_page_no, 'follow_list': result_list}
+            return {'status': 1, 'msg': 'Success', 'follow_count': get_row_count, 'total_pages': total_pages, 'current_page_no': current_page_no, 'follow_list': result_list}
 
     
     
@@ -6676,9 +6643,10 @@ async def influencerlist(db:Session=Depends(deps.get_db),token:str=Form(None),se
                 
                     })
             return {"status":1,"msg":"Success","total_pages":total_pages,"current_page_no":current_page_no,"users_list":result_list}  
+                    
+                    
                         
 # 81. Influencer Follow
-
 @router.post("/influencerfollow")
 async def influencerfollow(db:Session=Depends(deps.get_db),token:str=Form(None),auth_code:str=Form(None,description="SALT+ Token"),follow_userid:str=Form(None,description='["RA286164941105720824",”RA286164941105720957”]')):
     if token == None or token.strip() == "":
@@ -6687,7 +6655,9 @@ async def influencerfollow(db:Session=Depends(deps.get_db),token:str=Form(None),
         return {"status":0,"msg":"Auth code is missing"}
         
     else:
-        if checkAuthCode(db,token) == False:
+        auth_code = auth_code
+        auth_text = token
+        if checkAuthCode(auth_code,auth_text) == False:
             return {"status":0,"msg":"Authentication failed!"}
         else:
             access_token=checkToken(db,token)
@@ -6695,34 +6665,35 @@ async def influencerfollow(db:Session=Depends(deps.get_db),token:str=Form(None),
             if access_token == False:
                 return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
             else:
-                get_token_details=db.query(ApiTokens).filter_by(token == access_token).first()
+                get_token_details=db.query(ApiTokens).filter_by(token = access_token).first()
                 
                 login_user_id=get_token_details.user_id
                 
-                follow_userids=follow_userid
+                follow_userids=eval(follow_userid)
                 
-                if follow_userids:
-                    return {"status":0,"msg":"Invalid follow user list"}
+                if not isinstance(follow_userids, list):
+                    return {"status": 0, "msg": "Invalid follow user list"}
+                
                 else:
                     total=len(follow_userids)
                     success=0
                     failed=0
                     reason=''
                     
-                    for follow_userid in follow_userids:
-                        users=db.query(User).filter(User.user_ref_id == follow_userid).first()
+                    for follow_user_id in follow_userids:
+                        users=db.query(User).filter(User.user_ref_id == follow_user_id).first()
                         
                         if users:
-                            follow_userid=users.id
+                            user_id=users.id
                             
-                            user=db.query(User).filter(User.id == follow_userid,User.status == 1).first()
+                            user=db.query(User).filter(User.id == user_id,User.status == 1).first()
                             
-                            follow_user=db.query(FollowUser).filter(FollowUser.follower_userid == login_user_id,FollowUser.following_userid == follow_userid).first()
+                            follow_user=db.query(FollowUser).filter(FollowUser.follower_userid == login_user_id,FollowUser.following_userid == user_id).first()
                             
-                            friend_group=db.query(FriendGroups).filter(FriendGroups.group_name == 'My Fans',FriendGroups.created_by == follow_userid ).first()
+                            friend_group=db.query(FriendGroups).filter(FriendGroups.group_name == 'My Fans',FriendGroups.created_by == user_id ).first()
                             
-                            if user and follow_user and login_user_id != follow_userid:
-                                add_follow_user=FollowUser(follower_userid=login_user_id,following_userid=follow_userid,created_date=datetime.now())
+                            if user and follow_user and login_user_id != user_id:
+                                add_follow_user=FollowUser(follower_userid=login_user_id,following_userid=user_id,created_date=datetime.now())
                                 db.add(add_follow_user)
                                 db.commit()
                                 
@@ -6731,7 +6702,7 @@ async def influencerfollow(db:Session=Depends(deps.get_db),token:str=Form(None),
                                         friend_group_member=db.query(FriendGroupMembers).filter(FriendGroupMembers.group_id == friend_group.id,FriendGroupMembers.user_id == login_user_id).all()
                                         
                                         if not friend_group_member:
-                                            add_group_member=FriendGroupMembers(group_id=friend_group.id,user_id=login_user_id,added_date=datetime.now(),added_by=follow_userid,is_admin=0,disable_notification=1,status=1)
+                                            add_group_member=FriendGroupMembers(group_id=friend_group.id,user_id=login_user_id,added_date=datetime.now(),added_by=user_id,is_admin=0,disable_notification=1,status=1)
                                             db.add(add_group_member)
                                             db.commit()
                                             
@@ -6749,15 +6720,15 @@ async def influencerfollow(db:Session=Depends(deps.get_db),token:str=Form(None),
                                         success = success + 1         
                             
                                 else:
-                                    reason += f"{follow_userid} unable to save, "
+                                    reason += f"{follow_user_id} unable to save, "
                                     failed=failed + 1
                         
                             else:
-                                reason += f"{follow_userid} Not allowed, "
+                                reason += f"{follow_user_id} Not allowed, "
                                 failed=failed + 1
 
                         else:
-                            reason += f"{follow_userid} Unable to get user details, "
+                            reason += f"{follow_user_id} Unable to get user details, "
                             failed=failed + 1
                 
                 if total == success:

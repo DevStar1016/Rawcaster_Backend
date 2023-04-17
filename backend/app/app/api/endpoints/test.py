@@ -1,51 +1,76 @@
-# from fastapi import APIRouter, Depends, Form,File,UploadFile
-# from app.models import *
-# from app.core.security import *
-# from typing import List
-# from app.utils import *
-# from app.api import deps
-# from sqlalchemy.orm import Session
-# from datetime import datetime,date,time
-# from sqlalchemy import func,case,text
-# import re
-# import base64
-# import json
-# from langdetect import detect
-# from gtts import gTTS
-# from playsound import playsound
-# from profanityfilter import ProfanityFilter
-# from moviepy.video.io.VideoFileClip import VideoFileClip
-# import boto3    
+from fastapi import APIRouter, Depends, Form,File,UploadFile
+from app.models import *
+from app.core.security import *
+from typing import List
+from app.utils import *
+from app.api import deps
+from sqlalchemy.orm import Session
+from datetime import datetime,date,time
+from sqlalchemy import func,case,text
 
-# router = APIRouter() 
+from langdetect import detect
+from gtts import gTTS
+from playsound import playsound
+from moviepy.video.io.VideoFileClip import VideoFileClip
+import boto3    
+import sys,math,os,shutil
+
+router = APIRouter() 
 
 
-# access_key="AKIAYFYE6EFYG6RJOPMF"
-# access_secret="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"
+access_key="AKIAYFYE6EFYG6RJOPMF"
+access_secret="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"
 
 # from io import BytesIO
 
-# @router.post('/upload')
-# async def upload_image(image: UploadFile = File(...)):
-#     # bucket_name = event['bucket_name']
-#     # file_name = event['file_name']
-#     import boto3
-#     import csv
-#     import io
-#     s3Client = boto3.client('s3', aws_access_key_id=access_key,aws_secret_access_key=access_secret)
-#     def lambda_handler(event, context): 
-#         #Get our bucket and file name
-#         bucket = event['Records'][0]['s3']['bucket']['name']
-#         key = event['Records'][0]['s3']['object']['key']
+@router.post('/upload')
+async def upload_image(image: UploadFile = File(...)):
+    path='/uploads/user'
+    file_name=image.filename
+    ext = os.path.splitext(file_name)[-1].lower()
+    extensions=[".jpeg", ".jpg", ".png"]
+    file_size = len(await image.read())
     
-#         #Get our object 
-#         response = s3Client.get_object(Bucket=bucket, Key=key)
-#         #Process the data
-#         data = response['Body'].read().decode('utf-8')
-#         reader = csv.reader(io.StringlO(data))
-#         next(reader)
-#         for row in reader: 
-#             print(str.format("Year - {Year, Mileage - Price - {}", row[0], row[1], row[2]))
+    if ext not in extensions:
+        return {"status":0,"msg":'Profile Image format does not support'}
+    elif file_size > 10240000 :
+        return {"status":0,"msg":'Profile Image size must be less than 10 MB'}
+    else:
+        new_file_name=f'Image_{random.randint(11111,99999)}{random.randint(1111,4444)}{ext}'
+        file_path=f'{path}/{new_file_name}'
+        # Set up the S3 client
+        s3 = boto3.client('s3',
+                        aws_access_key_id=access_key,
+                        aws_secret_access_key=access_secret
+                        )
+
+        # Upload a file directly to S3
+        bucket_name = 'profileimage'
+      
+        with open(new_file_name, "wb") as buffer:
+            shutil.copyfileobj(image, buffer)
+        
+        
+        # s3.upload_file(new_file_name, bucket_name, file_path)
+        
+        return file_path,new_file_name
+    
+
+
+    # s3Client = boto3.client('s3', aws_access_key_id=access_key,aws_secret_access_key=access_secret)
+    # def lambda_handler(event, context): 
+    #     #Get our bucket and file name
+    #     bucket = event['Records'][0]['s3']['bucket']['name']
+    #     key = event['Records'][0]['s3']['object']['key']
+    
+    #     #Get our object 
+    #     response = s3Client.get_object(Bucket=bucket, Key=key)
+    #     #Process the data
+    #     data = response['Body'].read().decode('utf-8')
+    #     reader = csv.reader(io.StringlO(data))
+    #     next(reader)
+    #     for row in reader: 
+    #         print(str.format("Year - {Year, Mileage - Price - {}", row[0], row[1], row[2]))
     
 
 # # 1 Video Spliting
