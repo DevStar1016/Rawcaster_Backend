@@ -4,7 +4,7 @@ import math
 from app.core.config import settings as st
 from datetime import datetime,timedelta
 from app.models import *
-import random
+import random,string
 import hashlib
 from email_validator import validate_email, EmailNotValidError
 import re
@@ -21,7 +21,35 @@ from urllib.parse import urlparse, urlunparse
 import mimetypes
 from PIL import Image
 import os,boto3
+import sys,shutil
+from PIL import Image
 
+
+def file_upload(file_name):
+    uploads_file_name=file_name.filename
+    
+    base_dir = os.getcwd()
+    try:
+        os.makedirs(base_dir, mode=0o777, exist_ok=True)
+    except OSError as e:
+        sys.exit("Can't create {dir}: {err}".format(
+            dir=base_dir, err=e))
+
+    output_dir = base_dir + "/"
+    
+    characters = string.ascii_letters + string.digits
+    # Generate the random string
+    random_string = ''.join(random.choice(characters) for i in range(18))
+    
+    ext = os.path.splitext(uploads_file_name)[-1].lower()
+    filename=f"Image_{random_string}{ext}"    
+   
+    save_full_path=f'{output_dir}{filename}'    
+    with Image.open(file_name.file) as img:   # Input File
+        img.save(save_full_path, optimize=True, quality=50)  
+    
+    return save_full_path
+    
 
 async def send_email(db,to_mail, subject, message):
     check_bounce_mail=db.query(AwsBounceEmails).filter(AwsBounceEmails.email_id == to_mail).first()

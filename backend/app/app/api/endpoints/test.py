@@ -13,66 +13,49 @@ from gtts import gTTS
 from playsound import playsound
 from moviepy.video.io.VideoFileClip import VideoFileClip
 import boto3    
-import sys,math,os,shutil
-
+import shutil
+import os
+import io
 router = APIRouter() 
 
 
-access_key="AKIAYFYE6EFYG6RJOPMF"
-access_secret="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"
+access_key="AKIAYFYE6EFYGNPCA32D"
+access_secret="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"
+
+
 
 # from io import BytesIO
 
+
 @router.post('/upload')
 async def upload_image(image: UploadFile = File(...)):
-    path='/uploads/user'
-    file_name=image.filename
-    ext = os.path.splitext(file_name)[-1].lower()
-    extensions=[".jpeg", ".jpg", ".png"]
-    file_size = len(await image.read())
+    save_full_path,filename=file_upload(image)
+    return save_full_path
+    # Upload File to Server
+    # output_dir,filename=file_upload(image)
     
-    if ext not in extensions:
-        return {"status":0,"msg":'Profile Image format does not support'}
-    elif file_size > 10240000 :
-        return {"status":0,"msg":'Profile Image size must be less than 10 MB'}
-    else:
-        new_file_name=f'Image_{random.randint(11111,99999)}{random.randint(1111,4444)}{ext}'
-        file_path=f'{path}/{new_file_name}'
-        # Set up the S3 client
-        s3 = boto3.client('s3',
-                        aws_access_key_id=access_key,
-                        aws_secret_access_key=access_secret
-                        )
+    # bucket_name='rawcaster'
+    # print("""connect to s3""")
 
-        # Upload a file directly to S3
-        bucket_name = 'profileimage'
-      
-        with open(new_file_name, "wb") as buffer:
-            shutil.copyfileobj(image, buffer)
+    # client_s3 = boto3.client(
+    #     's3',
+    #     aws_access_key_id=access_key,
+    #     aws_secret_access_key=access_secret
+    # )
+
+    # print("""upload file to s3""")
+    # file_path=image.filename
+    # bucket_file_path=f"profileimage/{filename}"
+    
+    # with open(output_dir, 'rb') as data:
+    #     upload=client_s3.upload_fileobj(data, bucket_name, bucket_file_path)
+
+    # os.remove(output_dir)
+
+    # out_pdf_file=f'{bucket_name}/{output_dir}'
+    
+    # print('done..')
         
-        
-        # s3.upload_file(new_file_name, bucket_name, file_path)
-        
-        return file_path,new_file_name
-    
-
-
-    # s3Client = boto3.client('s3', aws_access_key_id=access_key,aws_secret_access_key=access_secret)
-    # def lambda_handler(event, context): 
-    #     #Get our bucket and file name
-    #     bucket = event['Records'][0]['s3']['bucket']['name']
-    #     key = event['Records'][0]['s3']['object']['key']
-    
-    #     #Get our object 
-    #     response = s3Client.get_object(Bucket=bucket, Key=key)
-    #     #Process the data
-    #     data = response['Body'].read().decode('utf-8')
-    #     reader = csv.reader(io.StringlO(data))
-    #     next(reader)
-    #     for row in reader: 
-    #         print(str.format("Year - {Year, Mileage - Price - {}", row[0], row[1], row[2]))
-    
-
 # # 1 Video Spliting
 # @router.post("/video_split")
 # async def video_split(db:Session=Depends(deps.get_db)):

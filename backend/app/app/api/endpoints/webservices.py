@@ -909,7 +909,23 @@ async def updatemyprofile(db:Session=Depends(deps.get_db),token:str=Form(None),n
                 
                 login_user_id=get_token_details.user_id if get_token_details else None
                 
+                # Get User Profile
                 get_user_profile=db.query(User).filter(User.id == login_user_id).first()
+                name=name
+                first_name=first_name if first_name else get_user_profile.first_name
+                last_name=last_name if last_name else get_user_profile.last_name
+                gender=gender if gender else get_user_profile.gender
+                dob=dob if dob else get_user_profile.dob
+                country_code=country_code if country_code else get_user_profile.country_code
+                mobile_no=mobile_no if mobile_no else get_user_profile.mobile_no
+                email_id=email_id if email_id else get_user_profile.email_id
+                website=website if website else get_user_profile.website
+                country_id=country_id if country_id else get_user_profile.country_id
+                geo_location=geo_location if geo_location else get_user_profile.geo_location
+                latitude=latitude if latitude else get_user_profile.latitude
+                longitude=longitude if longitude else get_user_profile.longitude
+                bio_data=bio_data if bio_data else get_user_profile.bio_data
+                
                 
                 check_email=db.query(User).filter(User.email_id == email_id,User.id != login_user_id).count()
                 if check_email > 0:
@@ -945,24 +961,65 @@ async def updatemyprofile(db:Session=Depends(deps.get_db),token:str=Form(None),n
                     
                     # Image Part Pending
                     if profile_image:
-                        path= '/uploads/user'
-                        
-                        s3 = boto3.client('s3', aws_access_key_id='',aws_secret_access_key='')
-                        bucket_name=""
                         file_name = profile_image.filename
                         ext = os.path.splitext(file_name)[-1].lower()
-                        extensions=["jpeg", "jpg", "png"]
-                        if ext in extensions:
-                            return {"status":0,"msg":'"Profile Image format does not support"'}
-                        # Compress Image
-                        profile_image.save("compressed.jpg", optimize=True, quality=50)
-                        # Upload the file to S3 bucket
-                        file_upload=s3.upload_file(profile_image, bucket_name, file_name)
+                        
+                        extensions=[".jpeg", ".jpg", ".png"]
+                        
+                        if ext not in extensions:
+                            return {"status":0,"msg":"Profile Image format does not support"}                        
+                        
+                        # Upload File to Server
+                        output_dir,filename=file_upload(profile_image)
+                        
+                        bucket_name='rawcaster'
 
-                        return 'File uploaded successfully to S3'
+                        client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
 
-                                                    
-                                                        
+                        bucket_file_path=f"profileimage/{filename}"  
+                        
+                        with open(output_dir, 'rb') as data:  # Upload File To S3
+                            upload=client_s3.upload_fileobj(data, bucket_name, bucket_file_path,ExtraArgs={'ACL': 'public-read'})
+
+                        os.remove(output_dir)
+                        
+                        # Stored File Path
+                        url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
+                        url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{bucket_file_path}'
+                        # Update Profile Image
+                        get_user_profile.profile_img = url
+                        db.commit()
+                    
+                    if cover_image:
+                        file_name = cover_image.filename
+                        ext = os.path.splitext(file_name)[-1].lower()
+                        
+                        extensions=[".jpeg", ".jpg", ".png"]
+                        
+                        if ext not in extensions:
+                            return {"status":0,"msg":'Profile Image format does not support'}                        
+                        
+                        # Upload File to Server
+                        output_dir,filename=file_upload(cover_image)
+                        
+                        bucket_name='rawcaster'
+
+                        client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
+
+                        bucket_file_path=f"coverimage/{filename}"  
+                        
+                        with open(output_dir, 'rb') as data:  # Upload File To S3
+                            upload=client_s3.upload_fileobj(data, bucket_name, bucket_file_path,ExtraArgs={'ACL': 'public-read'})
+
+                        os.remove(output_dir)
+                        
+                        # Stored File Path
+                        url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
+                        url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{bucket_file_path}'
+                        # Update Profile Image
+                        get_user_profile.cover_image = url
+                        print(url)
+                        db.commit()
                         
                     
                     # Get Updated User Profile
@@ -1669,8 +1726,35 @@ async def addfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),gr
                                     
                         # Profile Image
                         if group_icon:
-                            # Pending
-                            print("Pending")
+                            file_name = group_icon.filename
+                            ext = os.path.splitext(file_name)[-1].lower()
+                            
+                            extensions=[".jpeg", ".jpg", ".png"]
+                            
+                            if ext not in extensions:
+                                return {"status":0,"msg":"Profile Image format does not support"}                        
+                            
+                            # Upload File to Server
+                            output_dir,filename=file_upload(group_icon)
+                            
+                            bucket_name='rawcaster'
+
+                            client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
+
+                            bucket_file_path=f"profileimage/{filename}"  
+                            
+                            with open(output_dir, 'rb') as data:  # Upload File To S3
+                                upload=client_s3.upload_fileobj(data, bucket_name, bucket_file_path,ExtraArgs={'ACL': 'public-read'})
+
+                            os.remove(output_dir)
+                            
+                            # Stored File Path
+                            url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
+                            url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{bucket_file_path}'
+                            # Update Profile Image
+                            add_friend_group.group_icon = url
+                            db.commit()
+                                
                             
                         group_details= GetGroupDetails(db,add_friend_group.id)
                             
@@ -1731,11 +1815,37 @@ async def editfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),g
                     return {"status":0,"msg":"You can't edit the My Fans group."}
                     
                 else:
-                    img_path=get_group.group_icon
                     
                     # Profile Image
                     if group_icon:
-                        print("Image upload pending")
+                        file_name = group_icon.filename
+                        ext = os.path.splitext(file_name)[-1].lower()
+                        
+                        extensions=[".jpeg", ".jpg", ".png"]
+                        
+                        if ext not in extensions:
+                            return {"status":0,"msg":"Profile Image format does not support"}                        
+                        
+                        # Upload File to Server
+                        output_dir=file_upload(group_icon)
+                        
+                        bucket_name='rawcaster'
+
+                        client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
+                        filename=f"groupicon/groupicon_{random.randint(11111,99999)}{int(datetime.now().timestamp())}"
+                        bucket_file_path=f"profileimage/{filename}"  
+                        
+                        with open(output_dir, 'rb') as data:  # Upload File To S3
+                            upload=client_s3.upload_fileobj(data, bucket_name, bucket_file_path,ExtraArgs={'ACL': 'public-read'})
+
+                        os.remove(output_dir)
+                        
+                        # Stored File Path
+                        url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
+                        url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{bucket_file_path}'
+                        # Update Profile Image
+                        get_group.group_icon = url
+                        db.commit()
                     
                     if group_members:
                         for member in group_members:
@@ -2010,7 +2120,74 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),conten
                     attachment_count=0  
                     # Nuggets Media
                     if nuggets_media:
-                        print("Pending")
+                        for nugget_media in nuggets_media:
+                            file_name = nugget_media.filename
+                            ext = os.path.splitext(file_name)[-1].lower()
+                            media_type=nugget_media.content_type
+                            file_size = nugget_media.content_length
+                            
+                            type = 'image'
+                            if 'video' in media_type:
+                                type = 'video'
+                            elif 'audio' in media_type:
+                                type = 'audio'
+                            
+                            add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,media_type=type,media_file_type=ext,file_size=file_size,created_date=datetime.now(),path="",status=1)
+                            db.add(add_nugget_attachment)
+                            db.commit()
+                            
+                            if add_nugget_attachment:
+                                
+                                bucket_name='rawcaster'
+                                client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
+                                
+                                try:
+                                    if file_size > 1000000 and type == 'image' and ext != '.gif':
+                                        
+                                        output_dir=file_upload(nugget_media)
+                                        filename=f'nuggets/image_{random.randint(1111,9999)}{int(datetime.now().timestamp())}'
+                                        bucket_file_path=f"nuggets/{filename}"  
+                                        
+                                        with open(output_dir, 'rb') as data:  # Upload File To S3
+                                            upload=client_s3.upload_fileobj(data, bucket_name, bucket_file_path,ExtraArgs={'ACL': 'public-read'})
+
+                                        os.remove(output_dir)
+                            
+                                        url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
+                                        url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{bucket_file_path}'
+                                        add_nugget_attachment.path = url
+                                        db.commit()
+                                    else:
+                                        if type == 'video':
+                                            output_dir=file_upload(nugget_media)
+                                            bucket_file_path=f'nuggets/video_{random.randint(11111,99999)}{int(datetime.now().timestamp())}.mp4'
+                                            
+                                            with open(output_dir, 'rb') as data:  # Upload File To S3
+                                                upload=client_s3.upload_fileobj(data, bucket_name, bucket_file_path,ExtraArgs={'ACL': 'public-read'})
+
+                                            os.remove(output_dir)
+                                
+                                            url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
+                                            url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{bucket_file_path}'
+                                            add_nugget_attachment.path = url
+                                            db.commit()
+                                        
+                                        if type == 'audio':
+                                            output_dir=file_upload(nugget_media)
+                                            bucket_file_path=f'nuggets/audio_{random.randint(11111,99999)}{int(datetime.now().timestamp())}.mp3'
+                                            
+                                            with open(output_dir, 'rb') as data:  # Upload File To S3
+                                                upload=client_s3.upload_fileobj(data, bucket_name, bucket_file_path,ExtraArgs={'ACL': 'public-read'})
+
+                                            os.remove(output_dir)
+                                
+                                            url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
+                                            url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{bucket_file_path}'
+                                            add_nugget_attachment.path = url
+                                            db.commit()
+                                except:
+                                    return {"status":0,"msg":"Not able to upload"}
+                                       
                     
                     add_nuggets=Nuggets(nuggets_id=add_nuggets_master.id,user_id=login_user_id,type=1,share_type=share_type,created_date=datetime.now())
                     db.add(add_nuggets)
@@ -2992,7 +3169,74 @@ async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugg
                             
                             # Nuggets Media
                             if nuggets_media:
-                                print("Pending")
+                                for nugget_media in nuggets_media:
+                                    file_name = nugget_media.filename
+                                    ext = os.path.splitext(file_name)[-1].lower()
+                                    media_type=nugget_media.content_type
+                                    file_size = nugget_media.content_length
+                                    
+                                    type = 'image'
+                                    if 'video' in media_type:
+                                        type = 'video'
+                                    elif 'audio' in media_type:
+                                        type = 'audio'
+                                    
+                                    add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,media_type=type,media_file_type=ext,file_size=file_size,created_date=datetime.now(),path="",status=1)
+                                    db.add(add_nugget_attachment)
+                                    db.commit()
+                                    
+                                    if add_nugget_attachment:
+                                        
+                                        bucket_name='rawcaster'
+                                        client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
+                                        
+                                        try:
+                                            if file_size > 1000000 and type == 'image' and ext != '.gif':
+                                                
+                                                output_dir=file_upload(nugget_media)
+                                                filename=f'nuggets/image_{random.randint(1111,9999)}{int(datetime.now().timestamp())}'
+                                                bucket_file_path=f"nuggets/{filename}"  
+                                                
+                                                with open(output_dir, 'rb') as data:  # Upload File To S3
+                                                    upload=client_s3.upload_fileobj(data, bucket_name, bucket_file_path,ExtraArgs={'ACL': 'public-read'})
+
+                                                os.remove(output_dir)
+                                    
+                                                url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
+                                                url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{bucket_file_path}'
+                                                add_nugget_attachment.path = url
+                                                db.commit()
+                                            else:
+                                                if type == 'video':
+                                                    output_dir=file_upload(nugget_media)
+                                                    bucket_file_path=f'nuggets/video_{random.randint(11111,99999)}{int(datetime.now().timestamp())}.mp4'
+                                                    
+                                                    with open(output_dir, 'rb') as data:  # Upload File To S3
+                                                        upload=client_s3.upload_fileobj(data, bucket_name, bucket_file_path,ExtraArgs={'ACL': 'public-read'})
+
+                                                    os.remove(output_dir)
+                                        
+                                                    url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
+                                                    url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{bucket_file_path}'
+                                                    add_nugget_attachment.path = url
+                                                    db.commit()
+                                                
+                                                if type == 'audio':
+                                                    output_dir=file_upload(nugget_media)
+                                                    bucket_file_path=f'nuggets/audio_{random.randint(11111,99999)}{int(datetime.now().timestamp())}.mp3'
+                                                    
+                                                    with open(output_dir, 'rb') as data:  # Upload File To S3
+                                                        upload=client_s3.upload_fileobj(data, bucket_name, bucket_file_path,ExtraArgs={'ACL': 'public-read'})
+
+                                                    os.remove(output_dir)
+                                        
+                                                    url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
+                                                    url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{bucket_file_path}'
+                                                    add_nugget_attachment.path = url
+                                                    db.commit()
+                                        except:
+                                            return {"status":0,"msg":"Not able to upload"}
+                                
                             
                             # Delete Share with
                             del_share_nuggets=db.query(NuggetsShareWith).filter(NuggetsShareWith.nuggets_id == check_nuggets.id).delete()
@@ -3413,13 +3657,118 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                     db.commit()
                     
                     # Banner Image
+                    client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
+                    
                     if event_banner:
-                        print("Pennding")
+                        file_name = event_banner.filename
+                        ext = os.path.splitext(file_name)[-1].lower()
+                        file_size=event_banner.content_length
+                        media_type=event_banner.content_type
+                        
+                        bucket_name='rawcaster'
+                        
+                        type ='image'
+                        if 'video' in media_type:
+                            type='video'
+                            
+                        # Upload File to Server
+                        output_dir=file_upload(event_banner)
+
+                        filename=f"Image_{random.randint(11111,99999)}{new_event.id}{int(datetime.now().timestamp())}"
+                        bucket_file_path=f"events/{filename}"  
+                        
+                        with open(output_dir, 'rb') as data:  # Upload File To S3
+                            upload=client_s3.upload_fileobj(data, bucket_name, bucket_file_path,ExtraArgs={'ACL': 'public-read'})
+
+                        os.remove(output_dir)
+                        
+                        # Stored File Path
+                        url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
+                        url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{bucket_file_path}'
+                        # Update Profile Image
+                        new_event.cover_img = url
+                        db.commit()
+                        
                     
                     # Event Melody
                     if event_melody:
-                        print("Pending")
-                    
+                        try:
+                            temp_name=event_melody.file.name
+                            ext = os.path.splitext(file_name)[-1].lower()
+                            
+                            file_name=event_melody.filename
+                            file_size=event_melody.content_length
+                            file_type = mimetypes.guess_type(event_melody.filename)[0]
+                            media_type=1
+                            if ext == '.png' or ext == '.jpeg' or ext == 'jpg':
+                                type='image'
+                            elif ext == '.mp3':
+                                type ='audio'
+                            elif ext == 'pptx' or ext == 'ppt':
+                                type='ppt'
+                            elif 'video' in file_type:
+                                type='video'
+                                media_type = 2
+                        
+
+                            if file_size > 1000000 and type == 'image' and ext != '.gif':
+                                output_dir=file_upload(event_melody)
+
+                                filename=f"eventsmelody{random.randint(11111,99999)}{new_event.id}{int(datetime.now().timestamp())}"
+                                bucket_file_path=f"eventsmelody/{filename}"  
+                                
+                                with open(output_dir, 'rb') as data:  # Upload File To S3
+                                    upload=client_s3.upload_fileobj(data, bucket_name, bucket_file_path,ExtraArgs={'ACL': 'public-read'})
+
+                                os.remove(output_dir)
+                                
+                                # Stored File Path
+                                url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
+                                url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{bucket_file_path}'
+                                # Update Profile Image
+                                if url:
+                                    new_melody=EventMelody(event_id=new_event.id,path=url,type=media_type,created_at=datetime.now(),created_by=login_user_id)
+                                    db.add(new_melody)
+                                    db.commit()
+                                    db.refresh(new_melody)
+                                    
+                                    if new_melody:
+                                        new_event.event_melody_id = new_melody.id
+                                        db.commit()
+                                else:
+                                    return {"status":0,"msg":"Not able to upload"}
+                                        
+                            else:
+                                filename=f"eventsmelody{random.randint(11111,99999)}{new_event.id}{int(datetime.now().timestamp())}{ext}"
+                                output_dir=file_upload(event_melody)
+                                
+                                if type == 'video' and ext != '.mp4':
+                                    filename=f"eventsmelody{random.randint(11111,99999)}{new_event.id}{int(datetime.now().timestamp())}.mp4"
+                                                            
+                                bucket_file_path=f"eventsmelody/{filename}"  
+                                
+                                with open(output_dir, 'rb') as data:  # Upload File To S3
+                                    upload=client_s3.upload_fileobj(data, bucket_name, bucket_file_path,ExtraArgs={'ACL': 'public-read'})
+
+                                os.remove(output_dir)
+                                
+                                # Stored File Path
+                                url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
+                                url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{bucket_file_path}'
+                                
+                                if url:
+                                    add_new_melody=EventMelody(event_id=new_event.id,path=url,type=media_type,
+                                                            created_at=datetime.now(),created_by=login_user_id)
+                                    
+                                    if add_new_melody:
+                                        new_event.event_melody_id = new_melody.id
+                                        db.commit()
+                                
+                                else:
+                                    return {"status":0,"msg":'Not able to upload'}  
+                        except:
+                            return {"status":0,"msg":'Not able to upload'}  
+                                    
                     else:
                         temp=event_melody_id if event_melody_id else 1
                         update_event_melody_id = db.query(Events).filter_by(id = new_event.id).update({"event_melody_id":temp if temp > 0 else 1})
@@ -4207,8 +4556,34 @@ async def uploadchatattachment(db:Session=Depends(deps.get_db),token:str=Form(No
                 return {"status":0,"msg":"Reference id is missing"}
            
             else:
-                path='/uploads/chatattachments'
-                print("Pending")
+                file_size=chatattachment.content_lenfth
+                if file_size > 100000000:
+                    return {"status":0, "msg":"Max 100MB allowed"}
+                    
+                else:
+                    try:
+                        output_dir=file_upload(chatattachment)
+                        
+                        bucket_name='rawcaster'
+
+                        client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
+
+                        bucket_file_path=f"chat/attachment_{random.randint(11111,99999)}{int(datetime.now().timestamp())}"  
+                        
+                        with open(output_dir, 'rb') as data:  # Upload File To S3
+                            client_s3.upload_fileobj(data, bucket_name, bucket_file_path,ExtraArgs={'ACL': 'public-read'})
+
+                        os.remove(output_dir)
+                        if client_s3:
+                            url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
+                            url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{bucket_file_path}'
+                            return {"status":1, "msg":"Success","filepath":url,"refid":refid}
+                        else:
+                            return {"status":0, "msg":"Not able to upload"}
+                    except:
+                        return {"status":0, "msg":"Failed to create directory"}
+                        
+                
             
 #----------------------------file want to store---#-----------#----------#---------------------_#-----------------------------------______#--------#
 
@@ -4811,17 +5186,66 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
             if user_setting_id !='':
                 settings=db.query(UserSettings).filter(UserSettings.status==1,UserSettings.id==user_setting_id).first()
                 if settings:
-                    default_melody_list=[]
+                    default_melody_list={}
                     edit_melody=db.query(EventMelody).filter(EventMelody.created_by==login_user_id,EventMelody.is_default==1,EventMelody.is_created_by_admin==0).first()
                     if edit_melody:
-                        default_melody_list.append({"path":edit_melody.path,"type":edit_melody.type,"title":edit_melody.title})
+                        default_melody_list.update({"path":edit_melody.path,"type":edit_melody.type,"title":edit_melody.title})
 
                     if default_melody:
-                        path='/uploads/eventmelody'
-                        if path:  #Create File Dir
+                        file_name=default_melody.filename
+                        file_tmp=default_melody.file.name
+                        file_size=default_melody.content_length
+                        ext = os.path.splitext(file_name)[-1].lower()
+                        
+                        mime_type, encoding = mimetypes.guess_type(default_melody)
+                        
+                        media_type=1
+                        if ext == '.png' or ext == '.jpeg' or ext == '.jpg' or ext == '.gif':
+                            type='image'
+                        elif ext == '.mp3':
+                            type ='audio'
+                            media_type=3
+                        elif ext == '.pptx' or ext == 'ppt':
+                            type ='ppt'
+                            media_type=4
+                        elif 'video' in mime_type:
+                            type = 'video'
+                            media_type = 2
+                        
+                        # if file_size > 1000000 and type == 'image' and ext != ".gif":
+                        s3_file_path=f"eventsmelody/eventsmelody_{random.randint(1111,9999)}{int(datetime.now().timestamp())}{ext}"
+                        save_file_path=file_upload(default_melody)
+                        bucket_name='rawcaster'
+                        client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
+                        
+                        with open(save_file_path, 'rb') as data:  # Upload File To S3
+                            client_s3.upload_fileobj(data, bucket_name, s3_file_path,ExtraArgs={'ACL': 'public-read'})
+
+                        os.remove(save_file_path)
+                        
+                        # Stored File Path
+                        url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
+                        url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{s3_file_path}'
+                        
+                        if client_s3:
+                            default_melody_list.update({"path":url,"type":media_type})
                             
-                            print("Pending")
-                            pass
+                            if edit_melody:
+                                edit_melody.path=url
+                                edit_melody.type=media_type
+                                db.commit()
+                                
+                                default_melody_list.update({"title":edit_melody.title})
+                                
+                            else:
+                                new_melody=EventMelody(title='Your default',is_default=1,path=url,type=media_type,
+                                                        created_at=datetime.now(),created_by=login_user_id)
+                                db.add(new_melody)
+                                db.commit()
+                                default_melody_list.update({"title":new_melody.title})
+                                    
+                            
+                               
                         else:
                             return {"status":0,"msg":"Not able to upload"}
                              
