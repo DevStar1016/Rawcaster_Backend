@@ -24,13 +24,13 @@ access_secret="2xf3IXK0x9s5KX4da01OM5Lhl+vV17ttloRMeXVk"
     
 # 1 Signup User
 @router.post("/signup")
-async def signup(db:Session=Depends(deps.get_db),signup_type:int=Form(defaul=1,description="1-Email,2-Phone Number"),first_name:str=Form(None,max_length=100),
-                    last_name:str=Form(None,max_length=100),display_name:str=Form(None,max_length=100),gender:int=Form(None,description="1-male,2-female"),
-                    dob:date=Form(None),email_id:str=Form(None,max_length=100,description="email or mobile number"),country_code:int=Form(None),country_id:int=Form(None),
-                    mobile_no:int=Form(None),password:str=Form(None),geo_location:str=Form(None),
-                    latitude:int=Form(None),longitude:int=Form(None),ref_id:str=Form(None),auth_code:str=Form(None,description="SALT + email_id"),
-                    device_id:str=Form(None),push_id:str=Form(None),device_type:int=Form(None),
-                    voip_token:str=Form(None),app_type:int=Form(None,description="1-Android,2-IOS"),signup_social_ref_id:str=Form(None),
+async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(defaul=1,description="1-Email,2-Phone Number"),first_name:str=Form(None,max_length=100),
+                    last_name:str=Form(None,max_length=100),display_name:str=Form(None,max_length=100),gender:str=Form(None,description="1-male,2-female"),
+                    dob:date=Form(None),email_id:str=Form(None,max_length=100,description="email or mobile number"),country_code:str=Form(None),country_id:str=Form(None),
+                    mobile_no:str=Form(None),password:str=Form(None),geo_location:str=Form(None),
+                    latitude:str=Form(None),longitude:str=Form(None),ref_id:str=Form(None),auth_code:str=Form(None,description="SALT + email_id"),
+                    device_id:str=Form(None),push_id:str=Form(None),device_type:str=Form(None),
+                    voip_token:str=Form(None),app_type:str=Form(None,description="1-Android,2-IOS"),signup_social_ref_id:str=Form(None),
                     login_from:str=Form(None)):
 
     
@@ -234,7 +234,7 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:int=Form(defaul=1,d
 
 # 2 - Signup Verification by OTP
 @router.post("/signupverify")
-async def signupverify(db:Session=Depends(deps.get_db),auth_code:str=Form(None,description="SALT + otp_ref_id"),otp_ref_id:str=Form(None,description="From service no. 1"),otp:int=Form(None),otp_flag:str=Form(None)):
+async def signupverify(db:Session=Depends(deps.get_db),auth_code:str=Form(None,description="SALT + otp_ref_id"),otp_ref_id:str=Form(None,description="From service no. 1"),otp:str=Form(None),otp_flag:str=Form(None)):
     if auth_code == None or auth_code.strip() == "":
         return {"status":0,"msg":"Auth Code is missing"}
     elif otp_ref_id == None or otp_ref_id.strip() == "":
@@ -456,8 +456,8 @@ async def resendotp(db:Session=Depends(deps.get_db),auth_code:str=Form(None,desc
 # 4 - Login
 @router.post("/login")
 async def login(db:Session=Depends(deps.get_db),auth_code:str=Form(None,description="SALT + username"),username:str=Form(None,description="Email ID"),
-                    password:str=Form(None),device_id:str=Form(None),push_id:str=Form(None),device_type:int=Form(None,description="1-> Android,  2-> IOS, 3->Web"),voip_token:str=Form(None),
-                    app_type:int=Form(None,description="1-> Android, 2-> IOS"),login_from:str=Form(None)):
+                    password:str=Form(None),device_id:str=Form(None),push_id:str=Form(None),device_type:str=Form(None,description="1-> Android,  2-> IOS, 3->Web"),voip_token:str=Form(None),
+                    app_type:str=Form(None,description="1-> Android, 2-> IOS"),login_from:str=Form(None)):
     
     if auth_code == None or auth_code.strip() == '':
         return {"status":0,"msg":"Authcode is missing"}
@@ -467,6 +467,9 @@ async def login(db:Session=Depends(deps.get_db),auth_code:str=Form(None,descript
         
     if password == None or password.strip() == '':
         return {"status":0,"msg":"Password is missing"}
+    
+    # if app_type and not isinstance(app_type, int):
+    #     return {"status":0,"msg":"Type Error"}
     
     auth_text=username.strip()
     if checkAuthCode(auth_code.strip(),auth_text) == False:
@@ -598,9 +601,9 @@ async def forgotpassword(db:Session=Depends(deps.get_db),username:str=Form(None,
 
 # 7 - Verify OTP and Reset Password
 @router.post("/verifyotpandresetpassword")
-async def verifyotpandresetpassword(db:Session=Depends(deps.get_db),otp_ref_id:int=Form(None),otp:int=Form(None),
+async def verifyotpandresetpassword(db:Session=Depends(deps.get_db),otp_ref_id:str=Form(None),otp:str=Form(None),
                                     new_password:str=Form(None,min_length=5),confirm_password:str=Form(None,min_length=5),device_id:str=Form(None),
-                                    push_id:str=Form(None,description="FCM  or APNS"),device_type:int=Form(None),
+                                    push_id:str=Form(None,description="FCM  or APNS"),device_type:str=Form(None),
                                     auth_code:str=Form(None,description="SALT + otp_ref_id")):
     
     if auth_code == None or auth_code.strip() == "":
@@ -877,9 +880,9 @@ async def getmyprofile(db:Session=Depends(deps.get_db),token:str=Form(None),auth
 # 12. Update My Profile
 @router.post("/updatemyprofile")
 async def updatemyprofile(db:Session=Depends(deps.get_db),token:str=Form(None),name:str=Form(None),first_name:str=Form(None),last_name:str=Form(None),
-                          gender:int=Form(None,description="0->Transgender,1->Male,2->Female"),dob:date=Form(None),
-                          email_id:str=Form(None),website:str=Form(None),country_code:int=Form(None),country_id:int=Form(None),
-                          mobile_no:int=Form(None),profile_image:UploadFile=File(None),cover_image:UploadFile=File(None),
+                          gender:str=Form(None,description="0->Transgender,1->Male,2->Female"),dob:date=Form(None),
+                          email_id:str=Form(None),website:str=Form(None),country_code:str=Form(None),country_id:str=Form(None),
+                          mobile_no:str=Form(None),profile_image:UploadFile=File(None),cover_image:UploadFile=File(None),
                           auth_code:str=Form(None,description="SALT + token + name"),geo_location:str=Form(None),latitude:str=Form(None),
                           longitude:str=Form(None),bio_data:str=Form(None)):
    
@@ -1037,7 +1040,7 @@ async def updatemyprofile(db:Session=Depends(deps.get_db),token:str=Form(None),n
 
 @router.post("/searchrawcasterusers")
 async def searchrawcasterusers(db:Session=Depends(deps.get_db),token:str=Form(None),auth_code:str=Form(None,description="SALT + token"),
-                               search_key:str=Form(None),page_number:int=Form(default=1)):
+                               search_key:str=Form(None),page_number:str=Form(default=1)):
  
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
@@ -1299,8 +1302,8 @@ async def listallfriendrequests(db:Session=Depends(deps.get_db),token:str=Form(N
 
 # 17 Respond to friend request received from others
 @router.post("/respondtofriendrequests")
-async def respondtofriendrequests(db:Session=Depends(deps.get_db),token:str=Form(None),friend_request_id:int=Form(None),notification_id:int=Form(None),
-                                  response:int=Form(None,description="1-Accept,2-Reject,3-Block")):
+async def respondtofriendrequests(db:Session=Depends(deps.get_db),token:str=Form(None),friend_request_id:str=Form(None),notification_id:str=Form(None),
+                                  response:str=Form(None,description="1-Accept,2-Reject,3-Block")):
                     
     if token == None or token.strip() == '':
         return {"status": -1, "msg": "Sorry! your login session expired. please login again."}
@@ -1387,7 +1390,7 @@ async def respondtofriendrequests(db:Session=Depends(deps.get_db),token:str=Form
                     
 # 18 List all Friend Groups
 @router.post("/listallfriendgroups")
-async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(None),search_key:str=Form(None),page_number:int=Form(default=1),flag:str=Form(None)):
+async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(None),search_key:str=Form(None),page_number:str=Form(default=1),flag:str=Form(None)):
     
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
@@ -1500,8 +1503,8 @@ async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(Non
 # 19 List all Friends
 @router.post("/listallfriends")
 async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),search_key:str=Form(None),group_ids:str=Form(None,description="Like ['12','13','14']"),
-                         nongrouped:int=Form(None,description="Send 1"),friends_count:int=Form(None),allfriends:int=Form(None,description="send 1"),
-                         page_number:int=Form(default=1,description="send 1 for initial request")):
+                         nongrouped:str=Form(None,description="Send 1"),friends_count:str=Form(None),allfriends:str=Form(None,description="send 1"),
+                         page_number:str=Form(default=1,description="send 1 for initial request")):
                          
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
@@ -1779,7 +1782,7 @@ async def addfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),gr
 
 # 21 Edit Friend Group
 @router.post("/editfriendgroup")
-async def editfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),group_name:str=Form(None),group_id:int=Form(None),
+async def editfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),group_name:str=Form(None),group_id:str=Form(None),
                          group_icon:UploadFile=File(None),group_members:str=Form(None,description=" User ids Like ['12','13','14']")):
   
     if token == None or token.strip() == "":
@@ -1873,7 +1876,7 @@ async def editfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),g
 
 # 22 Add Friends to Group
 @router.post("/addfriendstogroup")
-async def addfriendstogroup(db:Session=Depends(deps.get_db),token:str=Form(None),group_members:str=Form(None,description=" User ids Like ['12','13','14']"),group_id:int=Form(None)):
+async def addfriendstogroup(db:Session=Depends(deps.get_db),token:str=Form(None),group_members:str=Form(None,description=" User ids Like ['12','13','14']"),group_id:str=Form(None)):
     
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
@@ -1955,7 +1958,7 @@ async def addfriendstogroup(db:Session=Depends(deps.get_db),token:str=Form(None)
 
 # 23 Remove Friends from Group
 @router.post("/removefriendsfromgroup")
-async def removefriendsfromgroup(db:Session=Depends(deps.get_db),token:str=Form(None),group_members:str=Form(None,description=" User ids Like ['12','13','14']"),group_id:int=Form(None)):
+async def removefriendsfromgroup(db:Session=Depends(deps.get_db),token:str=Form(None),group_members:str=Form(None,description=" User ids Like ['12','13','14']"),group_id:str=Form(None)):
              
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
@@ -1994,7 +1997,7 @@ async def removefriendsfromgroup(db:Session=Depends(deps.get_db),token:str=Form(
 
 # 24. Delete Friend Group
 @router.post("/deletefriendgroup")
-async def deletefriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),group_id:int=Form(None)):
+async def deletefriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),group_id:str=Form(None)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif group_id == None:
@@ -2034,7 +2037,7 @@ async def deletefriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None)
 
 # 25. Add Nuggets
 @router.post("/addnuggets")
-async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),content:str=Form(None),share_type:int=Form(None),share_with:str=Form(None,description='friends":[1,2,3],"groups":[1,2,3]}'),
+async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),content:str=Form(None),share_type:str=Form(None),share_with:str=Form(None,description='friends":[1,2,3],"groups":[1,2,3]}'),
                      nuggets_media:UploadFile=File(None),poll_option:str=Form(None),poll_duration:str=Form(None),metadata:str=Form(None)):
                          
     if token == None or token.strip() == "":
@@ -2282,8 +2285,8 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),conten
 
 # 26. List Nuggets
 @router.post("/listnuggets")
-async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nuggets:int=Form(None),filter_type:int=Form(None),user_id:int=Form(None),
-                     saved:int=Form(None),search_key:str=Form(None),page_number:int=Form(default=1),nugget_type:int=Form(None,description="1-video,2-Other than video,0-all")):
+async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nuggets:str=Form(None),filter_type:str=Form(None),user_id:str=Form(None),
+                     saved:str=Form(None),search_key:str=Form(None),page_number:str=Form(default=1),nugget_type:str=Form(None,description="1-video,2-Other than video,0-all")):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif nugget_type and not 0 <= nugget_type <= 2:
@@ -2591,7 +2594,7 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
 
 # 27. Like And Unlike Nugget
 @router.post("/likeandunlikenugget")
-async def likeandunlikenugget(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(None),like:int=Form(None,description="1-like,2-unlike")):
+async def likeandunlikenugget(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:str=Form(None),like:str=Form(None,description="1-like,2-unlike")):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif nugget_id == None:
@@ -2660,7 +2663,7 @@ async def likeandunlikenugget(db:Session=Depends(deps.get_db),token:str=Form(Non
 
 # 28. Delete Nugget
 @router.post("/deletenugget")
-async def deletenugget(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(None)):
+async def deletenugget(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:str=Form(None)):
                          
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
@@ -2707,7 +2710,7 @@ async def deletenugget(db:Session=Depends(deps.get_db),token:str=Form(None),nugg
 
 # 29. Nugget Comment List
 @router.post("/nuggetcommentlist")
-async def nuggetcommentlist(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(None)):
+async def nuggetcommentlist(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:str=Form(None)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif not nugget_id:
@@ -2797,8 +2800,8 @@ async def nuggetcommentlist(db:Session=Depends(deps.get_db),token:str=Form(None)
 
 # 30. Add or Reply Nugget Comment
 @router.post("/addnuggetcomment")
-async def addnuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(None),type:int=Form(None,description="1-comment,2-reply"),nugget_id:int=Form(None),
-                           comment_id:int=Form(None),comment:str=Form(None)):
+async def addnuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(None),type:str=Form(None,description="1-comment,2-reply"),nugget_id:str=Form(None),
+                           comment_id:str=Form(None),comment:str=Form(None)):
     
     
     
@@ -2867,7 +2870,7 @@ async def addnuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(None),
             
 # 31. Edit Nuggets Comments 
 @router.post("/editnuggetcomment")
-async def editnuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(None),comment_id:int=Form(None),comment:str=Form(None)):
+async def editnuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(None),comment_id:str=Form(None),comment:str=Form(None)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif comment == None or comment.strip() == '':
@@ -2906,7 +2909,7 @@ async def editnuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(None)
                
 # 32. Delete Nuggets Comments
 @router.post("/deletenuggetcomment")
-async def deletenuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(None),comment_id:int=Form(None)):
+async def deletenuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(None),comment_id:str=Form(None)):
         if token == None or token.strip() == "":
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         elif comment_id == None:
@@ -2945,7 +2948,7 @@ async def deletenuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(Non
 # 33. Like and Unlike Nugget Comment
 
 @router.post("/likeandunlikenuggetcomment") 
-async def likeandunlikenuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(None),comment_id:int=Form(None),like:int=Form(None,description="1->like 2->unlike")):
+async def likeandunlikenuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(None),comment_id:str=Form(None),like:str=Form(None,description="1->like 2->unlike")):
         if token == None or token.strip() == "":
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         elif comment_id ==None:
@@ -3009,7 +3012,7 @@ async def likeandunlikenuggetcomment(db:Session=Depends(deps.get_db),token:str=F
 # 34. Nugget and comment Liked user list 
 
 @router.post("/nuggetandcommentlikeeduserlist")
-async def nuggetandcommentlikeeduserlist(db:Session=Depends(deps.get_db),token:str=Form(None),id:int=Form(None,description="Nuggets,Comment"),type:int=Form(None,description="1-Nuggets,2->Comments")):
+async def nuggetandcommentlikeeduserlist(db:Session=Depends(deps.get_db),token:str=Form(None),id:str=Form(None,description="Nuggets,Comment"),type:str=Form(None,description="1-Nuggets,2->Comments")):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif type == None:
@@ -3071,7 +3074,7 @@ async def nuggetandcommentlikeeduserlist(db:Session=Depends(deps.get_db),token:s
 
 # 35. Edit Nugget
 @router.post("/editnugget")
-async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(None),share_type:int=Form(None),metadata:str=Form(None),content:str=Form(None),delete_media_id:str=Form(None,description="[1,2,3]"),nuggets_media:UploadFile=File(None),share_with:str=Form(None,description=' {"friends":[1,2,3],"groups":[1,2,3]} ')):
+async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:str=Form(None),share_type:str=Form(None),metadata:str=Form(None),content:str=Form(None),delete_media_id:str=Form(None,description="[1,2,3]"),nuggets_media:UploadFile=File(None),share_with:str=Form(None,description=' {"friends":[1,2,3],"groups":[1,2,3]} ')):
     if token== None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif nugget_id == None:
@@ -3307,7 +3310,7 @@ async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugg
 
 # 36. Share Nugget
 @router.post("/sharenugget")
-async def sharenugget(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(None),share_type:int=Form(None,description="1-public,2-only me,3-groups,4-individual,5-both group & individual ,6-all my friends"),
+async def sharenugget(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:str=Form(None),share_type:str=Form(None,description="1-public,2-only me,3-groups,4-individual,5-both group & individual ,6-all my friends"),
                      share_with:str=Form(None,description='{"friends":[1,2,3],"groups":[1,2,3]}')):
     
     
@@ -3458,7 +3461,7 @@ async def sharenugget(db:Session=Depends(deps.get_db),token:str=Form(None),nugge
 
 # 37. Get individual nugget detail
 @router.post("/getnuggetdetail")
-async def getnuggetdetail(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(None)):
+async def getnuggetdetail(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:str=Form(None)):
     if token== None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif nugget_id == None:
@@ -3537,11 +3540,11 @@ async def geteventlayout(db:Session=Depends(deps.get_db),token:str=Form(None)):
 
 # 40. Add Event
 @router.post("/addevent")
-async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_title:str=Form(None),event_type:int=Form(None),event_start_date:date=Form(None),event_start_time:time=Form(None),
-                   event_message:str=Form(None),event_participants:int=Form(None),event_duration:time=Form(None),event_layout:int=Form(None),
+async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_title:str=Form(None),event_type:str=Form(None),event_start_date:date=Form(None),event_start_time:time=Form(None),
+                   event_message:str=Form(None),event_participants:str=Form(None),event_duration:time=Form(None),event_layout:str=Form(None),
                    event_host_audio:UploadFile=File(None),event_host_video:UploadFile=File(None),event_guest_audio:UploadFile=File(None),event_guest_video:UploadFile=File(None),event_melody:UploadFile=File(None),
-                   event_invite_mails:UploadFile=File(None),event_invite_groups:str=Form(None),event_invite_friends:str=Form(None),event_melody_id:int=Form(None),
-                   waiting_room:int=Form(None),join_before_host:int=Form(None),sound_notify:int=Form(None),user_screenshare:int=Form(None),event_banner:UploadFile=File(None)):
+                   event_invite_mails:UploadFile=File(None),event_invite_groups:str=Form(None),event_invite_friends:str=Form(None),event_melody_id:str=Form(None),
+                   waiting_room:str=Form(None),join_before_host:str=Form(None),sound_notify:str=Form(None),user_screenshare:str=Form(None),event_banner:UploadFile=File(None)):
     
     event_invite_friends=json.loads(event_invite_friends) if event_invite_friends else None
     event_invite_custom=json.loads(event_invite_mails) if event_invite_mails else None
@@ -3864,7 +3867,7 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                                  
 # 41. List Event        ( user id defined in php code)
 @router.post("/listevents")
-async def listevents(db:Session=Depends(deps.get_db),token:str=Form(None),user_id:int=Form(None),event_type:int=Form(0,description="1->My Events, 2->Invited Events, 3->Public Events"),type_filter:int=Form(None,description="1 - Event,2 - Talkshow,3 - Live"),page_number:int=Form(default=1)):
+async def listevents(db:Session=Depends(deps.get_db),token:str=Form(None),user_id:str=Form(None),event_type:str=Form(0,description="1->My Events, 2->Invited Events, 3->Public Events"),type_filter:str=Form(None,description="1 - Event,2 - Talkshow,3 - Live"),page_number:str=Form(default=1)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
    
@@ -4164,7 +4167,7 @@ async def listevents(db:Session=Depends(deps.get_db),token:str=Form(None),user_i
 
 #  42. Delete Events
 @router.post("/deleteevent")
-async def deleteevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_id:int=Form(None)):
+async def deleteevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_id:str=Form(None)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif event_id == None:
@@ -4197,7 +4200,7 @@ async def deleteevent(db:Session=Depends(deps.get_db),token:str=Form(None),event
 
 # 43. View Event         
 @router.post("/viewevent")
-async def viewevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_id:int=Form(None)):
+async def viewevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_id:str=Form(None)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif event_id == None:
@@ -4226,22 +4229,22 @@ async def viewevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
 
 # 44. Edit Event
 @router.post("/editevent")
-async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_id:int=Form(None),event_title:str=Form(None),
-                        event_type:int=Form(None),
+async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_id:str=Form(None),event_title:str=Form(None),
+                        event_type:str=Form(None),
                         event_start_date:date=Form(None),event_start_time:time=Form(None),
                         event_message:str=Form(None),
-                        event_participants:int=Form(None,description="max no of participants"),
+                        event_participants:str=Form(None,description="max no of participants"),
                         event_duration:time=Form(None,description="Duration of Event hh:mm"),
-                        event_layout:int=Form(None),
+                        event_layout:str=Form(None),
                         
-                        event_melody_id:int=Form(None,description="Event melody id (56 api table)"),
+                        event_melody_id:str=Form(None,description="Event melody id (56 api table)"),
                         event_melody:UploadFile=File(None),
                         event_banner:UploadFile=File(None),
                         
-                        event_host_audio:int=Form(None,description="0->No ,1->Yes"),
-                        event_host_video:int=Form(None,description="0->No ,1->Yes"),
-                        event_guest_audio:int=Form(None,description="0->No ,1->Yes"),
-                        event_guest_video:int=Form(None,description="0->No ,1->Yes"),
+                        event_host_audio:str=Form(None,description="0->No ,1->Yes"),
+                        event_host_video:str=Form(None,description="0->No ,1->Yes"),
+                        event_guest_audio:str=Form(None,description="0->No ,1->Yes"),
+                        event_guest_video:str=Form(None,description="0->No ,1->Yes"),
                         
                         event_invite_mails:str=Form(None,description="example abc@mail.com , def@mail.com"),
                         event_invite_groups:str=Form(None,description="example [1,2,3]"),
@@ -4251,10 +4254,10 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                         delete_invite_groups:str=Form(None,description="example [1,2,3]"),
                         delete_invite_mails:str=Form(None,description="example abc@gmail.com,xyz@mail.com"),
                         
-                        waiting_room:int=Form(None,description="0-No,1-Yes"),
-                        join_before_host:int=Form(None,description="0-No,1-Yes"),
-                        sound_notify:int=Form(None,description="0-No,1-Yes"),
-                        user_screenshare:int=Form(None,description="0-No,1-Yes")):
+                        waiting_room:str=Form(None,description="0-No,1-Yes"),
+                        join_before_host:str=Form(None,description="0-No,1-Yes"),
+                        sound_notify:str=Form(None,description="0-No,1-Yes"),
+                        user_screenshare:str=Form(None,description="0-No,1-Yes")):
     
     
     if token == None or token.strip() == "":
@@ -4457,7 +4460,7 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
 
 # 45. List Chat Messages    
 @router.post("/listchatmessages")
-async def listchatmessages(db:Session=Depends(deps.get_db),token:str=Form(None),user_id:int=Form(None),page_number:int=Form(default=1),search_key:str=Form(None),last_msg_id:int=Form(None),msg_from:str=Form(default=2),sender_delete:int=Form(None),receiver_delete:int=Form(None)):
+async def listchatmessages(db:Session=Depends(deps.get_db),token:str=Form(None),user_id:str=Form(None),page_number:str=Form(default=1),search_key:str=Form(None),last_msg_id:str=Form(None),msg_from:str=Form(default=2),sender_delete:str=Form(None),receiver_delete:str=Form(None)):
 
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
@@ -4591,7 +4594,7 @@ async def uploadchatattachment(db:Session=Depends(deps.get_db),token:str=Form(No
 
 # 47. List Notifications
 @router.post("/listnotifications")
-async def listnotifications(db:Session=Depends(deps.get_db),token:str=Form(None),page_number:int=Form(default=1)):
+async def listnotifications(db:Session=Depends(deps.get_db),token:str=Form(None),page_number:str=Form(default=1)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
    
@@ -4650,7 +4653,7 @@ async def listnotifications(db:Session=Depends(deps.get_db),token:str=Form(None)
 
 # 48. Delete Notification
 @router.post("/deletenotification")
-async def deletenotification(db:Session=Depends(deps.get_db),token:str=Form(None),notification_id:int=Form(None)):
+async def deletenotification(db:Session=Depends(deps.get_db),token:str=Form(None),notification_id:str=Form(None)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     
@@ -4688,7 +4691,7 @@ async def deletenotification(db:Session=Depends(deps.get_db),token:str=Form(None
     
 # 49. Read Notification
 @router.post("/readnotification")
-async def readnotification(db:Session=Depends(deps.get_db),token:str=Form(None),notification_id:int=Form(None),mark_all_as_read:int=Form(default=0)):
+async def readnotification(db:Session=Depends(deps.get_db),token:str=Form(None),notification_id:str=Form(None),mark_all_as_read:str=Form(default=0)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
    
@@ -4716,7 +4719,7 @@ async def readnotification(db:Session=Depends(deps.get_db),token:str=Form(None),
 
 # 50. Unfriend a friend
 @router.post("/unfriend")
-async def unfriend(db:Session=Depends(deps.get_db),token:str=Form(None),user_id:int=Form(None)):
+async def unfriend(db:Session=Depends(deps.get_db),token:str=Form(None),user_id:str=Form(None)):
     if token== None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     if user_id == None:
@@ -4758,7 +4761,7 @@ async def unfriend(db:Session=Depends(deps.get_db),token:str=Form(None),user_id:
 
 # 51. GET OTHERS PROFILE
 @router.post("/getothersprofile")
-async def getothersprofile(db:Session=Depends(deps.get_db),token:str=Form(None),auth_code:str=Form(None,description="SALT + token"),user_id:int=Form(None)):
+async def getothersprofile(db:Session=Depends(deps.get_db),token:str=Form(None),auth_code:str=Form(None,description="SALT + token"),user_id:str=Form(None)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif auth_code == None or auth_code.strip() == '':
@@ -4854,7 +4857,7 @@ async def getothersprofile(db:Session=Depends(deps.get_db),token:str=Form(None),
 # 52. List all Blocked users
 
 @router.post("/listallblockedusers")
-async def listallblockedusers(db:Session=Depends(deps.get_db),token:str=Form(None),search_key:str=Form(None),page_number:int=Form(default=1)):
+async def listallblockedusers(db:Session=Depends(deps.get_db),token:str=Form(None),search_key:str=Form(None),page_number:str=Form(default=1)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     
@@ -4931,7 +4934,7 @@ async def listallblockedusers(db:Session=Depends(deps.get_db),token:str=Form(Non
 
 # 53. Block or Unblock a user
 @router.post("/blockunblockuser")
-async def blockunblockuser(db:Session=Depends(deps.get_db),token:str=Form(None),user_id:int=Form(None),action:int=Form(None,description="1-Block,2-Unblock")):
+async def blockunblockuser(db:Session=Depends(deps.get_db),token:str=Form(None),user_id:str=Form(None),action:str=Form(None,description="1-Block,2-Unblock")):
     if token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif user_id == None:
@@ -5154,13 +5157,13 @@ async def getusersettings(db:Session=Depends(deps.get_db),token:str=Form(None)):
 
 #55 Update User Settings
 @router.post("/updateusersettings")
-async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None),online_status:int=Form(None,description="0->Don't show,1->Public,2->Friends only,3->Special Group"),phone_display_status:int=Form(None,description="0->Don't show,1->Public,2->Friends only,3->Special Group"),
-           location_display_status:int=Form(None,description="0->Don't show,1->Public,2->Friends only,3->Special Group"),dob_display_status:int=Form(None,description="0->Don't show,1->Public,2->Friends only,3->Special Group"),bio_display_status:int=Form(None,description="0->Don't show,1->Public,2->Friends only,3->Special Group"),
+async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None),online_status:str=Form(None,description="0->Don't show,1->Public,2->Friends only,3->Special Group"),phone_display_status:str=Form(None,description="0->Don't show,1->Public,2->Friends only,3->Special Group"),
+           location_display_status:str=Form(None,description="0->Don't show,1->Public,2->Friends only,3->Special Group"),dob_display_status:str=Form(None,description="0->Don't show,1->Public,2->Friends only,3->Special Group"),bio_display_status:str=Form(None,description="0->Don't show,1->Public,2->Friends only,3->Special Group"),
            friend_request:str=Form(None,description="3 digit 000 to 111, 1st digit->Push notify , 2nd digit->Email notify,3rd digit->SMS"),nuggets:str=Form(None,description="3 digit 000 to 111, 1st digit->Push notify , 2nd digit->Email notify,3rd digit->SMS"),events:str=Form(None,description="3 digit 000 to 111, 1st digit->Push notify , 2nd digit->Email notify,3rd digit->SMS"),
-           passcode_status:int=Form(None,description="1->Enabled,0->Disabled"),passcode:str=Form(None),waiting_room:int=Form(None,description="1->Enabled,0->Disabled"),schmoozing_status:int=Form(None,description="1->Enabled,0->Disabled"),breakout_status:int=Form(None,description="1->Enabled,0->Disabled"),join_before_host:int=Form(None,description="1->Enabled,0->Disabled"),auto_record:int=Form(None,description="1->Enabled,0->Disabled"),
-           participant_join_sound:int=Form(None,description="1->Sound On,0->Sound Off"),screen_share_status:int=Form(None,description="1->Enabled,0->Disabled"),virtual_background:int=Form(None,description="1->Enabled,0->Disabled"),host_audio:int=Form(None,description="1->On,0->Off"),host_video:int=Form(None),participant_audio:int=Form(None,description="1->On,0->Off"),participant_video:int=Form(None,description="1->On,0->Off"),melody:int=Form(None),meeting_header_image:UploadFile=File(None),language_id:int=Form(None,description="table 65"),time_zone:str=Form(None,description='get from 64'),date_format:str=Form(None),mobile_default_page:int=Form(None,description="1->nuggets,2->events,3->chats"),
-           default_melody:UploadFile=File(None),event_type:int=Form(None),public_nugget_display:int=Form(None),
-           public_event_display:int=Form(None),manual_acc_active_inactive:int=Form(None)):
+           passcode_status:str=Form(None,description="1->Enabled,0->Disabled"),passcode:str=Form(None),waiting_room:str=Form(None,description="1->Enabled,0->Disabled"),schmoozing_status:str=Form(None,description="1->Enabled,0->Disabled"),breakout_status:str=Form(None,description="1->Enabled,0->Disabled"),join_before_host:str=Form(None,description="1->Enabled,0->Disabled"),auto_record:str=Form(None,description="1->Enabled,0->Disabled"),
+           participant_join_sound:str=Form(None,description="1->Sound On,0->Sound Off"),screen_share_status:str=Form(None,description="1->Enabled,0->Disabled"),virtual_background:str=Form(None,description="1->Enabled,0->Disabled"),host_audio:str=Form(None,description="1->On,0->Off"),host_video:str=Form(None),participant_audio:str=Form(None,description="1->On,0->Off"),participant_video:str=Form(None,description="1->On,0->Off"),melody:str=Form(None),meeting_header_image:UploadFile=File(None),language_id:str=Form(None,description="table 65"),time_zone:str=Form(None,description='get from 64'),date_format:str=Form(None),mobile_default_page:str=Form(None,description="1->nuggets,2->events,3->chats"),
+           default_melody:UploadFile=File(None),event_type:str=Form(None),public_nugget_display:str=Form(None),
+           public_event_display:str=Form(None),manual_acc_active_inactive:str=Form(None)):
     if token== None or token.strip()=="":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     
@@ -5389,7 +5392,7 @@ async def blockmultipleuser(db:Session=Depends(deps.get_db),token:str=Form(None)
 #58. Global Search Events
 
 @router.post("/globalsearchevents")
-async def globalsearchevents(db:Session=Depends(deps.get_db),token:str=Form(None),search_key:str=Form(None),page_number:int=Form(default=1)):
+async def globalsearchevents(db:Session=Depends(deps.get_db),token:str=Form(None),search_key:str=Form(None),page_number:str=Form(default=1)):
 
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
@@ -5485,7 +5488,7 @@ async def globalsearchevents(db:Session=Depends(deps.get_db),token:str=Form(None
 #  59. Global Search Nuggets
 
 @router.post("/globalsearchnuggets")
-async def globalsearchnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),search_key:str=Form(None),page_number:int=Form(1)):
+async def globalsearchnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),search_key:str=Form(None),page_number:str=Form(1)):
 
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
@@ -5619,7 +5622,7 @@ async def globalsearchnuggets(db:Session=Depends(deps.get_db),token:str=Form(Non
     
 #60 Report Nugget Abuse
 @router.post("/nuggetabusereport")
-async def nuggetabusereport(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(None),message:str=Form(None)):
+async def nuggetabusereport(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:str=Form(None),message:str=Form(None)):
 
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
@@ -5668,7 +5671,7 @@ async def nuggetabusereport(db:Session=Depends(deps.get_db),token:str=Form(None)
 
 # 61. Read Message
 @router.post("/messageread")
-async def messageread(db:Session=Depends(deps.get_db),token:str=Form(None),senderid:int=Form(None),receiverid:int=Form(None)):
+async def messageread(db:Session=Depends(deps.get_db),token:str=Form(None),senderid:str=Form(None),receiverid:str=Form(None)):
     
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
@@ -5986,7 +5989,7 @@ async def getfaq(db:Session=Depends(deps.get_db)):
 
 # 69. open nuggets details
 @router.post('/getopennuggetdetail')
-async def getopennuggetdetail(db:Session=Depends(deps.get_db),nugget_id:int=Form(None)):
+async def getopennuggetdetail(db:Session=Depends(deps.get_db),nugget_id:str=Form(None)):
     if nugget_id == None:
         return {"status":0,"msg":"Nugget id is missing"}
     else:
@@ -6073,7 +6076,7 @@ async def getopennuggetdetail(db:Session=Depends(deps.get_db),nugget_id:int=Form
 
 # 70. Get User Settings
 @router.post("/followandunfollow")
-async def followandunfollow(db:Session=Depends(deps.get_db),token:str=Form(None),follow_userid:str=Form(None),type:int=Form(None,description="1-Follow,2-unfollow")):
+async def followandunfollow(db:Session=Depends(deps.get_db),token:str=Form(None),follow_userid:str=Form(None),type:str=Form(None,description="1-Follow,2-unfollow")):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     if follow_userid == None: 
@@ -6142,7 +6145,7 @@ async def followandunfollow(db:Session=Depends(deps.get_db),token:str=Form(None)
 #-----------------last 3 parameters check-------------------------#
 # 71 Get follower and following list
 @router.post("/getfollowlist")
-async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),user_id:int=Form(None),type:int=Form(None,description="1->follower,2->following"),search_key:str=Form(None),page_number:int=Form(default=1)):
+async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),user_id:str=Form(None),type:str=Form(None,description="1->follower,2->following"),search_key:str=Form(None),page_number:str=Form(default=1)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif type == None:
@@ -6239,7 +6242,7 @@ async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),use
     
 # 72. Add nuggets view count
 @router.post("/addnuggetview")
-async def addnuggetview(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(None)):
+async def addnuggetview(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:str=Form(None)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     if nugget_id == None:
@@ -6273,7 +6276,7 @@ async def addnuggetview(db:Session=Depends(deps.get_db),token:str=Form(None),nug
 # 73. Get Referral List
 
 @router.post("/getreferrallist")
-async def getreferrallist(db:Session=Depends(deps.get_db),token:str=Form(None),page_number:int=Form(default=1)):
+async def getreferrallist(db:Session=Depends(deps.get_db),token:str=Form(None),page_number:str=Form(default=1)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     
@@ -6336,7 +6339,7 @@ async def getreferrallist(db:Session=Depends(deps.get_db),token:str=Form(None),p
 # 74. Create Live Event
 
 @router.post("/addliveevent")
-async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_title:str=Form(None),event_type:int=Form(None),event_start_date:date=Form(None),event_start_time:time=Form(None),event_banner:UploadFile=File(None),event_invite_mails:str=Form(None,description="example abc@mail.com,xyz@gmail.com"),event_invite_groups:str=Form(None,description="example [14,27,32]"),event_invite_friends:str=Form(None,description="example [5,7,3]")):
+async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_title:str=Form(None),event_type:str=Form(None),event_start_date:date=Form(None),event_start_time:time=Form(None),event_banner:UploadFile=File(None),event_invite_mails:str=Form(None,description="example abc@mail.com,xyz@gmail.com"),event_invite_groups:str=Form(None,description="example [14,27,32]"),event_invite_friends:str=Form(None,description="example [5,7,3]")):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
    
@@ -6505,7 +6508,7 @@ async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),even
 
 # 75.Edit Live Event
 @router.post("/editliveevent")
-async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_id:int=Form(None),event_title:str=Form(None),event_type:int=Form(None),event_start_date:date=Form(None),event_start_time:time=Form(None),event_banner:UploadFile=File(None),
+async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_id:str=Form(None),event_title:str=Form(None),event_type:str=Form(None),event_start_date:date=Form(None),event_start_time:time=Form(None),event_banner:UploadFile=File(None),
                               event_invite_mails:str=Form(None,description="Example abc@mail.com,def@mail.com"),event_invite_groups:str=Form(None,description="Example 1,2,3"),event_invite_friends:str=Form(None,description="Example 1,2,3"),delete_invite_mails:str=Form(None,description=" Example abc@mail.com,def@mail.com"),
                               delete_invite_groups:str=Form(None,description="Example 1,2,3"),delete_invite_friends:str=Form(None,description="Example 2,3,4")):
     
@@ -6673,7 +6676,7 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
   # 76. Add Go Live Event
 
 @router.post("/addgoliveevent")
-async def addgoliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_title:str=Form(None),event_type:int=Form(None)):
+async def addgoliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_title:str=Form(None),event_type:str=Form(None)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif event_title == None or event_title.strip() == '':
@@ -6739,7 +6742,7 @@ async def addgoliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),ev
  # 77 Enable golive event
 
 @router.post('/enablegoliveevent')
-async def enablegoliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_id:int=Form(None)):
+async def enablegoliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_id:str=Form(None)):
 
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
@@ -6824,12 +6827,12 @@ async def getinfluencercategory(db:Session=Depends(deps.get_db),token:str=Form(N
 
 #79 actionSocialmedialogin
 @router.post("/socialmedialogin")
-async def socialmedialogin(db:Session=Depends(deps.get_db),signin_type:int=Form(None,description="2->Apple,3->Twitter,4->Instagram,5->Google"),
-                                 first_name:str=Form(None),last_name:str=Form(None),dispaly_name:str=Form(None),gender:int=Form(None,description="1->Male,2->Female"),
-                                 dob:date=Form(None),email_id:str=Form(None),country_code:int=Form(None),mobile_no:int=Form(None),geo_location:str=Form(None),
+async def socialmedialogin(db:Session=Depends(deps.get_db),signin_type:str=Form(None,description="2->Apple,3->Twitter,4->Instagram,5->Google"),
+                                 first_name:str=Form(None),last_name:str=Form(None),dispaly_name:str=Form(None),gender:str=Form(None,description="1->Male,2->Female"),
+                                 dob:date=Form(None),email_id:str=Form(None),country_code:str=Form(None),mobile_no:str=Form(None),geo_location:str=Form(None),
                                  latitude:str=Form(None),longitude:str=Form(None),ref_id:str=Form(None),auth_code:str=Form(None,description="SALT+email_id"),device_id:str=Form(None,description="Uniq like IMEI number"),
-                                 push_id:str=Form(None),device_type:int=Form(None,description="1->Android,2->IOS,3->Web"),
-                                 auth_codes:str=Form(None,description="SALT+username"),voip_token:str=Form(None),app_type:int=Form(None,description="1->Android,2->IOS"),password:str=Form(None),login_from:str=Form(None),signup_social_ref_id:str=Form(None)):
+                                 push_id:str=Form(None),device_type:str=Form(None,description="1->Android,2->IOS,3->Web"),
+                                 auth_codes:str=Form(None,description="SALT+username"),voip_token:str=Form(None),app_type:str=Form(None,description="1->Android,2->IOS"),password:str=Form(None),login_from:str=Form(None),signup_social_ref_id:str=Form(None)):
     
     if auth_code.strip() =="" or auth_code.strip() ==None:
         return {"status":0,"msg":"Auth Code is missing"}
@@ -6987,7 +6990,7 @@ async def socialmedialogin(db:Session=Depends(deps.get_db),signin_type:int=Form(
 
 # 80  actionInfluencerlist
 @router.post("/influencerlist")
-async def influencerlist(db:Session=Depends(deps.get_db),token:str=Form(None),search_key:str=Form(None),auth_code:str=Form(None,description="SALT+token"),category:int=Form(None,description="influencer category"),page_number:int=Form(default=1)):
+async def influencerlist(db:Session=Depends(deps.get_db),token:str=Form(None),search_key:str=Form(None),auth_code:str=Form(None,description="SALT+token"),category:str=Form(None,description="influencer category"),page_number:str=Form(default=1)):
     if token == None or token.strip() == '':
         return {"status":-1,"msg":"Sorry! your login session expired. please login again"}
     elif auth_code == None or auth_code.strip() == '':
@@ -7164,7 +7167,7 @@ async def influencerfollow(db:Session=Depends(deps.get_db),token:str=Form(None),
 # 82. Poll Vote
 
 @router.post("/pollvote")
-async def pollvote(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(None),poll_option_id:int=Form(None)):
+async def pollvote(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:str=Form(None),poll_option_id:str=Form(None)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif nugget_id == None:
@@ -7221,7 +7224,7 @@ async def pollvote(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_i
 # 83.Tags List
 
 @router.post("/tagslist")
-async def tagslist(db:Session=Depends(deps.get_db),token:str=Form(None),search_tag:str=Form(None),auth_code:str=Form(None),page_number:int=Form(default=1)):
+async def tagslist(db:Session=Depends(deps.get_db),token:str=Form(None),search_tag:str=Form(None),auth_code:str=Form(None),page_number:str=Form(default=1)):
    
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
@@ -7287,7 +7290,7 @@ async def tagslist(db:Session=Depends(deps.get_db),token:str=Form(None),search_t
                             if nuggettrend:
                                 for trend in nuggettrend:
                                     if trend.Hours == i:
-                                        trends.append({"total_nuggets":int(trend.total_nuggets),
+                                        trends.append({"total_nuggets":str(trend.total_nuggets),
                                                        "hours":i})
                                     else:
                                         trends.append({"total_nuggets":0,
@@ -7305,7 +7308,7 @@ async def tagslist(db:Session=Depends(deps.get_db),token:str=Form(None),search_t
 
 # 84. Save And Unsave Nugget
 @router.post("/saveandunsavenugget")
-async def saveandunsavenugget(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(None),save:int=Form(None,description="1-save,2-unsave")):
+async def saveandunsavenugget(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:str=Form(None),save:str=Form(None,description="1-save,2-unsave")):
     if token== None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     if nugget_id == None:
