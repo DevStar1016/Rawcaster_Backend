@@ -1,4 +1,4 @@
-from sqlalchemy import or_,and_,func,not_
+from sqlalchemy import or_,and_,func
 import datetime
 import math
 from app.core.config import settings as st
@@ -6,26 +6,43 @@ from datetime import datetime,timedelta
 from app.models import *
 import random,string
 import hashlib
-from email_validator import validate_email, EmailNotValidError
+from email_validator import EmailNotValidError
 import re
 import math
 import requests
 import string
 from dateutil.relativedelta import relativedelta
 from jose import jwt
-from pyfcm import FCMNotification
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 import base64
 from operator import itemgetter
 from urllib.parse import urlparse, urlunparse
-import mimetypes
 from PIL import Image
 import os,boto3
-import sys,shutil
+import sys
 from PIL import Image
+import time
+from dateutil.parser import parse
 
 
-def file_upload(file_name):
+def is_date(string, fuzzy=False):
+    try: 
+        parse(string, fuzzy=fuzzy)
+        return True
+
+    except ValueError:
+        return False
+
+
+def isTimeFormat(input):
+    try:
+        time.strptime(input, '%H:%M')
+        return True
+    except ValueError:
+        return False
+
+
+def file_upload(file_name,compress):
     uploads_file_name=file_name.filename
     
     base_dir = os.getcwd()
@@ -44,11 +61,36 @@ def file_upload(file_name):
     ext = os.path.splitext(uploads_file_name)[-1].lower()
     filename=f"Image_{random_string}{ext}"    
    
-    save_full_path=f'{output_dir}{filename}'    
+    save_full_path=f'{output_dir}{filename}'  
+      
     with Image.open(file_name.file) as img:   # Input File
-        img.save(save_full_path, optimize=True, quality=50)  
-    
+        if compress:
+            img.save(save_full_path, optimize=True, quality=50)  
+        else:
+            img.save(save_full_path)  
+            
     return save_full_path
+
+
+
+def upload_to_s3(local_file_pth,s3_bucket_path):
+    bucket_name='rawcaster'
+    
+    access_key="AKIAYFYE6EFYG6RJOPMF"
+    access_secret="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"
+    try:
+        client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
+        
+        with open(local_file_pth, 'rb') as data:  # Upload File To S3
+            upload=client_s3.upload_fileobj(data, bucket_name, s3_bucket_path,ExtraArgs={'ACL': 'public-read'})
+
+        os.remove(local_file_pth)
+        
+        url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
+        url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{s3_bucket_path}'
+        return {"status":1,"url":url}
+    except:
+        return {"staus":0,"msg":"Unable to Upload"}
     
 
 async def send_email(db,to_mail, subject, message):
@@ -961,7 +1003,7 @@ def ProfilePreference(db,myid,otherid,field,value):
 
 def get_pagination(row_count, current_page_no, default_page_size):
     
-    current_page_no = current_page_no
+    current_page_no = int(current_page_no)
     
     total_pages = math.ceil(row_count / default_page_size)
     
@@ -1230,7 +1272,7 @@ def SendOtp(db,user_id,signup_type):
         add_otp_to_log=OtpLog(otp_type=1, # SignUp
                                 user_id=user_id,
                                 otp=otp,
-                                created_date=otp_time,
+                                created_at=otp_time,
                                 status=1
                                 )
         db.add(add_otp_to_log)
@@ -1317,11 +1359,13 @@ def eventPostNotifcationEmail(db,eventId):
             eventTitle = event.title
             event_start_time = event.start_date_time
             # eventStartTime = datetime.strptime(event_start_time, '%Y-%m-%d %H:%M:%S').strftime('%-d %b %Y %-I:%M %p')
-            # subject = 'New Event Created'
+            subject = 'New Event Created'
             meetingUrl = inviteBaseurl() + 'joinmeeting/' + event.ref_id
             eventCreatorName = event.user.display_name if event.created_by else None
             sms_message =f'Hi,{eventCreatorName} is inviting you to join a web event called {eventTitle}. The link for this Rawcaster event is: {meetingUrl}'
             return (sms_message, body)
+        
+        
 
 def GenerateUserRegID(id):
     dt = str(int(datetime.utcnow().timestamp()))

@@ -29,8 +29,15 @@ access_secret="Os6IsUAOPbJybMYxAdqUAAUL58xCIUlaD08Tsgj2"
 
 @router.post('/upload')
 async def upload_image(image: UploadFile = File(...)):
-    save_full_path,filename=file_upload(image)
-    return save_full_path
+    file_name=image.filename
+    file_temp=image.content_type
+    file_size=len(await image.read())
+    
+    file_ext = os.path.splitext(image.filename)[1]
+    # return image
+    if 'video' in file_temp:
+        return "hi"
+    return file_name,file_temp,file_size,file_ext
     # Upload File to Server
     # output_dir,filename=file_upload(image)
     
