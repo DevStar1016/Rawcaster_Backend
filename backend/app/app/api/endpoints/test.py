@@ -15,12 +15,27 @@ from moviepy.video.io.VideoFileClip import VideoFileClip
 import boto3    
 import shutil
 import os
-import io
+import subprocess
 router = APIRouter() 
 
 
 access_key="AKIAYFYE6EFYGNPCA32D"
 access_secret="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"
+
+
+
+@router.post("/upload_audio/")
+async def upload_audio(audio: UploadFile = File(...)):
+    filename = audio.filename
+    input_path = os.path.abspath(audio.filename)
+    return input_path
+    output_path = f"/home/mae3/Music/{audio.filename}_compressed.mp3"
+   
+
+    with open(input_path, "wb") as buffer: 
+        buffer.write(await audio.read())
+
+    subprocess.run(["ffmpeg", "-i", input_path, "-ab", "32k", "-y", output_path])
 
 
 

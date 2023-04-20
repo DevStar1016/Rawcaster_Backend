@@ -783,9 +783,7 @@ def OTPverificationtype(db,get_user):
     country=''
     if (get_user and get_user.mobile_no != "") or get_user.email_id != "":
         if get_user.geo_location != "":
-            country=(get_user.geo_location).split()
-            country=country[len(country) - 1]
-            country=country.rstrip('.')
+            country = (get_user.geo_location).split(',')[-1].strip().rstrip('.') if get_user.geo_location else ""
         if country != "":
             user_country=db.query(Country).filter(Country.sms_enabled == 1 ,Country.name == country).first()
             if user_country:

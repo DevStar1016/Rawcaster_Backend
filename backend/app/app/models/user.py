@@ -43,6 +43,10 @@ class User(Base):
     total_referral_point=Column(Integer,nullable=False,default=0)
     unused_referral_points=Column(Integer,nullable=False,default=0)
     influencer_category=Column(String(20))
+    # Newly Added
+    work_at=Column(String(100))
+    studied_at=Column(String(100))
+    
     status=Column(TINYINT(1),comment=" 0->verification pending, 1->Active, 2->Suspended, 3->Blocked, 4->Deleted ")
     
     

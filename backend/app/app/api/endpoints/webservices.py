@@ -42,7 +42,6 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(defaul=1,d
     elif not signup_type.isnumeric():
         return {"status":0,"msg":"Invalid signup type"}
         
-        
     elif first_name == None or first_name.strip() == "":
         return {"status":0,"msg":"Please provide your first name"}
     
@@ -58,8 +57,6 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(defaul=1,d
     elif dob and is_date(dob) == False:
         return {"status":0,"msg":"Invalid Date"}
             
-            
-    
     else:
         auth_text=email_id.strip() if email_id else None
         if checkAuthCode(auth_code,auth_text) == False:
@@ -474,14 +471,20 @@ async def login(db:Session=Depends(deps.get_db),auth_code:str=Form(None,descript
     if password == None or password.strip() == '':
         return {"status":0,"msg":"Password is missing"}
     
-    # if app_type and not isinstance(app_type, int):
-    #     return {"status":0,"msg":"Type Error"}
+    if app_type and not app_type.isnumeric() :
+        return {"status":0,"msg":"Invalid App Type"}
     
+    elif device_type and not device_type.isnumeric():
+        return {"status":0,"msg":"Invalid device type"}    
+
     auth_text=username.strip()
     if checkAuthCode(auth_code.strip(),auth_text) == False:
         return {"status":0,"msg":"Authentication failed!"}
         
     else:
+        app_type=int(app_type) if app_type else None
+        device_type=int(device_type) if device_type else None
+        
         if username.strip() != "" and password.strip() != "":
             password = hashlib.sha1(password.encode('utf-8')).hexdigest()
             # check Verified or not
@@ -797,38 +800,40 @@ def user_profile(db,id):
         
         user_details={}
         user_details.update({"user_id":get_user.id,
-                            "user_ref_id":get_user.user_ref_id,
-                            "is_email_id_verified":get_user.is_email_id_verified,
-                            "is_mobile_no_verified":get_user.is_mobile_no_verified,
+                            "user_ref_id":get_user.user_ref_id if get_user.user_ref_id else "",
+                            "is_email_id_verified":get_user.is_email_id_verified if get_user.is_email_id_verified else "",
+                            "is_mobile_no_verified":get_user.is_mobile_no_verified if get_user.is_mobile_no_verified else "",
                             "acc_verify_status":1 if get_user.is_email_id_verified == 1 or get_user.is_mobile_no_verified == 1 else 0, 
                             "is_profile_updated":1 if get_user.dob != "" and get_user.gender != "" else 0,
                             "name":get_user.display_name if get_user.display_name else "",
-                            "email_id":get_user.email_id,
-                            "mobile":get_user.mobile_no,
-                            "profile_image":get_user.profile_img,
-                            "cover_image":get_user.cover_image,
-                            "website":get_user.website,
-                            "first_name":get_user.first_name,
-                            "last_name":get_user.last_name,
-                            "gender":get_user.gender,
-                            "dob":get_user.dob,
-                            "country_code":get_user.country_code,
-                            "country_id":get_user.country_id,
-                            "user_code":get_user.user_code,
-                            "geo_location":get_user.geo_location,
-                            "latitude":get_user.latitude,
-                            "longitude":get_user.longitude,
+                            "email_id":get_user.email_id if get_user.email_id else "",
+                            "mobile":get_user.mobile_no if get_user.mobile_no else "",
+                            "profile_image":get_user.profile_img if get_user.profile_img else "",
+                            "cover_image":get_user.cover_image if get_user.cover_image else "",
+                            "website":get_user.website if get_user.website else "",
+                            "first_name":get_user.first_name if get_user.first_name else "",
+                            "last_name":get_user.last_name if get_user.last_name else "",
+                            "gender":get_user.gender if get_user.gender else "",
+                            "dob":get_user.dob if get_user.dob else "",
+                            "country_code":get_user.country_code if get_user.country_code else "",
+                            "country_id":get_user.country_id if get_user.country_id else "",
+                            "user_code":get_user.user_code if get_user.user_code else "",
+                            "geo_location":get_user.geo_location if get_user.geo_location else "",
+                            "latitude":get_user.latitude if get_user.latitude else "",
+                            "longitude":get_user.longitude if get_user.longitude else "",
                             "date_of_join":common_date(get_user.created_at) if get_user.created_at else "",
                             "user_type":get_user.user_type_master.name if get_user.user_type_id else "",  # .....
                             "user_status":get_user.user_status_master.name if get_user.user_status_id else "", #-----
                             "user_status_id":get_user.user_status_id,
-                            "bio_data":get_user.bio_data,
+                            "bio_data":get_user.bio_data if get_user.bio_data else "",
                             "followers_count":followers_count,
                             "friend_count":friend_count,
                             "following_count":following_count,
                             "nugget_count":nugget_count,
-                            "event_count":event_count
-                            
+                            "event_count":event_count,
+                            "work_at":get_user.work_at if get_user.work_at else "",
+                            "studied_at":get_user.studied_at if get_user.studied_at else "",
+                            "influencer_category":get_user.influencer_category if get_user.influencer_category else ""
                         })
         token_text=(str(get_user.user_ref_id) + str(datetime.now().timestamp())).encode("ascii")
         invite_url=inviteBaseurl()
@@ -893,22 +898,21 @@ async def updatemyprofile(db:Session=Depends(deps.get_db),token:str=Form(None),n
                           email_id:str=Form(None),website:str=Form(None),country_code:str=Form(None),country_id:str=Form(None),
                           mobile_no:str=Form(None),profile_image:UploadFile=File(None),cover_image:UploadFile=File(None),
                           auth_code:str=Form(None,description="SALT + token + name"),geo_location:str=Form(None),latitude:str=Form(None),
-                          longitude:str=Form(None),bio_data:str=Form(None)):
+                          longitude:str=Form(None),bio_data:str=Form(None),work_at:str=Form(None),studied_at:str=Form(None),
+                          influencer_category:str=Form(None)):
    
     
     if token == None or token.strip() == "":
         return {"status" : -1, "msg" :"Sorry! your login session expired. please login again."}
     elif auth_code == None or auth_code.strip() == "":
         return {"status" : -1, "msg" :"Auth Code is missing"}
-    elif email_id == None or email_id.strip() == "":
-        return {"status" : 0, "msg" :"Email ID is missing"}
-    elif first_name == None or first_name.strip() == "":
-        return {"status" : 0, "msg" :"First Name is missing"}
     elif name == None or name.strip() == "":
         return {"status" : -1, "msg" :"Name is missing"}
     elif dob and is_date(dob) == False:
         return {"status":0,"msg":"Invalid Date"}
-            
+    elif gender and not gender.isnumeric():
+        return {"status":0,"msg":"Invalid Gender type"}
+        
 
     else:
         access_token=checkToken(db,token)
@@ -937,16 +941,17 @@ async def updatemyprofile(db:Session=Depends(deps.get_db),token:str=Form(None),n
                 website=website if website else get_user_profile.website
                 country_id=country_id if country_id else get_user_profile.country_id
                 geo_location=geo_location if geo_location else get_user_profile.geo_location
-                latitude=latitude if latitude else get_user_profile.latitude
-                longitude=longitude if longitude else get_user_profile.longitude
-                bio_data=bio_data if bio_data else get_user_profile.bio_data
+                latitude=latitude.strip() if latitude else get_user_profile.latitude
+                longitude=longitude.strip() if longitude else get_user_profile.longitude
+                bio_data=bio_data.strip() if bio_data else get_user_profile.bio_data
+                work_at=work_at.strip() if work_at else get_user_profile.work_at
+                studied_at=studied_at.strip() if studied_at else get_user_profile.studied_at
                 
-                
-                check_email=db.query(User).filter(User.email_id == email_id,User.id != login_user_id).count()
+                check_email=db.query(User).filter(User.email_id == email_id,User.email_id != None,User.id != login_user_id).count()
                 if check_email > 0:
                     return {"status" : 0, "msg" :"This email ID is already used"}
                 
-                check_phone=db.query(User).filter(User.mobile_no == mobile_no,User.id != login_user_id).count()
+                check_phone=db.query(User).filter(User.mobile_no == mobile_no,User.mobile_no != None,User.id != login_user_id).count()
                 if check_phone > 0:
                     return {"status" : 0, "msg" :"This phone number is already used"}
                 
@@ -969,17 +974,20 @@ async def updatemyprofile(db:Session=Depends(deps.get_db),token:str=Form(None),n
                     get_user_profile.website=website.strip() if website else get_user_profile.website
                     get_user_profile.country_id=country_id if country_id else get_user_profile.country_id
                     get_user_profile.geo_location=geo_location.strip() if geo_location else get_user_profile.geo_location
-                    get_user_profile.latitude=latitude.strip() if latitude else get_user_profile.latitude
-                    get_user_profile.longitude=longitude.strip() if longitude else get_user_profile.longitude
-                    get_user_profile.bio_data=bio_data.strip() if bio_data else get_user_profile.bio_data
+                    get_user_profile.latitude=latitude
+                    get_user_profile.longitude=longitude
+                    get_user_profile.bio_data=bio_data
+                    get_user_profile.work_at =work_at
+                    get_user_profile.studied_at=studied_at
+                    get_user_profile.influencer_category = influencer_category.strip() if influencer_category else None
                     db.commit()
                     
                     # Image Part Pending
                     if profile_image:
-                        file_name=cover_image.filename
-                        file_temp=cover_image.content_type
-                        file_size=len(await cover_image.read())
-                        file_ext = os.path.splitext(cover_image.filename)[1]
+                        file_name=profile_image.filename
+                        file_temp=profile_image.content_type
+                        file_size=len(await profile_image.read())
+                        file_ext = os.path.splitext(profile_image.filename)[1]
                         
                         extensions=[".jpeg", ".jpg", ".png"]
                         
@@ -1041,8 +1049,8 @@ async def searchrawcasterusers(db:Session=Depends(deps.get_db),token:str=Form(No
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif auth_code == None or auth_code.strip() == "":
         return {"status":-1,"msg":"Auth Code is missing"}
-    elif not page_number.isnumeric():
-        return {"status":-1,"msg":"Invalid page Number"}
+    elif not str(page_number).isnumeric():
+        return {"status":0,"msg":"Invalid page Number"}
         
     else:
         access_token=checkToken(db,token.strip())
@@ -1304,11 +1312,15 @@ async def respondtofriendrequests(db:Session=Depends(deps.get_db),token:str=Form
                     
     if token == None or token.strip() == '':
         return {"status": -1, "msg": "Sorry! your login session expired. please login again."}
-    elif response == None or not 1 <= response <= 3 :
+    
+    elif response and not response.isnumeric():
+        return {"status": 0, "msg": "Invalid Response type"}
+        
+    elif response == None or not 1 <= int(response) <= 3 :
         return {"status": 0, "msg": "Response is missing"}
         
     else:
-        
+        response=int(response)
         access_token = checkToken(db,token)
         if not access_token:
             return {"status": -1, "msg": "Sorry! your login session expired. please login again."}
@@ -1391,8 +1403,8 @@ async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(Non
     
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    elif not page_number.isnumeric():
-        return {"status":-1,"msg":"Invalid page Number"}
+    elif not str(page_number).isnumeric():
+        return {"status":0,"msg":"Invalid page Number"}
     else:
         access_token=checkToken(db,token)
         
@@ -1405,7 +1417,7 @@ async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(Non
             
             current_page_no=int(page_number)
             
-            flag=flag if flag else 0
+            flag= flag if flag else 0
             
             my_friend_group=db.query(FriendGroups).join(FriendGroupMembers,FriendGroupMembers.group_id == FriendGroups.id,isouter=True)
             
@@ -1488,7 +1500,7 @@ async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(Non
                                         "chat_enabled":res.chat_enabled,
                                         "group_type":grouptype,
                                         "last_msg":get_group_chat.message if get_group_chat else "",
-                                        "last_msg_datetime":common_date(get_group_chat.sent_datetime) if get_group_chat else "",
+                                        "last_msg_datetime":(common_date(get_group_chat.sent_datetime) if get_group_chat.sent_datetime else "") if get_group_chat else "",
                                         "result_list":3,
                                         "group_member_ids":members,
                                         "group_members_list":memberlist
@@ -1506,9 +1518,15 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
                          
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    elif not page_number.isnumeric():
-        return {"status":-1,"msg":"Invalid page Number"}
+    elif not str(page_number).isnumeric():
+        return {"status":0,"msg":"Invalid page Number"}
+    elif nongrouped and not nongrouped.isnumeric():
+        return {"status":0,"msg":"Invalid nongrouped flag"}
+    elif allfriends and not allfriends.isnumeric():
+        return {"status":0,"msg":"Invalid allfriends flag"}
+        
     else:
+        nongrouped=int(nongrouped) if nongrouped else None
         access_token=checkToken(db,token)
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
@@ -1636,7 +1654,7 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
                                                 "unreadmsg":0,
                                                 "follow":True if get_follow_user_id else False,
                                                 "last_msg":get_last_msg.message if get_last_msg else "",
-                                                "last_msg_datetime":common_date(get_last_msg.sent_datetime) if get_last_msg else None,
+                                                "last_msg_datetime":(common_date(get_last_msg.sent_datetime) if get_last_msg.sent_datetime else "") if get_last_msg else None,
                                                 "login_from":friend_login_from,  #  1 - WEB, 2 - APP
                                                 "login_from_app":friend_requests.user2.app_online if friend_requests.receiver_id else "",  # 1 - true, 0 - False
                                                 "login_from_web":friend_requests.user2.web_online if friend_requests.receiver_id else ""   # 1 - true, 0 - False
@@ -1661,7 +1679,7 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
                                                 "unreadmsg":0,
                                                 "follow":True if get_follow_user_id else False,
                                                 "last_msg":get_last_msg.message if get_last_msg else "",
-                                                "last_msg_datetime":common_date(get_last_msg.sent_datetime) if get_last_msg else None,
+                                                "last_msg_datetime":(common_date(get_last_msg.sent_datetime) if get_last_msg.sent_datetime else "") if get_last_msg else None,
                                                 "login_from":friend_login_from,  #  1 - WEB, 2 - APP
                                                 "login_from_app":friend_requests.user1.app_online if friend_requests.sender_id else "",  # 1 - true, 0 - False
                                                 "login_from_web":friend_requests.user1.web_online if friend_requests.sender_id else ""   # 1 - true, 0 - False
@@ -2273,8 +2291,8 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
     
     elif nugget_type and not 0 <= int(nugget_type) <= 2:
         return {"status":0,"msg":"Invalid Nugget Type"}
-    elif not page_number.isnumeric():
-        return {"status":-1,"msg":"Invalid page Number"}
+    elif not str(page_number).isnumeric():
+        return {"status":0,"msg":"Invalid page Number"}
     else:
        
         access_token = checkToken(db,token) if token != 'RAWCAST' else True
@@ -2580,23 +2598,23 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
 async def likeandunlikenugget(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:str=Form(None),like:str=Form(None,description="1-like,2-unlike")):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    elif nugget_id == None:
+    elif nugget_id == None and not nugget_id.isnumeric():
         return {"status":0,"msg":"Nugget id is missing"}
     elif like == None:
         return {"status":0,"msg":"Like flag is missing"}
-    elif like != 1 and like != 2:
+    elif like and not like.isnumeric() and like != 1 and like != 2:
         return {"status":0,"msg":"Like flag is invalid"}
         
     else:
+        like=int(like) if like else None
         access_token=checkToken(db,token)
         
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
-            status=0
-            msg="Invalid nugget id"
+            
             get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
-            login_user_id=get_token_details.user_id
+            login_user_id=get_token_details.user_id if get_token_details else None
 
             if IsAccountVerified(db,login_user_id) == False:
                 return {"status":0,"msg":"You need to complete your account validation before you can do this"}
@@ -2611,7 +2629,7 @@ async def likeandunlikenugget(db:Session=Depends(deps.get_db),token:str=Form(Non
             if check_nuggets:
                 if like == 1:
                     checkpreviouslike=db.query(NuggetsLikes).filter(NuggetsLikes.nugget_id == nugget_id,NuggetsLikes.user_id == login_user_id).first()
-                    if checkpreviouslike:
+                    if not checkpreviouslike:
                         nuggetlike=NuggetsLikes(user_id=login_user_id,nugget_id=nugget_id,created_date=datetime.now())
                         db.add(nuggetlike)
                         db.commit()
@@ -2619,26 +2637,33 @@ async def likeandunlikenugget(db:Session=Depends(deps.get_db),token:str=Form(Non
                         if nuggetlike:
                             notification_type=5
                             Insertnotification(db,check_nuggets.user_id,login_user_id,notification_type,nugget_id)
-                            status=1
-                            msg = 'Success'
+                            
+                            return {"status":1,"msg":"Success"} 
+                            
                         else:
-                            msg='failed to like'
+                            return {"status":0,"msg":"failed to like"} 
                             
                     else:
-                        msg = 'Your already liked this nugget'
+                        return {"status":0,"msg":"Your already liked this nugget"} 
+                        
                 elif like == 2:
                     checkpreviouslike=db.query(NuggetsLikes).filter(NuggetsLikes.nugget_id == nugget_id,NuggetsLikes.user_id == login_user_id).first()
                     if checkpreviouslike:
                         deleteresult=db.query(NuggetsLikes).filter_by(id = checkpreviouslike.id ).delete()
+                        db.commit()
+                        
                         if deleteresult:
-                            status = 1
-                            msg="Success"
+                            return {"status":1,"msg":"Success"} 
+                            
                         else:
-                            msg='failed to unlike'
+                            return {"status":0,"msg":'failed to unlike'} 
+                            
                     else:
-                        msg='you not yet liked this nugget'
-            return {"status":status,"msg":msg} 
-
+                        return {"status":0,"msg":'you not yet liked this nugget'} 
+                        
+                else:
+                    return {"status":0,"msg":'Invalid Like type'} 
+                    
 
 
     
@@ -2655,7 +2680,7 @@ async def deletenugget(db:Session=Depends(deps.get_db),token:str=Form(None),nugg
         
     else:
         access_token=checkToken(db,token)
-        
+        nugget_id=int(nugget_id)
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
@@ -2699,6 +2724,7 @@ async def nuggetcommentlist(db:Session=Depends(deps.get_db),token:str=Form(None)
     elif not nugget_id:
         return {"status":0,"msg":"Nugget id is missing"}
     else:
+        nugget_id=int(nugget_id)
         access_token=checkToken(db,token)
         
         if access_token == False:
@@ -2793,13 +2819,20 @@ async def addnuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(None),
     
     elif not nugget_id:
         return {"status":0,"msg":"Nugget id is missing"}
-    
-    elif type == 2 and not comment_id:
+    elif type and not type.isnumeric():
+        return {"status":0,"msg":"Invalid type flag"}   
+    elif comment_id and not comment_id.isnumeric():
+        return {"status":0,"msg":"Invalid comment id"}
+    elif int(type) == 2 and not comment_id:
         return {"status":0,"msg":"comment id required"}
     elif comment == None or comment.strip() == '':
         return {"status":0,"msg":"comment is missing"}
+    elif nugget_id and not nugget_id.isnumeric():
+        return {"status":0,"msg":"Nugget id is missing"}
+        
     
     else:
+        type=int(type) if type else None
         access_token=checkToken(db,token)
         
         if access_token == False:
@@ -2858,11 +2891,11 @@ async def editnuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(None)
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif comment == None or comment.strip() == '':
         return {"status":0,"msg":"Comment is missing"}
-    elif comment_id == None :
+    elif comment_id == None or not comment_id.isnumeric():
         return {"status":0,"msg":"Comment_id is missing"}
     else:
         access_token=checkToken(db,token)
-        
+        comment_id=int(comment_id)
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
@@ -2895,7 +2928,7 @@ async def editnuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(None)
 async def deletenuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(None),comment_id:str=Form(None)):
         if token == None or token.strip() == "":
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-        elif comment_id == None:
+        elif comment_id == None or not comment_id.isnumeric():
             return {"status":0,"msg":"Comment_id is missing"}
             
         else:
@@ -2904,6 +2937,7 @@ async def deletenuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(Non
             if access_token == False:
                 return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
             else:
+                comment_id=int(comment_id)
                 status=0
                 msg="Invalid nugget id"
                 get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
@@ -2934,14 +2968,15 @@ async def deletenuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(Non
 async def likeandunlikenuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(None),comment_id:str=Form(None),like:str=Form(None,description="1->like 2->unlike")):
         if token == None or token.strip() == "":
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-        elif comment_id ==None:
+        elif comment_id == None or not comment_id.isnumeric():
             return {"status":0,"msg":"Comment id is missing"} 
         elif like == None:
             return {"status":0,"msg":"Like flag is missing"} 
-        elif like != 1 or like != 2:
+        elif like and not like.isnumeric() and (like != 1 or like != 2):
             return {"status":0,"msg":"Like flag is Invalid"} 
             
         else:
+            comment_id=int(comment_id)
             access_token=checkToken(db,token)
             
             if access_token == False:
@@ -3000,9 +3035,9 @@ async def nuggetandcommentlikeeduserlist(db:Session=Depends(deps.get_db),token:s
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif type == None:
         return {"status":0,"msg":"type is missing"}
-    elif type != 1 and type != 2:
+    elif type and not type.isnumeric() and (type != 1 and type != 2):
         return {"status":0,"msg":"type is invalid"}
-    elif id == None:
+    elif id == None or not id.isnumeric():
         return {"status":0,"msg":f"{'Nugget id is missing' if type == 1 else 'Comment id is missing' }"}
         
     else:
@@ -3060,15 +3095,16 @@ async def nuggetandcommentlikeeduserlist(db:Session=Depends(deps.get_db),token:s
 async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:str=Form(None),share_type:str=Form(None),metadata:str=Form(None),content:str=Form(None),delete_media_id:str=Form(None,description="[1,2,3]"),nuggets_media:UploadFile=File(None),share_with:str=Form(None,description=' {"friends":[1,2,3],"groups":[1,2,3]} ')):
     if token== None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    elif nugget_id == None:
+    elif nugget_id == None or not nugget_id.isnumeric() :
         return {"status":0,"msg":"Nugget id is missing"}
-    elif share_type == None:
+    elif share_type == None or not share_type.isnumeric():
         return {"status":0,"msg":"Sorry! Share type can not be empty."}
         
-    elif (share_type == 3 or share_type == 4 or share_type == 5) and not share_with :
+    elif (int(share_type) == 3 or int(share_type) == 4 or int(share_type) == 5) and not share_with :
         return {"status":0,"msg":"Sorry! Share with can not be empty."}
    
     else:
+        share_type=int(share_type)
         access_token=checkToken(db,token)
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
@@ -3276,9 +3312,11 @@ async def sharenugget(db:Session=Depends(deps.get_db),token:str=Form(None),nugge
     
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    elif nugget_id == None:
+    elif nugget_id == None or not nugget_id.isnumeric():
         return {"status":0,"msg":"nugget_id is missing"}
-    
+    elif share_type == None or not share_type.isnumeric():
+        return {"status":0,"msg":"Invalid Share type"}
+        
     else:
         access_token=checkToken(db,token)
         
@@ -3292,7 +3330,6 @@ async def sharenugget(db:Session=Depends(deps.get_db),token:str=Form(None),nugge
                 return {"status":0,"msg":"Sorry! Share with groups list missing."}
                 
             elif share_type == 4 and not share_with["friends"]:
-                print("hff")
                
                 return {"status":0,"msg":"Sorry! Share with friends list missing."}
             
@@ -3331,7 +3368,7 @@ async def sharenugget(db:Session=Depends(deps.get_db),token:str=Form(None),nugge
                                         friend_id = elem.id
                                         receiver_id = elem.receiver_id
                                         get_friends[friend_id] = receiver_id
-                                    print(get_friends)
+                                    
                                    
                                    
                                     
@@ -3424,7 +3461,7 @@ async def sharenugget(db:Session=Depends(deps.get_db),token:str=Form(None),nugge
 async def getnuggetdetail(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:str=Form(None)):
     if token== None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    elif nugget_id == None:
+    elif nugget_id == None or not nugget_id.isnumeric():
         return {"status":0,"msg":"Nugget_id is missing"}
         
     else:
@@ -3839,9 +3876,19 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
 async def listevents(db:Session=Depends(deps.get_db),token:str=Form(None),user_id:str=Form(None),event_type:str=Form(0,description="1->My Events, 2->Invited Events, 3->Public Events"),type_filter:str=Form(None,description="1 - Event,2 - Talkshow,3 - Live"),page_number:str=Form(default=1)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    elif not page_number.isnumeric():
-        return {"status":-1,"msg":"Invalid page Number"}
+    elif not str(page_number).isnumeric():
+        return {"status":0,"msg":"Invalid page Number"}
+    elif user_id and not user_id.isnumeric():
+        return {"status":0,"msg":"Invalid User id"}
+    elif event_type and not event_type.isnumeric():
+        return {"status":0,"msg":"Invalid Event type"}
+    elif type_filter and not type_filter.isnumeric():
+        return {"status":0,"msg":"Invalid Type Filter"}
+         
     else:
+        type_filter=int(type_filter) if type_filter else None
+        event_type=int(event_type) if event_type else None
+        user_id=int(user_id) if user_id else None
         
         access_token=checkToken(db,token)
         
@@ -4092,9 +4139,9 @@ async def listevents(db:Session=Depends(deps.get_db),token:str=Form(None),user_i
                                             "event_type_id":event.event_type_id,
                                             "event_layout_id":event.event_layout_id,
                                             "message":event.description if event.description else "",
-                                            "start_date_time":common_date(event.start_date_time) if event.created_at else "",
-                                            "start_date":common_date(event.start_date_time) if event.created_at else "",
-                                            "start_time":common_date(event.start_date_time) if event.created_at else "",
+                                            "start_date_time":(common_date(event.start_date_time) if event.start_date_time else "") if event.created_at else "",
+                                            "start_date":(common_date(event.start_date_time) if event.start_date_time else "") if event.created_at else "",
+                                            "start_time":common_date(event.start_date_time) if event.start_date_time else "" if event.created_at else "",
                                             "duration":event.duration,
                                             "no_of_participants":event.no_of_participants if event.no_of_participants else "",
                                             "banner_image":event.cover_img if event.cover_img else "",
@@ -4124,10 +4171,13 @@ async def listevents(db:Session=Depends(deps.get_db),token:str=Form(None),user_i
 async def deleteevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_id:str=Form(None)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    elif event_id == None:
+    elif event_id == None or not event_id.isnumeric():
         return {"status":0, "msg":"Event id is missing"}
+    elif not event_id.isnumeric():
+        return {"status":0, "msg":"Invalid Event id"}
         
     else:
+        event_id=int(event_id) if event_id else None
         access_token=checkToken(db,token)
         
         if access_token == False:
@@ -4157,9 +4207,12 @@ async def deleteevent(db:Session=Depends(deps.get_db),token:str=Form(None),event
 async def viewevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_id:str=Form(None)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    elif event_id == None:
+    elif event_id == None or not event_id.isnumeric():
         return {"status":0, "msg":"Event id is missing"}
+        
+        
     else:
+        event_id=int(event_id) if event_id else None
         access_token=checkToken(db,token)
         
         if access_token == False:
@@ -4216,9 +4269,13 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
     
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    elif event_id == None or not event_id.isnumeric():
+        return {"status":0, "msg":"Event id is missing"}
+    elif not event_id.isnumeric():
+        return {"status":0, "msg":"Invalid Event id "}
     if event_title == None or event_title.strip() == "":
         return {"status":0,"msg":"Event title cant be blank."}
-    elif event_type == None:
+    elif event_type == None or not event_type.isnumeric():
         return {"status":0,"msg":"Event type cant be blank."}
     elif event_start_date == None:
         return {"status":0,"msg":"Event start date cant be blank."}
@@ -4252,6 +4309,7 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
     elif event_duration and isTimeFormat(event_duration) == False:
         return {"status":0,"msg":"Invalid Time format"}
     else:
+        event_type=int(event_type) if event_type else None
         access_token=checkToken(db,token)
         
         if access_token == False:
@@ -4424,16 +4482,17 @@ async def listchatmessages(db:Session=Depends(deps.get_db),token:str=Form(None),
 
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    elif user_id == None:
+    elif user_id == None or not user_id.isnumeric():
         return {"status":0,"msg":"User id is missing"}
-    elif not page_number.isnumeric():
-        return {"status":-1,"msg":"Invalid page Number"}
+    elif not str(page_number).isnumeric():
+        return {"status":0,"msg":"Invalid page Number"}
     else:
         access_token=checkToken(db,token)
         
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
+            user_id=int(user_id) if user_id else None
             get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
             login_user_id=get_token_details.user_id
             
@@ -4485,7 +4544,7 @@ async def listchatmessages(db:Session=Depends(deps.get_db),token:str=Form(None),
                                        'is_deleted_for_both':res.is_deleted_for_both if res.is_deleted_for_both else None,
                                        'sender_delete':res.sender_delete if res.sender_delete else None,
                                        'receiver_delete':res.receiver_delete if receiver_delete else None,
-                                       'sender_deleted_datetime':common_date(res.sender_deleted_datetime)  if res.sender_deleted_datetime else None,
+                                       'sender_deleted_datetime':common_date(res.sender_deleted_datetime) if res.sender_deleted_datetime else None,
                                        'receiver_deleted_datetime':common_date(res.receiver_deleted_datetime) if res.receiver_deleted_datetime else None,
                                        'call_status':res.call_status if res.call_status else None,
                                        'msg_from':res.msg_from if res.msg_from else None,
@@ -4547,8 +4606,8 @@ async def uploadchatattachment(db:Session=Depends(deps.get_db),token:str=Form(No
 async def listnotifications(db:Session=Depends(deps.get_db),token:str=Form(None),page_number:str=Form(default=1)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    elif not page_number.isnumeric():
-        return {"status":-1,"msg":"Invalid page Number"}
+    elif not str(page_number).isnumeric():
+        return {"status":0,"msg":"Invalid page Number"}
     else:
         
         access_token=checkToken(db,token)
@@ -4811,8 +4870,8 @@ async def getothersprofile(db:Session=Depends(deps.get_db),token:str=Form(None),
 async def listallblockedusers(db:Session=Depends(deps.get_db),token:str=Form(None),search_key:str=Form(None),page_number:str=Form(default=1)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    elif not page_number.isnumeric():
-        return {"status":-1,"msg":"Invalid page Number"}
+    elif not str(page_number).isnumeric():
+        return {"status":0,"msg":"Invalid page Number"}
     else:
         
         access_token=checkToken(db,token)
@@ -4857,7 +4916,7 @@ async def listallblockedusers(db:Session=Depends(deps.get_db),token:str=Form(Non
                                 "gender":frnd_req.user2.gender if frnd_req.receiver_id else "",
                                 "profile_img":frnd_req.user2.profile_img if frnd_req.receiver_id else "",
                                 "online":frnd_req.user2.online if frnd_req.receiver_id else "",
-                                "last_seen":(common_date(frnd_req.user2.last_seen) if frnd_req.user2.last_seen else None) if frnd_req.receiver_id else "",
+                                "last_seen":((common_date(frnd_req.user2.last_seen) if frnd_req.user2.last_seen else "") if frnd_req.user2.last_seen else None) if frnd_req.receiver_id else "",
                                 "typing":0
                             }
                         )
@@ -4875,7 +4934,7 @@ async def listallblockedusers(db:Session=Depends(deps.get_db),token:str=Form(Non
                                 "gender":frnd_req.user1.gender if frnd_req.sender_id else "",
                                 "profile_img":frnd_req.user1.profile_img if frnd_req.sender_id else "",
                                 "online":frnd_req.user1.online if frnd_req.sender_id else "",
-                                "last_seen":(common_date(frnd_req.user1.last_seen) if frnd_req.user1.last_seen else None) if frnd_req.sender_id else "",
+                                "last_seen":((common_date(frnd_req.user1.last_seen) if frnd_req.user1.last_seen else "") if frnd_req.user1.last_seen else None) if frnd_req.sender_id else "",
                                 "typing":0
                             }
                         )
@@ -5100,7 +5159,13 @@ async def getusersettings(db:Session=Depends(deps.get_db),token:str=Form(None)):
                                 "time_zone":get_user_settings.time_zone,
                                 "default_date_format":get_user_settings.date_format,
                                 "mobile_default_page":get_user_settings.mobile_default_page,
-                                "account_active_inactive":get_user_settings.manual_acc_active_inactive
+                                "account_active_inactive":get_user_settings.manual_acc_active_inactive,
+                                "lock":{
+                                        "lock_nugget":get_user_settings.lock_nugget if get_user_settings.lock_nugget else 0,
+                                        "lock_fans":get_user_settings.lock_fans if get_user_settings.lock_fans else 0,
+                                        "lock_my_connection":get_user_settings.lock_my_connection if get_user_settings.lock_my_connection else 0,
+                                        "lock_my_influence":get_user_settings.lock_my_influence if get_user_settings.lock_my_influence else 0
+                                        }
                                 })
         
             return {"status":1,"msg":"Success","settings":result_list}
@@ -5113,22 +5178,25 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
            location_display_status:str=Form(None,description="0->Don't show,1->Public,2->Friends only,3->Special Group"),dob_display_status:str=Form(None,description="0->Don't show,1->Public,2->Friends only,3->Special Group"),bio_display_status:str=Form(None,description="0->Don't show,1->Public,2->Friends only,3->Special Group"),
            friend_request:str=Form(None,description="3 digit 000 to 111, 1st digit->Push notify , 2nd digit->Email notify,3rd digit->SMS"),nuggets:str=Form(None,description="3 digit 000 to 111, 1st digit->Push notify , 2nd digit->Email notify,3rd digit->SMS"),events:str=Form(None,description="3 digit 000 to 111, 1st digit->Push notify , 2nd digit->Email notify,3rd digit->SMS"),
            passcode_status:str=Form(None,description="1->Enabled,0->Disabled"),passcode:str=Form(None),waiting_room:str=Form(None,description="1->Enabled,0->Disabled"),schmoozing_status:str=Form(None,description="1->Enabled,0->Disabled"),breakout_status:str=Form(None,description="1->Enabled,0->Disabled"),join_before_host:str=Form(None,description="1->Enabled,0->Disabled"),auto_record:str=Form(None,description="1->Enabled,0->Disabled"),
-           participant_join_sound:str=Form(None,description="1->Sound On,0->Sound Off"),screen_share_status:str=Form(None,description="1->Enabled,0->Disabled"),virtual_background:str=Form(None,description="1->Enabled,0->Disabled"),host_audio:str=Form(None,description="1->On,0->Off"),host_video:str=Form(None),participant_audio:str=Form(None,description="1->On,0->Off"),participant_video:str=Form(None,description="1->On,0->Off"),melody:str=Form(None),
+           participant_join_sound:str=Form(None,description="1->Sound On,0->Sound Off"),screen_share_status:str=Form(None,description="1->Enabled,0->Disabled"),virtual_background:str=Form(None,description="1->Enabled,0->Disabled"),host_audio:str=Form(None,description="1->On,0->Off"),host_video:str=Form(None),participant_audio:str=Form(None,description="1->On,0->Off"),participant_video:str=Form(None,description="1->On,0->Off"),
+           melody:str=Form(None),
            meeting_header_image:UploadFile=File(None),language_id:str=Form(None,description="table 65"),time_zone:str=Form(None,description='get from 64'),date_format:str=Form(None),mobile_default_page:str=Form(None,description="1->nuggets,2->events,3->chats"),
            default_melody:UploadFile=File(None),event_type:str=Form(None),public_nugget_display:str=Form(None),
-           public_event_display:str=Form(None),manual_acc_active_inactive:str=Form(None)):
+           public_event_display:str=Form(None),manual_acc_active_inactive:str=Form(None),
+           lock_nugget:str=Form(None,description="1-Yes,0-No"),lock_fans:str=Form(None,description="1-Yes,0-No"),
+           lock_my_connection:str=Form(None,description="1-Yes,0-No"),lock_my_influence:str=Form(None,description="1-Yes,0-No")):
     
     if token== None or token.strip()=="":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     
     else:
-        access_token=checkToken(token.strip())
+        access_token=checkToken(db,token.strip())
         if access_token == False:
             return {"sttaus":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
-            get_token_details=db.query(ApiTokens).filter(ApiTokens.token==token.strip()).all()
-            for res in get_token_details:
-                login_user_id=res.user_id
+            get_token_details=db.query(ApiTokens).filter(ApiTokens.token==access_token.strip()).first()
+            login_user_id=get_token_details.user_id if get_token_details else None
+            
             user_setting_id=''
             
             get_user_settings=db.query(UserSettings).filter(UserSettings.status==1,UserSettings.user_id==login_user_id).first()
@@ -5247,20 +5315,53 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                                 meeting_header_image=result['url']
                             else:
                                 return result
-      
+
+                    breakout_status=int(breakout_status) if breakout_status and breakout_status.isnumeric() else settings.breakout_status
+                    waiting_room=int(waiting_room) if waiting_room and waiting_room.isnumeric() else settings.waiting_room
+                    online_status=int(online_status) if online_status and online_status.isnumeric() else settings.online_status
+                    phone_display_status=int(phone_display_status) if phone_display_status and phone_display_status.isnumeric() else settings.phone_display_status
+                    location_display_status=int(location_display_status) if location_display_status and location_display_status.isnumeric() else settings.location_display_status
+                    dob_display_status=int(dob_display_status) if dob_display_status and dob_display_status.isnumeric() else settings.dob_display_status
+                    bio_display_status=int(bio_display_status) if bio_display_status and bio_display_status.isnumeric() else settings.bio_display_status
+                    friend_request=friend_request if friend_request and friend_request.isnumeric() else settings.friend_request
+                    passcode_status=int(passcode_status) if passcode_status and passcode_status.isnumeric() else settings.passcode_status
+                    schmoozing_status=int(schmoozing_status) if schmoozing_status and schmoozing_status.isnumeric() else settings.schmoozing_status
+                    join_before_host=int(join_before_host) if join_before_host and join_before_host.isnumeric() else settings.join_before_host
+                    auto_record=int(auto_record) if auto_record and auto_record.isnumeric() else settings.auto_record
+                    participant_join_sound=int(participant_join_sound) if participant_join_sound and participant_join_sound.isnumeric() else settings.participant_join_sound
+                    screen_share_status=int(screen_share_status) if screen_share_status and screen_share_status.isnumeric() else settings.screen_share_status
+                    virtual_background=int(virtual_background) if virtual_background and virtual_background.isnumeric() else settings.virtual_background
+                    host_audio=int(host_audio) if host_audio and host_audio.isnumeric() else settings.host_audio
+                    host_video=int(host_video) if host_video and host_video.isnumeric() else settings.host_video
+                    participant_audio=int(participant_audio) if participant_audio and participant_audio.isnumeric() else settings.participant_audio
+                    participant_video=int(participant_video) if participant_video and participant_video.isnumeric() else settings.participant_video
+                    melody=int(melody) if melody and melody.isnumeric() else settings.melody
+                    language_id=int(language_id) if language_id and language_id.isnumeric() else settings.language_id
+                    time_zone=time_zone if time_zone  else settings.time_zone
+                    mobile_default_page=int(mobile_default_page) if mobile_default_page and mobile_default_page.isnumeric() else settings.mobile_default_page
+                    public_nugget_display=int(public_nugget_display) if public_nugget_display and public_nugget_display.isnumeric() else settings.public_nugget_display
+                    public_event_display=int(public_event_display) if public_event_display and public_event_display.isnumeric() else settings.public_event_display
+                    manual_acc_active_inactive=int(manual_acc_active_inactive) if manual_acc_active_inactive and manual_acc_active_inactive.isnumeric() else settings.manual_acc_active_inactive
+                    event_type=int(event_type) if event_type and event_type.isnumeric() else settings.default_event_type
+                    
+                    lock_nugget=int(lock_nugget) if lock_nugget and lock_nugget.isnumeric() else settings.lock_nugget
+                    lock_fans=int(lock_fans) if lock_fans and lock_fans.isnumeric() else settings.lock_fans
+                    lock_my_connection=int(lock_my_connection) if lock_my_connection and lock_my_connection.isnumeric() else settings.lock_my_connection
+                    lock_my_influence=int(lock_my_influence) if lock_my_influence and lock_my_influence.isnumeric() else settings.lock_my_influence
+                    
                     settings.online_status=online_status if online_status  and online_status>=0 else settings.online_status
                     settings.phone_display_status=phone_display_status if phone_display_status and phone_display_status>=0 else settings.phone_display_status
                     settings.location_display_status=location_display_status if location_display_status and location_display_status>=0 else settings.location_display_status
                     settings.dob_display_status=dob_display_status if dob_display_status and dob_display_status>=0 else settings.dob_display_status
                     settings.bio_display_status =bio_display_status if bio_display_status and bio_display_status>=0 else settings.bio_display_status
-                    settings.friend_request=friend_request if friend_request and len(friend_request.strip())==3 else settings.friend_request 
-                    settings.nuggets =nuggets if nuggets and len(nuggets.strip)==3 else settings.nuggets
+                    settings.friend_request=friend_request if friend_request and len(friend_request.strip()) == 3 else settings.friend_request 
+                    settings.nuggets =nuggets if nuggets and len(nuggets.strip())==3 else settings.nuggets
                     settings.events=events if events and len(events.strip())==3 else settings.events
                     settings.passcode_status=passcode_status if passcode_status and 1>=passcode_status>=0 else settings.passcode_status
-                    settings.passcode =passcode if passcode and passcode.strip!="" else settings.passcode
-                    settings.waiting_room=waiting_room if waiting_room and 1>=waiting_room>=0 else settings.waiting_room
+                    settings.passcode =passcode if passcode and passcode.strip()!="" else settings.passcode
+                    settings.waiting_room=waiting_room if int(waiting_room) and 1>= int(waiting_room) >=0 else settings.waiting_room
                     settings.schmoozing_status=schmoozing_status if schmoozing_status and 1>=schmoozing_status>=0 else settings.schmoozing_status
-                    settings.breakout_status=breakout_status if breakout_status and 0<=breakout_status<=1 else settings.breakout_status
+                    settings.breakout_status=breakout_status if breakout_status and 0<= breakout_status<=1 else settings.breakout_status
                     settings.join_before_host =join_before_host if join_before_host and 0<=join_before_host<=1 else settings.join_before_host
                     settings.auto_record=auto_record if auto_record and  0<= auto_record<=1 else settings.auto_record
                     settings.participant_join_sound =participant_join_sound  if participant_join_sound  and 0<=participant_join_sound <=1 else settings.participant_join_sound
@@ -5270,10 +5371,10 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                     settings.host_video=host_video if host_video and 0<=host_video<=1 else settings.host_video
                     settings.participant_audio=participant_audio if participant_audio and 0<=participant_audio<=1 else settings.participant_audio
                     settings.participant_video=participant_video if participant_video and 0<=participant_video<=1 else settings.participant_video
-                    settings.melody=melody if melody and melody>=0 else settings.melody
+                    settings.melody=melody if melody and melody >= 0 else settings.melody
                     settings.meeting_header_image=meeting_header_image
                     settings.language_id=language_id if language_id and language_id>0 else settings.language_id
-                    settings.time_zone=time_zone if time_zone and time_zone>0 else settings.time_zone
+                    settings.time_zone=time_zone if time_zone else settings.time_zone
                     settings.date_format=date_format if date_format!="" and date_format!=None else settings.date_format
                     settings.mobile_default_page =mobile_default_page  if mobile_default_page and 0<mobile_default_page <=3 else settings.mobile_default_page 
                     settings.public_nugget_display=public_nugget_display if public_nugget_display and public_nugget_display>0 else settings.public_nugget_display
@@ -5281,6 +5382,10 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                     settings.manual_acc_active_inactive=manual_acc_active_inactive  if manual_acc_active_inactive  and manual_acc_active_inactive >0 else settings.manual_acc_active_inactive
                     settings.default_event_type=event_type if event_type and event_type>0 else settings.default_event_type
 
+                    settings.lock_nugget=lock_nugget
+                    settings.lock_fans=lock_fans
+                    settings.lock_my_connection=lock_my_connection
+                    settings.lock_my_influence=lock_my_influence
                     db.commit()
 
                     return {"status":1,"msg":"Success","url":meeting_header_image,"default_melody":default_melody if default_melody else None}
@@ -5385,8 +5490,8 @@ async def globalsearchevents(db:Session=Depends(deps.get_db),token:str=Form(None
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif search_key == None:
         return {"status":0,"msg":"Search Key missing"}
-    elif not page_number.isnumeric():
-        return {"status":-1,"msg":"Invalid page Number"}
+    elif not str(page_number).isnumeric():
+        return {"status":0,"msg":"Invalid page Number"}
     else:
         access_token=checkToken(db,token)
         
@@ -5483,7 +5588,7 @@ async def globalsearchnuggets(db:Session=Depends(deps.get_db),token:str=Form(Non
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     if search_key == None:
         return {"status":0,"msg":"Search Key missing"}
-    elif not page_number.isnumeric():
+    elif not str(page_number).isnumeric():
         return {"status":0,"msg":"Invalid Page Number"}
     else:
         access_token=checkToken(db,token)
@@ -6141,8 +6246,8 @@ async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),use
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif type == None:
         return {"status":0,"msg":"Type is missing"}
-    elif not page_number.isnumeric():
-        return {"status":-1,"msg":"Invalid page Number"}
+    elif not str(page_number).isnumeric():
+        return {"status":0,"msg":"Invalid page Number"}
     else:
         access_token=checkToken(db,token)
         
@@ -6206,7 +6311,7 @@ async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),use
                         'gender': follow.user2.gender if follow.user2.gender != '' else '',
                         'profile_img': follow.user2.profile_img if follow.user2.profile_img != '' else '',
                         'online': ProfilePreference(db,login_user_id, follow.user2.id, 'online_status', follow.user2.online),
-                        'last_seen': common_date(follow.user2.last_seen) if follow.user2.last_seen != '' else '',
+                        'last_seen': (common_date(follow.user2.last_seen) if follow.user2.last_seen else "") if follow.user2.last_seen != '' else '',
                         'follow': True if followback else False   
                     }
                 else:
@@ -6222,7 +6327,7 @@ async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),use
                         'gender': follow.user1.gender if follow.user1.gender != '' else '',
                         'profile_img': follow.user1.profile_img if follow.user1.profile_img != '' else '',
                         'online': ProfilePreference(db,login_user_id, follow.user1.id, 'online_status', follow.user1.online),
-                        'last_seen': common_date(follow.user1.last_seen) if follow.user1.last_seen != '' else '',
+                        'last_seen': ((common_date(follow.user1.last_seen) if follow.user1.last_seen else "") if follow.user1.last_seen else "") if follow.user1.last_seen != '' else '',
                         'follow': True if followback else False
                     }
                     i=i+1
@@ -6240,6 +6345,9 @@ async def addnuggetview(db:Session=Depends(deps.get_db),token:str=Form(None),nug
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     if nugget_id == None:
         return {"status":0,"msg":"Nugget id is missing"}
+    elif not nugget_id.isnumeric():
+        return {"status":0,"msg":"Invalid Nugget id type"}
+        
     else:
         access_token=checkToken(db,token)
         
@@ -6249,7 +6357,9 @@ async def addnuggetview(db:Session=Depends(deps.get_db),token:str=Form(None),nug
             get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).all()
             for res in get_token_details:
                 login_user_id=res.user_id
-            nugget_id=nugget_id if nugget_id>0 else ""
+                
+            nugget_id=int(nugget_id) if int(nugget_id) > 0 else ""
+            
             access_check=NuggetAccessCheck(db,login_user_id,nugget_id)
             if not access_check:
                 return {"status":0,"msg":"Unauthorized access"}
@@ -6272,8 +6382,8 @@ async def addnuggetview(db:Session=Depends(deps.get_db),token:str=Form(None),nug
 async def getreferrallist(db:Session=Depends(deps.get_db),token:str=Form(None),page_number:str=Form(default=1)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    elif not page_number.isnumeric():
-        return {"status":-1,"msg":"Invalid page Number"}
+    elif not str(page_number).isnumeric():
+        return {"status":0,"msg":"Invalid page Number"}
     else:
         
         access_token=checkToken(db,token)
@@ -6552,6 +6662,8 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
         return {"status":0,"msg":"Event start time is missing"}
     elif event_id == None:
         return {"status":0,"msg":"Event ID cant be blank"}
+    elif not event_id.isnumeric():
+        return {"status":0, "msg":"Invalid Event id "}
     elif event_banner == None:
         return {"status":0,"msg":"Event Banner is missing"}
     elif event_start_date and is_date(event_start_date) == False:
@@ -6812,6 +6924,9 @@ async def enablegoliveevent(db:Session=Depends(deps.get_db),token:str=Form(None)
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     if event_id == None:
         return {"status":0,"msg":"Event ID cant be blank."}
+    elif not event_id.isnumeric() :
+        return {"status":0,"msg":"Invalid Event ID"}
+        
     else:
         access_token=checkToken(db,token)
         
@@ -6826,7 +6941,7 @@ async def enablegoliveevent(db:Session=Depends(deps.get_db),token:str=Form(None)
             if IsAccountVerified(db,login_user_id) == False:
                 return {"status":0,"msg":"You need to complete your account validation before you can do this"}
             
-            event_id=event_id if event_id>0 else None
+            event_id=int(event_id) if int(event_id) > 0 else None
             if event_id==None :
                 return {"status":0,"msg":"Event ID cant be blank."}
             else:
@@ -7060,8 +7175,8 @@ async def influencerlist(db:Session=Depends(deps.get_db),token:str=Form(None),se
         return {"status":-1,"msg":"Sorry! your login session expired. please login again"}
     elif auth_code == None or auth_code.strip() == '':
         return {"status":0,"msg":"Auth code is missing"}
-    elif not page_number.isnumeric():
-        return {"status":-1,"msg":"Invalid page Number"} 
+    elif not str(page_number).isnumeric():
+        return {"status":0,"msg":"Invalid page Number"} 
     
     access_token=checkToken(db,token) if token != "RAWCAST" else True
     auth_code=auth_code.strip()
@@ -7078,6 +7193,7 @@ async def influencerlist(db:Session=Depends(deps.get_db),token:str=Form(None),se
             get_token_details=db.query(ApiTokens).filter(ApiTokens.token==token).first()
             if get_token_details:
                 login_user_id=get_token_details.user_id
+                
             api_search_key=search_key if search_key!=None and (search_key.strip()!=None or search_key.strip()!="") else None
             api_category=category if category !=None and category>0 else None
             
@@ -7302,8 +7418,8 @@ async def tagslist(db:Session=Depends(deps.get_db),token:str=Form(None),search_t
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif auth_code == None:
         return {"status":0,"msg":"Authcode is missing"}
-    elif not page_number.isnumeric():
-        return {"status":-1,"msg":"Invalid page Number"} 
+    elif not str(page_number).isnumeric():
+        return {"status":0,"msg":"Invalid page Number"} 
     else:
         if checkAuthCode(db,token) == False:
             return {"status":0,"msg":"Authentication failed!"}
@@ -7384,11 +7500,13 @@ async def tagslist(db:Session=Depends(deps.get_db),token:str=Form(None),search_t
 async def saveandunsavenugget(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:str=Form(None),save:str=Form(None,description="1-save,2-unsave")):
     if token== None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    if nugget_id == None:
+    
+    elif nugget_id == None or not nugget_id.isnumeric():
         return {"status":0,"msg":"Nugget Id is required"}
-    if not save:
+    elif not save or not save.isnumeric():
         return {"status":0,"msg":"Save flag is missing"}
-    if save != 1 and save != 2:
+    
+    if int(save) != 1 and int(save) != 2:
         return {"status":0,"msg":"Save flag is invalid"}
     
     else:

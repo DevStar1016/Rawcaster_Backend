@@ -39,6 +39,12 @@ class UserSettings(Base):
     mobile_default_page=Column(TINYINT,default=1)
     default_event_type=Column(TINYINT,default=1)
     manual_acc_active_inactive=Column(TINYINT,default=1)
+    # New Column
+    lock_nugget=Column(TINYINT,comment="1-Yes,0-No",default=0)
+    lock_fans=Column(TINYINT,comment="1-Yes,0-No",default=0)
+    lock_my_connection=Column(TINYINT,comment="1-Yes,0-No",default=0)
+    lock_my_influence=Column(TINYINT,comment="1-Yes,0-No",default=0)
+    
     status=Column(TINYINT,default=1)
    
     user=relationship("User",back_populates="user_settings")   
