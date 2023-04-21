@@ -23,7 +23,7 @@ import sys
 from PIL import Image
 import time
 from dateutil.parser import parse
-
+import subprocess
 
 def is_date(string, fuzzy=False):
     try: 
@@ -71,6 +71,65 @@ def file_upload(file_name,compress):
             
     return save_full_path
 
+
+async def video_file_upload(upload_file,compress):
+    uploads_file_name=upload_file.filename
+    
+    base_dir = os.getcwd()
+    try:
+        os.makedirs(base_dir, mode=0o777, exist_ok=True)
+    except OSError as e:
+        sys.exit("Can't create {dir}: {err}".format(
+            dir=base_dir, err=e))
+
+    output_dir = base_dir + "/"
+    
+    characters = string.ascii_letters + string.digits
+    # Generate the random string
+    random_string = ''.join(random.choice(characters) for i in range(18))
+    
+    ext = os.path.splitext(uploads_file_name)[-1].lower()
+    filename=f"Image_{random_string}.mp4"    
+   
+    save_full_path=f'{output_dir}{filename}'  
+      
+    with open(save_full_path, "wb") as buffer:
+        buffer.write(await upload_file.read())
+    if compress:
+        command = f"ffmpeg -i {save_full_path} -vcodec libx265 -crf 50 {save_full_path}"
+        subprocess.run(command, shell=True, check=True)
+         
+    return save_full_path
+    
+
+async def audio_file_upload(upload_file,compress):
+    uploads_file_name=upload_file.filename
+    
+    base_dir = os.getcwd()
+    try:
+        os.makedirs(base_dir, mode=0o777, exist_ok=True)
+    except OSError as e:
+        sys.exit("Can't create {dir}: {err}".format(
+            dir=base_dir, err=e))
+
+    output_dir = base_dir + "/"
+    
+    characters = string.ascii_letters + string.digits
+    # Generate the random string
+    random_string = ''.join(random.choice(characters) for i in range(18))
+    
+    ext = os.path.splitext(uploads_file_name)[-1].lower()
+    filename=f"Image_{random_string}.mp3"    
+   
+    save_full_path=f'{output_dir}{filename}'  
+      
+    with open(save_full_path, "wb") as buffer:
+        buffer.write(await upload_file.read())
+    if compress:
+        subprocess.run(["ffmpeg", "-i", save_full_path, "-ab", "32k", "-y", save_full_path])
+         
+    return save_full_path
+    
 
 
 def upload_to_s3(local_file_pth,s3_bucket_path):
@@ -815,12 +874,14 @@ def get_friend_requests(db,login_user_id,requested_by,request_status,response_ty
         get_my_friends=get_my_friends.filter(MyFriends.request_status.in_([request_status]))
     
     get_my_friends=get_my_friends.all()
+    
     if get_my_friends:
         
         for frnd_request in get_my_friends:
             friend_details=[]
             if frnd_request.sender_id == login_user_id:    # Receiver
                 friend_id=frnd_request.receiver_id
+                print(friend_id)
                 friend_details.append({"friend_request_id":frnd_request.id,
                                        "user_ref_id":frnd_request.user1.user_ref_id if frnd_request.receiver_id else None,
                                        "user_id":frnd_request.user1.id if frnd_request.receiver_id else None,
@@ -833,6 +894,7 @@ def get_friend_requests(db,login_user_id,requested_by,request_status,response_ty
                                     })
                 
             else:
+                print(frnd_request.sender_id)
                 friend_id=frnd_request.sender_id
                 friend_details.append({"friend_request_id":frnd_request.id,
                                        "user_ref_id":frnd_request.user1.user_ref_id if frnd_request.sender_id else None,
@@ -856,13 +918,13 @@ def get_friend_requests(db,login_user_id,requested_by,request_status,response_ty
                     blocked.append(friend_id) # if blocked
             else:
                 if frnd_request.request_status == 0:
-                    pending.append(friend_details)
+                    pending += friend_details
                 elif frnd_request.request_status == 1:
-                    accepted.append(friend_details)
+                    accepted += friend_details
                 elif frnd_request.request_status == 2:
-                    rejected.append(friend_details)
+                    rejected += friend_details
                 elif frnd_request.request_status == 3:
-                    blocked.append(friend_details)
+                    blocked += friend_details
                 
     return {"pending":pending,"accepted":accepted,"rejected":rejected,"blocked":blocked}
                   
@@ -1546,12 +1608,12 @@ def ChangeReferralExpiryDate(db,referrerid):
         
 def checkToken(db,access_token):
     try:
-    
+        access_token=access_token.strip()
         payload = jwt.decode(access_token, st.SECRET_KEY, algorithms=['HS256'])        
         
         if payload != "" or payload != None:
             access_token=payload['token']
-            get_token_details=db.query(ApiTokens).filter(ApiTokens.status == 1,ApiTokens.token == access_token.strip()).first()
+            get_token_details=db.query(ApiTokens).filter(ApiTokens.status == 1,ApiTokens.token == access_token).first()
             if not get_token_details:
                 return False
             current_time=int(datetime.utcnow().timestamp())

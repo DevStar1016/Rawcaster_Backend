@@ -52,3 +52,6 @@ from .nuggets_attachment import NuggetsAttachment
 from .nuggets_comments import NuggetsComments
 from .nuggets_comments_likes import NuggetsCommentsLikes
 from .nuggets_likes import NuggetsLikes
+
+# New
+from .event_abuse_report import EventAbsueReport

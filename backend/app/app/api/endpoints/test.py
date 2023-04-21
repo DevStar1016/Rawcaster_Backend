@@ -28,7 +28,7 @@ access_secret="Os6IsUAOPbJybMYxAdqUAAUL58xCIUlaD08Tsgj2"
 async def upload_audio(audio: UploadFile = File(...)):
     filename = audio.filename
     input_path = os.path.abspath(audio.filename)
-    return input_path
+    
     output_path = f"/home/mae3/Music/{audio.filename}_compressed.mp3"
    
 
@@ -37,6 +37,26 @@ async def upload_audio(audio: UploadFile = File(...)):
 
     subprocess.run(["ffmpeg", "-i", input_path, "-ab", "32k", "-y", output_path])
 
+
+
+@router.post("/upload-video/")
+async def upload_video(video: UploadFile = File(...), target_size_kb: int = 100):
+  
+     
+    file_path = os.path.abspath(video.filename)
+    print(file_path)
+    with open(file_path, "wb") as buffer:
+        buffer.write(await video.read())
+
+    output_file = f"/home/mae3/Music/{video.filename[:-4]}_converted.mp4"
+    command = f"ffmpeg -i {file_path} -vcodec libx265 -crf 50 {output_file}"
+    subprocess.run(command, shell=True, check=True)
+
+    compressed_size = os.path.getsize(output_file) // 1024
+
+ 
+
+    return compressed_size
 
 
 # from io import BytesIO

@@ -43,7 +43,10 @@ class UserSettings(Base):
     lock_nugget=Column(TINYINT,comment="1-Yes,0-No",default=0)
     lock_fans=Column(TINYINT,comment="1-Yes,0-No",default=0)
     lock_my_connection=Column(TINYINT,comment="1-Yes,0-No",default=0)
-    lock_my_influence=Column(TINYINT,comment="1-Yes,0-No",default=0)
+    lock_my_influencer=Column(TINYINT,comment="1-Yes,0-No",default=0)
+    live_event_banner=Column(String(500))
+    talkshow_event_banner=Column(String(500))
+    
     
     status=Column(TINYINT,default=1)
    

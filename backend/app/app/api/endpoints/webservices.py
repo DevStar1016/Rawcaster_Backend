@@ -12,7 +12,7 @@ import json
 import pytz
 import boto3
 from urllib.parse import urlparse
-
+from sqlalchemy.orm import aliased
 
 router = APIRouter() 
 
@@ -807,7 +807,7 @@ def user_profile(db,id):
                             "is_profile_updated":1 if get_user.dob != "" and get_user.gender != "" else 0,
                             "name":get_user.display_name if get_user.display_name else "",
                             "email_id":get_user.email_id if get_user.email_id else "",
-                            "mobile":get_user.mobile_no if get_user.mobile_no else "",
+                            "mobile":str(get_user.mobile_no) if get_user.mobile_no else "",
                             "profile_image":get_user.profile_img if get_user.profile_img else "",
                             "cover_image":get_user.cover_image if get_user.cover_image else "",
                             "website":get_user.website if get_user.website else "",
@@ -1293,8 +1293,7 @@ async def listallfriendrequests(db:Session=Depends(deps.get_db),token:str=Form(N
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
             get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
-            login_user_id=get_token_details.user_id
-            login_user_name=get_token_details.user.first_name
+            login_user_id=get_token_details.user_id if get_token_details else None
             
             response_type=0
             request_status=0
@@ -1452,9 +1451,7 @@ async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(Non
                         groupname=f"Influencer: {(res.user.display_name if res.user.display_name else '') if res.created_by else ''}"
 
                     get_group_chat=db.query(GroupChat).filter(GroupChat.status == 1,GroupChat.group_id == res.id).order_by(GroupChat.id.desc()).first()
-                    
-                    result_list.append({})
-                    
+                                        
                     memberlist=[]
                     members=[]
                     membercount=0
@@ -1526,7 +1523,9 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
         return {"status":0,"msg":"Invalid allfriends flag"}
         
     else:
+        allfriends=int(allfriends) if allfriends else None
         nongrouped=int(nongrouped) if nongrouped else None
+        
         access_token=checkToken(db,token)
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
@@ -1542,7 +1541,7 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
             my_friends_ids=[]
             
             # Step 1) Get all active friends of logged in user (if requested for all friends list)
-            if allfriends and allfriends == 1:
+            if allfriends == 1:
                 get_all_friends=db.query(MyFriends).filter(MyFriends.status == 1,MyFriends.request_status == 1,or_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == login_user_id)).all()
                 
                 if get_all_friends:
@@ -1550,69 +1549,70 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
                         my_friends_ids.append(frnds.id)
                 
             
-            else:  #  # Step 2) Get all active friends of logged in user (based on requested conditions)
-                # Step 2.1) Get all non grouped friends
-                all_group_friends=set()
+            # else:  #  # Step 2) Get all active friends of logged in user (based on requested conditions)
+            #     # Step 2.1) Get all non grouped friends
+            #     all_group_friends=set()
                 
-                if nongrouped and nongrouped == 1:
-                    get_all_group_friends=db.query(FriendGroupMembers).filter(FriendGroupMembers.group_id == FriendGroups.id,FriendGroupMembers.status == 1,FriendGroups.status == 1,FriendGroups.created_by == login_user_id).all()
+            #     if nongrouped == 1:
                     
-                    all_group_friends=[gp_user.user_id for gp_user in get_all_group_friends]
-
-                    # Step 2.1.2) Get all friends who are all not invloved any one of the group
-                    get_all_non_group_friends=db.query(MyFriends).filter(MyFriends.status == 1 ,MyFriends.request_status == 1)
-
-                    if all_group_friends:
-                        group_members_ids= ",".join(all_group_friends)
-                        get_all_non_group_friends=get_all_non_group_friends.filter(or_(MyFriends.sender_id == login_user_id,MyFriends.sender_id.not_in(group_members_ids)) | (MyFriends.receiver_id.not_in(group_members_ids),MyFriends.receiver_id == login_user_id))
-                    else:
-                        get_all_non_group_friends=get_all_non_group_friends.filter(or_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == login_user_id))
-
-                    get_all_non_group_friends=get_all_non_group_friends.all()
+            #         get_all_group_friends=db.query(FriendGroupMembers).join(FriendGroups,FriendGroupMembers.group_id == FriendGroups.id,isouter=True).filter(FriendGroupMembers.status == 1,FriendGroups.status == 1,FriendGroups.created_by == login_user_id).all()
                     
-                    if get_all_non_group_friends:
-                        for frnds in get_all_non_group_friends:
-                            my_friends_ids.append(frnds.id)
+            #         all_group_friends=[gp_user.user_id for gp_user in get_all_group_friends]
+
+            #         # Step 2.1.2) Get all friends who are all not invloved any one of the group
+            #         get_all_non_group_friends=db.query(MyFriends).filter(MyFriends.status == 1 ,MyFriends.request_status == 1)
+
+            #         if all_group_friends:
+            #             group_members_ids= ",".join(all_group_friends)
+            #             get_all_non_group_friends=get_all_non_group_friends.filter(or_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id.not_in(group_members_ids)),MyFriends.sender_id.not_in(group_members_ids),MyFriends.receiver_id == login_user_id)
+
+            #         else:
+            #             get_all_non_group_friends=get_all_non_group_friends.filter(or_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == login_user_id))
+
+            #         get_all_non_group_friends=get_all_non_group_friends.all()
+                    
+            #         if get_all_non_group_friends:
+            #             for frnds in get_all_non_group_friends:
+            #                 my_friends_ids.append(frnds.id)
                        
                 
-                # Step 2.2) Get all friends who are already in requested groups
-                if group_ids and group_ids.split != "":
-                    requested_group_friends=set()
-                    requested_group_ids=group_ids
+            #     # Step 2.2) Get all friends who are already in requested groups
+            #     if group_ids:
+            #         requested_group_friends=set()
+            #         requested_group_ids=json.loads(group_ids)
                     
-                    if requested_group_ids and requested_group_ids != []:
-                        # Step 2.2.1) Get all friends who are already in requested groups
-                        get_requested_group_members=db.query(FriendGroupMembers).filter(FriendGroupMembers.group_id == FriendGroups.id,FriendGroupMembers.status == 1,FriendGroups.status == 1,FriendGroups.created_by ==login_user_id)
-                        get_requested_group_members=get_requested_group_members.filter(FriendGroupMembers.group_id.in_(requested_group_ids)).all()
-                        
-                        if get_requested_group_members:
-                            requested_group_friends=[req_frnd.user_id for req_frnd in get_requested_group_members]
+            #         if requested_group_ids :
+            #             # Step 2.2.1) Get all friends who are already in requested groups
+            #             get_requested_group_members=db.query(FriendGroupMembers).join(FriendGroups,FriendGroupMembers.group_id == FriendGroups.id,isouter=True).filter(FriendGroupMembers.status == 1,FriendGroups.status == 1,FriendGroups.created_by == login_user_id,FriendGroupMembers.group_id.in_(requested_group_ids)).all()
+                       
+            #             if get_requested_group_members:
+            #                 requested_group_friends=[req_frnd.user_id for req_frnd in get_requested_group_members]
                     
-                            # Step 2.2.2) Get all friends who are already in requested groups
-                            get_all_requested_group_friends=db.query(MyFriends).filter(MyFriends.status == 1,MyFriends.request_status == 1)
+            #                 # Step 2.2.2) Get all friends who are already in requested groups
+            #                 get_all_requested_group_friends=db.query(MyFriends).filter(MyFriends.status == 1,MyFriends.request_status == 1)
 
-                            if requested_group_friends:
-                                requested_group_friends_ids= ",".join(requested_group_friends)
-                                get_all_requested_group_friends=get_all_requested_group_friends.filter(or_(MyFriends.sender_id == login_user_id,MyFriends.sender_id.in_(requested_group_friends_ids)),or_(MyFriends.receiver_id.in_(requested_group_friends_ids),MyFriends.receiver_id == login_user_id ))
+            #                 if requested_group_friends:
+            #                     requested_group_friends_ids= ",".join(requested_group_friends)
+            #                     get_all_requested_group_friends=get_all_requested_group_friends.filter(or_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id.in_(requested_group_friends_ids)),or_(MyFriends.sender_id.in_(requested_group_friends_ids),MyFriends.receiver_id == login_user_id ))
 
-                                get_all_requested_group_friends=get_all_requested_group_friends.all()
+            #                     get_all_requested_group_friends=get_all_requested_group_friends.all()
                                 
-                                if get_all_requested_group_friends:
-                                    for frnds in get_all_requested_group_friends:
-                                        my_friends_ids.append(frnds.id)
+            #                     if get_all_requested_group_friends:
+            #                         for frnds in get_all_requested_group_friends:
+            #                             my_friends_ids.append(frnds.id)
                     
-            # Get Final result after applied all requested conditions    [[[[  SUB QUERY  ]]]]
+            # Get Final result after applied all requested conditions
             
-            get_my_friends = db.query(MyFriends).filter(or_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == login_user_id)).filter(MyFriends.status == 1, MyFriends.request_status == 1)
+            get_my_friends = db.query(MyFriends).join(FollowUser,or_(and_(FollowUser.following_userid == MyFriends.sender_id,FollowUser.following_userid == MyFriends.receiver_id),and_(FollowUser.follower_userid == login_user_id)))
             
-            get_my_friends=get_my_friends.filter(MyFriends.id.in_(my_friends_ids))
+            get_my_friends=get_my_friends.filter(MyFriends.status == 1,MyFriends.request_status == 1,MyFriends.id.in_(my_friends_ids))
             
             if search_key:
-                get_my_friends=get_my_friends.filter(or_(User.email_id.like(search_key),User.display_name.like(search_key),User.first_name.like(search_key),User.last_name.like(search_key)))
+                get_my_friends=get_my_friends.filter(or_(User.email_id.like(search_key),User.display_name.like(search_key),User.first_name.like(search_key),User.last_name.like(search_key),User.gender == search_key,User.geo_location.like(search_key+"%")))
             
             get_my_friends_count=get_my_friends.count()
             
-            if get_my_friends_count <1 :
+            if get_my_friends_count < 1 :
                 return {"status":0,"msg":"No Result found"}
             
             else:
@@ -1726,7 +1726,7 @@ async def addfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),gr
                 else:
                     # Add Friend Group
                     
-                    add_friend_group=FriendGroups(group_name = group_name,group_icon=defaultimage(group_icon),created_by=login_user_id,created_at=datetime.now(),status =1)
+                    add_friend_group=FriendGroups(group_name = group_name,group_icon=defaultimage('group_icon'),created_by=login_user_id,created_at=datetime.now(),status =1)
                     db.add(add_friend_group)
                     db.commit()
                     
@@ -1834,7 +1834,7 @@ async def editfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),g
                     return {"status":0,"msg":"You can't edit the My Fans group."}
                     
                 else:
-                    img_path=get_group.group_icon
+                    img_path=get_group.group_icon if get_group.group_icon else None
                     # Profile Image
                     if group_icon:
                         file_name=group_icon.filename
@@ -1883,7 +1883,7 @@ async def editfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),g
                                     db.add(add_frnd_group)
                                     db.commit()
                     
-                    update_frnd_group=db.query(FriendGroups).filter(FriendGroups.id == get_group.id).update({"group_name":group_name,"group_icon":"" if group_icon else img_path})               
+                    update_frnd_group=db.query(FriendGroups).filter(FriendGroups.id == get_group.id).update({"group_name":group_name,"group_icon":img_path})               
                     db.commit()
                     
                     group_details=GetGroupDetails(db,group_id)
@@ -2140,6 +2140,7 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),conten
                             db.commit()
                     
                     attachment_count=0  
+                    
                     # Nuggets Media
                     if nuggets_media:
                         for nugget_media in nuggets_media:
@@ -2147,7 +2148,7 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),conten
                             file_temp=nugget_media.content_type
                             file_size=len(await nugget_media.read())
                             file_ext = os.path.splitext(nugget_media.filename)[1]
-                            
+                            type='image'
                             if 'video' in file_temp:
                                 type='video'
                             elif 'audio' in file_temp:
@@ -2174,11 +2175,14 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),conten
                                 else:
                                     s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.now().timestamp())}{file_ext}"
                                     uploaded_file_path=None
+                                    
                                     if type == 'video':
                                         s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.now().timestamp())}.mp4"
-                                        uploaded_file_path=file_upload(nugget_media,compress=None)
+                                        uploaded_file_path=video_file_upload(nugget_media,compress=1)
+                                    
                                     elif type == 'audio':
-                                        s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.now().timestamp())}.mp3"
+                                        s3_file_path=f"nuggets/audio_{random.randint(1111,9999)}{int(datetime.now().timestamp())}.mp3"
+                                        uploaded_file_path=audio_file_upload(nugget_media,compress=1)
                                         
                                     
                                     result=upload_to_s3(uploaded_file_path,s3_file_path)
@@ -2304,7 +2308,7 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
             get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
                         
             user_public_nugget_display_setting = 1
-            
+            login_user_id=0
             if get_token_details:
                 login_user_id=get_token_details.user_id
                 get_user_settings=db.query(UserSettings).filter(UserSettings.user_id == login_user_id).first()
@@ -2479,7 +2483,7 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
                     total_comments=db.query(NuggetsComments).filter(NuggetsComments.nugget_id == nuggets.id).count()
                     total_views=db.query(NuggetView).filter(NuggetView.nugget_id == nuggets.id,NuggetView.user_id == login_user_id).count()
                     
-                    total_vote=db.query(NuggetPollVoted).filter(NuggetPollVoted.user_id == login_user_id,NuggetPollVoted.nugget_master_id == Nuggets.nuggets_id).distinct().count()
+                    total_vote=db.query(NuggetPollVoted).filter(NuggetPollVoted.user_id == login_user_id,NuggetPollVoted.nugget_master_id == Nuggets.nuggets_id).count()
                     
                     
                     img_count= 0
@@ -2512,7 +2516,7 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
                     get_nugget_poll_option=db.query(NuggetPollOption).filter(NuggetPollOption.nuggets_master_id == nuggets.nuggets_id,NuggetPollOption.status == 1).all()
                     
                     for option in get_nugget_poll_option:
-                        if option == 1:
+                        if option.status == 1:
                             poll_options.append({"option_id":option.id,"option_name":option.option_name,"option_percentage":option.poll_vote_percentage,"votes":option.votes})
                     
                     following=db.query(FollowUser).filter(FollowUser.follower_userid == login_user_id, FollowUser.following_userid == nuggets.user_id).count()
@@ -3196,7 +3200,7 @@ async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugg
                                     file_temp=nugget_media.content_type
                                     file_size=len(await nugget_media.read())
                                     file_ext = os.path.splitext(nugget_media.filename)[1]
-                                    
+                                    type='image'
                                     if 'video' in file_temp:
                                         type='video'
                                     elif 'audio' in file_temp:
@@ -3223,11 +3227,14 @@ async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugg
                                         else:
                                             s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.now().timestamp())}{file_ext}"
                                             uploaded_file_path=None
+                                            
                                             if type == 'video':
                                                 s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.now().timestamp())}.mp4"
-                                                uploaded_file_path=file_upload(nugget_media,compress=None)
+                                                uploaded_file_path=video_file_upload(nugget_media,compress=1)
+                                            
                                             elif type == 'audio':
-                                                s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.now().timestamp())}.mp3"
+                                                s3_file_path=f"nuggets/audio_{random.randint(1111,9999)}{int(datetime.now().timestamp())}.mp3"
+                                                uploaded_file_path=audio_file_upload(nugget_media,compress=1)
                                                 
                                             
                                             result=upload_to_s3(uploaded_file_path,s3_file_path)
@@ -3236,6 +3243,8 @@ async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugg
                                                 db.commit()
                                             else:
                                                 return result
+                                    else:
+                                        return {"status":0,"msg":"Unable to Upload"}    
                                 
                             # Delete Share with
                             del_share_nuggets=db.query(NuggetsShareWith).filter(NuggetsShareWith.nuggets_id == check_nuggets.id).delete()
@@ -3519,7 +3528,7 @@ async def geteventlayout(db:Session=Depends(deps.get_db),token:str=Form(None)):
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
-            get_token_details=db.query(ApiTokens).filter_by(token == access_token).first()
+            get_token_details=db.query(ApiTokens).filter_by(token = access_token).first()
             
             login_user_id=get_token_details.user_id 
 
@@ -3537,7 +3546,7 @@ async def geteventlayout(db:Session=Depends(deps.get_db),token:str=Form(None)):
 
 # 40. Add Event
 @router.post("/addevent")
-async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_title:str=Form(None),event_type:str=Form(None),event_start_date:Any=Form(None),event_start_time:Any=Form(None),
+async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_title:str=Form(None),event_type:str=Form(None,description="1-Event,2-Talkshow,3-Live"),event_start_date:Any=Form(None),event_start_time:Any=Form(None),
                    event_message:str=Form(None),event_participants:str=Form(None),event_duration:Any=Form(None),event_layout:str=Form(None),
                    event_host_audio:UploadFile=File(None),event_host_video:UploadFile=File(None),event_guest_audio:UploadFile=File(None),event_guest_video:UploadFile=File(None),event_melody:UploadFile=File(None),
                    event_invite_mails:str=Form(None),event_invite_groups:str=Form(None),event_invite_friends:str=Form(None),event_melody_id:str=Form(None),
@@ -3549,7 +3558,7 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
     
     if event_title == None or event_title.strip() == "":
         return {"status":0,"msg":"Event title cant be blank."}
-    elif event_type == None:
+    elif event_type == None and not event_type.isnumeric():
         return {"status":0,"msg":"Event type cant be blank."}
     elif event_start_date == None:
         return {"status":0,"msg":"Event start date cant be blank."}
@@ -3617,8 +3626,11 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                 return {"status":0,"msg":"Event participants count should be greater than 1."}
                 
             else:
+                event_type=int(event_type)
                 setting=db.query(UserSettings).filter_by(user_id = login_user_id).first()
-                flag='event_banner'
+                
+                flag='event_banner' if event_type == 1 else "talkshow" if event_type == 2 else "live" if event_type == 3 else None
+                
                 cover_img=defaultimage(flag)
                 
                 if setting and setting.meeting_header_image != None:  
@@ -3665,117 +3677,97 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                     db.commit()
                     
                     # Banner Image
-                    client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
-                    
                     if event_banner:
-                        file_name = event_banner.filename
-                        ext = os.path.splitext(file_name)[-1].lower()
-                        file_size=event_banner.content_length
-                        media_type=event_banner.content_type
-                        
-                        bucket_name='rawcaster'
-                        
-                        type ='image'
-                        if 'video' in media_type:
-                            type='video'
+                        file_name=event_banner.filename
+                        file_temp=event_banner.content_type
+                        file_size=len(await event_banner.read())
+                        file_ext = os.path.splitext(event_banner.filename)[1]
+                                                
+                        type='image'
+                        if 'video' in file_temp:
+                            type ='video'
                             
-                        # Upload File to Server
-                        output_dir=file_upload(event_banner)
-
-                        filename=f"Image_{random.randint(11111,99999)}{new_event.id}{int(datetime.now().timestamp())}"
-                        bucket_file_path=f"events/{filename}"  
-                        
-                        with open(output_dir, 'rb') as data:  # Upload File To S3
-                            upload=client_s3.upload_fileobj(data, bucket_name, bucket_file_path,ExtraArgs={'ACL': 'public-read'})
-
-                        os.remove(output_dir)
-                        
-                        # Stored File Path
-                        url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
-                        url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{bucket_file_path}'
-                        # Update Profile Image
-                        new_event.cover_img = url
-                        db.commit()
+                        if file_size > 1024 and type == 'image' and file_ext != '.gif':
+                            
+                            s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.now().timestamp())}{file_ext}"
+                            uploaded_file_path=file_upload(event_banner,compress=1)
+                            
+                            result=upload_to_s3(uploaded_file_path,s3_path)
+                            if result['status'] == 1:
+                                new_event.cover_img = result['url']
+                                db.commit()
+                                
+                            else:
+                                return result
+                        else:
+                            s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.now().timestamp())}{file_ext}"
+                            uploaded_file_path=file_upload(event_banner,compress=None)
+                            
+                            result=upload_to_s3(uploaded_file_path,s3_path)
+                            # Upload to S3
+                            if result['status'] == 1:
+                                new_event.cover_img = result['url']
+                                db.commit()
+                            else:
+                                return result
                         
                     
                     # Event Melody
                     if event_melody:
-                        try:
-                            temp_name=event_melody.file.name
-                            ext = os.path.splitext(file_name)[-1].lower()
-                            
-                            file_name=event_melody.filename
-                            file_size=event_melody.content_length
-                            file_type = mimetypes.guess_type(event_melody.filename)[0]
-                            media_type=1
-                            if ext == '.png' or ext == '.jpeg' or ext == 'jpg':
-                                type='image'
-                            elif ext == '.mp3':
-                                type ='audio'
-                            elif ext == 'pptx' or ext == 'ppt':
-                                type='ppt'
-                            elif 'video' in file_type:
-                                type='video'
-                                media_type = 2
+                        file_name=event_melody.filename
+                        file_temp=event_melody.content_type
+                        file_size=len(await event_melody.read())
+                        file_ext = os.path.splitext(event_melody.filename)[1]
+                        media_type=1
+                        if file_ext == '.png' or file_ext == '.jpeg' or file_ext == 'jpg':
+                            type='image'
+                        elif file_ext == '.mp3':
+                            type ='audio'
+                        elif file_ext == 'pptx' or file_ext == 'ppt':
+                            type='ppt'
+                        elif 'video' in file_temp:
+                            type='video'
+                            media_type = 2
                         
-
-                            if file_size > 1000000 and type == 'image' and ext != '.gif':
-                                output_dir=file_upload(event_melody)
-
-                                filename=f"eventsmelody{random.randint(11111,99999)}{new_event.id}{int(datetime.now().timestamp())}"
-                                bucket_file_path=f"eventsmelody/{filename}"  
+                        if file_size > 1000000 and type == 'image' and file_ext != '.gif':
+                            s3_file_path=f"eventsmelody/eventsmelody{random.randint(11111,99999)}{new_event.id}{int(datetime.now().timestamp())}"
+                            upload_file_path=file_upload(event_melody,compress=1)
+                            
+                            result=upload_to_s3(upload_file_path,s3_file_path)
+                            
+                            if result and result['status'] == 1:
+                                new_melody=EventMelody(event_id=new_event.id,path=result['url'],type=media_type,created_at=datetime.now(),created_by=login_user_id)
+                                db.add(new_melody)
+                                db.commit()
+                                db.refresh(new_melody)
                                 
-                                with open(output_dir, 'rb') as data:  # Upload File To S3
-                                    upload=client_s3.upload_fileobj(data, bucket_name, bucket_file_path,ExtraArgs={'ACL': 'public-read'})
-
-                                os.remove(output_dir)
-                                
-                                # Stored File Path
-                                url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
-                                url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{bucket_file_path}'
-                                # Update Profile Image
-                                if url:
-                                    new_melody=EventMelody(event_id=new_event.id,path=url,type=media_type,created_at=datetime.now(),created_by=login_user_id)
-                                    db.add(new_melody)
+                                if new_melody:
+                                    new_event.event_melody_id = new_melody.id
                                     db.commit()
-                                    db.refresh(new_melody)
-                                    
-                                    if new_melody:
-                                        new_event.event_melody_id = new_melody.id
-                                        db.commit()
-                                else:
-                                    return {"status":0,"msg":"Not able to upload"}
-                                        
                             else:
-                                filename=f"eventsmelody{random.randint(11111,99999)}{new_event.id}{int(datetime.now().timestamp())}{ext}"
-                                output_dir=file_upload(event_melody)
+                                return {"status":0,"msg":"Not able to upload"}
+                                        
+                        else:
+                            s3_file_path=f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{new_event.id}{int(datetime.now().timestamp())}{file_ext}"
+                            upload_file_path=file_upload(event_melody)
+                            
+                            if type == 'video' and file_ext != '.mp4':
+                                s3_file_path=f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{new_event.id}{int(datetime.now().timestamp())}.mp4"
+                                upload_file_path=video_file_upload(event_melody,compress=1)
+                                                        
+                            result=upload_to_s3(upload_file_path,s3_file_path)
+                           
+                            if result and result['status'] == 1:
+                                add_new_melody=EventMelody(event_id=new_event.id,path=result['url'],type=media_type,
+                                                        created_at=datetime.now(),created_by=login_user_id)
                                 
-                                if type == 'video' and ext != '.mp4':
-                                    filename=f"eventsmelody{random.randint(11111,99999)}{new_event.id}{int(datetime.now().timestamp())}.mp4"
-                                                            
-                                bucket_file_path=f"eventsmelody/{filename}"  
-                                
-                                with open(output_dir, 'rb') as data:  # Upload File To S3
-                                    upload=client_s3.upload_fileobj(data, bucket_name, bucket_file_path,ExtraArgs={'ACL': 'public-read'})
-
-                                os.remove(output_dir)
-                                
-                                # Stored File Path
-                                url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
-                                url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{bucket_file_path}'
-                                
-                                if url:
-                                    add_new_melody=EventMelody(event_id=new_event.id,path=url,type=media_type,
-                                                            created_at=datetime.now(),created_by=login_user_id)
-                                    
-                                    if add_new_melody:
-                                        new_event.event_melody_id = new_melody.id
-                                        db.commit()
-                                
-                                else:
-                                    return {"status":0,"msg":'Not able to upload'}  
-                        except:
-                            return {"status":0,"msg":'Not able to upload'}  
+                                if add_new_melody:
+                                    new_event.event_melody_id = new_melody.id
+                                    db.commit()
+                            
+                            else:
+                                return {"status":0,"msg":'Not able to upload'}  
+                        
                                     
                     else:
                         temp=event_melody_id if event_melody_id else 1
@@ -4130,7 +4122,9 @@ async def listevents(db:Session=Depends(deps.get_db),token:str=Form(None),user_i
                             default_host_video.append(def_av.default_host_video)
                             default_guest_audio.append(def_av.default_guest_audio)
                             default_guest_video.append(def_av.default_guest_video)
-                            
+                        
+                        banner_image= (settings.meeting_header_image if settings.meeting_header_image else "") if event.type == 1 else (settings.talkshow_event_banner if settings.talkshow_event_banner else "") if event.type == 2 else (settings.live_event_banner if settings.live_event_banner else "") if event.type == 3 else event.cover_img
+                        
                         result_list.append({
                                             "event_id":event.id,
                                             "event_name":event.title,
@@ -4144,7 +4138,8 @@ async def listevents(db:Session=Depends(deps.get_db),token:str=Form(None),user_i
                                             "start_time":common_date(event.start_date_time) if event.start_date_time else "" if event.created_at else "",
                                             "duration":event.duration,
                                             "no_of_participants":event.no_of_participants if event.no_of_participants else "",
-                                            "banner_image":event.cover_img if event.cover_img else "",
+                                            # "banner_image":event.cover_img if event.cover_img else "",
+                                            "banner_image":banner_image,   # Event Images displayed event type wise
                                             "is_host":1 if event.created_by else 0,
                                             "created_at":common_date(event.created_at) if event.created_at else "",
                                             "original_user_name":event.user.display_name,
@@ -4392,15 +4387,99 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                     
                     # Banner Image
                     if event_banner:
-                        print("Pending")
-                    else:  
-                        temp=event_melody_id
-                        edit_event.event_melody_id =temp if temp > 0 else 1
+                        file_name=event_banner.filename
+                        file_temp=event_banner.content_type
+                        file_size=len(await event_banner.read())
+                        file_ext = os.path.splitext(event_banner.filename)[1]
+                                                
+                        type='image'
+                        if 'video' in file_temp:
+                            type ='video'
+                            
+                        if file_size > 1024 and type == 'image' and file_ext != '.gif':
+                            
+                            s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.now().timestamp())}{file_ext}"
+                            uploaded_file_path=file_upload(event_banner,compress=1)
+                            
+                            result=upload_to_s3(uploaded_file_path,s3_path)
+                            if result['status'] == 1:
+                                edit_event.cover_img = result['url']
+                                db.commit()
+                                
+                            else:
+                                return result
+                        else:
+                            s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.now().timestamp())}{file_ext}"
+                            uploaded_file_path=file_upload(event_banner,compress=None)
+                            
+                            result=upload_to_s3(uploaded_file_path,s3_path)
+                            # Upload to S3
+                            if result['status'] == 1:
+                                edit_event.cover_img = result['url']
+                                db.commit()
+                            else:
+                                return result
+                    else:
+                        temp=int(event_melody_id) if event_melody_id else None
+                        edit_event.event_melody_id = temp if temp > 0 else 1
                         db.commit()
+                        
                     
                     # Event Melody
                     if event_melody:
-                        print("Pending")
+                        file_name=event_melody.filename
+                        file_temp=event_melody.content_type
+                        file_size=len(await event_melody.read())
+                        file_ext = os.path.splitext(event_melody.filename)[1]
+                        media_type=1
+                        if file_ext == '.png' or file_ext == '.jpeg' or file_ext == 'jpg':
+                            type='image'
+                        elif file_ext == '.mp3':
+                            type ='audio'
+                        elif file_ext == 'pptx' or file_ext == 'ppt':
+                            type='ppt'
+                        elif 'video' in file_temp:
+                            type='video'
+                            media_type = 2
+                        
+                        if file_size > 1000000 and type == 'image' and file_ext != '.gif':
+                            s3_file_path=f"eventsmelody/eventsmelody{random.randint(11111,99999)}{edit_event.id}{int(datetime.now().timestamp())}"
+                            upload_file_path=file_upload(event_melody,compress=1)
+                            
+                            result=upload_to_s3(upload_file_path,s3_file_path)
+                            
+                            if result and result['status'] == 1:
+                                new_melody=EventMelody(event_id=edit_event.id,path=result['url'],type=media_type,created_at=datetime.now(),created_by=login_user_id)
+                                db.add(new_melody)
+                                db.commit()
+                                db.refresh(new_melody)
+                                
+                                if new_melody:
+                                    edit_event.event_melody_id = new_melody.id
+                                    db.commit()
+                            else:
+                                return {"status":0,"msg":"Not able to upload"}
+                                        
+                        else:
+                            s3_file_path=f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{edit_event.id}{int(datetime.now().timestamp())}{file_ext}"
+                            upload_file_path=file_upload(event_melody)
+                            
+                            if type == 'video' and file_ext != '.mp4':
+                                s3_file_path=f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{edit_event.id}{int(datetime.now().timestamp())}.mp4"
+                                upload_file_path=video_file_upload(event_melody,compress=1)
+                                                        
+                            result=upload_to_s3(upload_file_path,s3_file_path)
+                           
+                            if result and result['status'] == 1:
+                                add_new_melody=EventMelody(event_id=edit_event.id,path=result['url'],type=media_type,
+                                                        created_at=datetime.now(),created_by=login_user_id)
+                                
+                                if add_new_melody:
+                                    edit_event.event_melody_id = new_melody.id
+                                    db.commit()
+                            
+                            else:
+                                return {"status":0,"msg":'Not able to upload'}
                     
                     
                     else:
@@ -4776,7 +4855,7 @@ async def getothersprofile(db:Session=Depends(deps.get_db),token:str=Form(None),
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif auth_code == None or auth_code.strip() == '':
         return {"status":0,"msg":"Auth Code is missing"}
-    elif user_id == None:
+    elif user_id == None or not user_id.isnumeric():
         return {"status":0,"msg":"User ID missing"}
         
     else:
@@ -4789,6 +4868,7 @@ async def getothersprofile(db:Session=Depends(deps.get_db),token:str=Form(None),
             if access_token == False:
                 return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
             else:
+                user_id=int(user_id)
                 get_token_details=db.query(ApiTokens).filter_by(token = access_token).first()
                 
                 login_user_id=get_token_details.user_id if get_token_details else None
@@ -4799,66 +4879,76 @@ async def getothersprofile(db:Session=Depends(deps.get_db),token:str=Form(None),
                 response_type=1
                 
                 get_all_blocked_users=get_friend_requests(db,login_user_id,requested_by,request_status,response_type)
-                blocked_users=get_all_blocked_users['blocked']
                 
-                if blocked_users and user_id in blocked_users:
+                blocked_users=get_all_blocked_users['blocked']
+                if (user_id in blocked_users) and blocked_users :
                     return {"status": 0, "msg": "No result found!"}
             
                 else:
                     # get_user=db.query(User).join(FollowUser,FollowUser.following_userid == User.id).filter(User.id == user_id).first()
-                
-                    get_user=db.query(FollowUser).filter(User.id == user_id,FollowUser.following_userid == User.id,FollowUser.follower_userid == login_user_id).first()
+                    get_user = db.query(User, FollowUser.id.label('follow_id')).\
+                        outerjoin(FollowUser, (FollowUser.following_userid == User.id) & (FollowUser.follower_userid == login_user_id)).\
+                        filter(User.id == user_id).first()
+                    # get_user=db.query(User).join(FollowUser,FollowUser.following_userid == user_id,FollowUser.follower_userid == login_user_id).filter(User.id == user_id).first()
                     
                     followers_count=db.query(FollowUser).filter_by(following_userid = user_id).count()
                     
                     following_count=db.query(FollowUser).filter_by(follower_userid = user_id).count()
                     
-                    if get_user == None or get_user.status != 1:
+                    if not get_user:
                         return {"status": 0, "msg": "No result found!"}
 
                     else:
+                        
                         field='bio_display_status'
-                        settings=db.query(UserSettings).filter(UserSettings.user_id == login_user_id).first()
+                        
+                        settings=db.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+                        
                         get_friend_request=db.query(MyFriends).filter(MyFriends.status == 1,or_(MyFriends.sender_id == login_user_id,MyFriends.sender_id == user_id),or_(MyFriends.receiver_id == user_id,MyFriends.receiver_id == login_user_id)).order_by(MyFriends.id.desc()).first()
                         
                         
                         result_list={
-                                        "user_id":get_user.id,
-                                        "user_ref_id":get_user.user2.user_ref_id if get_user.following_userid else "",
-                                        "name":get_user.user2.display_name if get_user.following_userid else "",
-                                        "email_id":get_user.user2.email_id if get_user.following_userid else "",
+                                        "user_id":int(user_id),
+                                        "user_ref_id":get_user['User'].user_ref_id if get_user.follow_id else "",
+                                        "name":get_user["User"].display_name if get_user.follow_id else "",
+                                        "email_id":get_user["User"].email_id if get_user.follow_id else "",
                                         
-                                        "mobile":get_user.user2.mobile_no if get_user.following_userid else "",
-                                        "dob":get_user.user2.dob if get_user.following_userid else "",
-                                        "geo_location":get_user.user2.geo_location if get_user.following_userid else "",
-                                        "bio_data":ProfilePreference(db,login_user_id,get_user.id,field,get_user.user2.bio_data),
+                                        "mobile":get_user['User'].mobile_no if get_user.follow_id else "",
+                                        "dob":get_user['User'].dob if get_user.follow_id else "",
+                                        "geo_location":get_user['User'].geo_location if get_user.follow_id else "",
+                                        "bio_data":ProfilePreference(db,login_user_id,get_user['User'].id,field,get_user["User"].bio_data),
                                         
-                                        "profile_image":get_user.user2.profile_img if get_user.following_userid else "",
-                                        "cover_image":get_user.user2.cover_image if get_user.following_userid else "",
-                                        "website":get_user.user2.website if get_user.following_userid else "",
-                                        "first_name":get_user.user2.first_name if get_user.following_userid else "",
-                                        "last_name":get_user.user2.last_name if get_user.following_userid else "",
-                                        "gender":get_user.user2.gender if get_user.following_userid else "",
-                                        "country_code":get_user.user2.country_code if get_user.following_userid else "",
-                                        "country_id":get_user.user2.country_id if get_user.following_userid else "",
-                                        "user_code":get_user.user2.user_code if get_user.following_userid else "",
-                                        "latitude":get_user.user2.latitude if get_user.following_userid else "",
-                                        "longitude":get_user.user2.longitude if get_user.following_userid else "",
-                                        "date_of_join":get_user.user2.created_at if get_user.following_userid else "",
-                                        "user_type":get_user.user2.user_type_master.name if get_user.following_userid else "",
-                                        "user_status":get_user.user2.user_status_master.name if get_user.following_userid else "",
-                                        "user_status_id":get_user.user2.user_status_id if get_user.following_userid else "",
-                                        "friends_count":FriendsCount(db,get_user.user2.id),
+                                        "profile_image":get_user['User'].profile_img if get_user.follow_id else "",
+                                        "cover_image":get_user['User'].cover_image if get_user.follow_id else "",
+                                        "website":get_user['User'].website if get_user.follow_id else "",
+                                        "first_name":get_user['User'].first_name if get_user.follow_id else "",
+                                        "last_name":get_user['User'].last_name if get_user.follow_id else "",
+                                        "gender":get_user['User'].gender if get_user.follow_id else "",
+                                        "country_code":get_user['User'].country_code if get_user.follow_id else "",
+                                        "country_id":get_user['User'].country_id if get_user.follow_id else "",
+                                        "user_code":get_user['User'].user_code if get_user.follow_id else "",
+                                        "latitude":get_user['User'].latitude if get_user.follow_id else "",
+                                        "longitude":get_user['User'].longitude if get_user.follow_id else "",
+                                        "date_of_join":get_user['User'].created_at if get_user.follow_id else "",
+                                        "user_type":get_user['User'].user_type_master.name if get_user.follow_id else "",
+                                        "user_status":get_user['User'].user_status_master.name if get_user.follow_id else "",
+                                        "user_status_id":get_user['User'].user_status_id if get_user.follow_id else "",
+                                        "friends_count":FriendsCount(db,get_user["User"].id),
                                         "friend_status":None,
                                         "friend_request_id":None,
                                         "is_friend_request_sender":0,
-                                        "follow":True if get_user.id else False,
+                                        "follow":True if get_user["User"].id else False,
                                         "followers_count":followers_count,
                                         "following_count":following_count,
                                         "language": settings.language.name if settings else "English",
                                         "friend_request_id":get_friend_request.id if get_friend_request else "",
                                         "friend_status":get_friend_request.request_status if get_friend_request else "",
                                         "is_friend_request_sender": 1 if get_friend_request and get_friend_request.sender_id == get_user.id else "",
+                                        
+                                        "lock_nugget":(settings.lock_nugget if settings.lock_nugget else 0) if settings else "",
+                                        "lock_fans":(settings.lock_fans if settings.lock_fans else 0) if settings else "",
+                                        "lock_my_connection":(settings.lock_my_connection if settings.lock_my_connection else 0) if settings else "",
+                                        "lock_my_influencer":(settings.lock_my_influencer if settings.lock_my_influencer else 0) if settings else ""
                                 }
                     
                         return {"status":1,"msg":"Success","profile":result_list}
@@ -5160,12 +5250,11 @@ async def getusersettings(db:Session=Depends(deps.get_db),token:str=Form(None)):
                                 "default_date_format":get_user_settings.date_format,
                                 "mobile_default_page":get_user_settings.mobile_default_page,
                                 "account_active_inactive":get_user_settings.manual_acc_active_inactive,
-                                "lock":{
-                                        "lock_nugget":get_user_settings.lock_nugget if get_user_settings.lock_nugget else 0,
-                                        "lock_fans":get_user_settings.lock_fans if get_user_settings.lock_fans else 0,
-                                        "lock_my_connection":get_user_settings.lock_my_connection if get_user_settings.lock_my_connection else 0,
-                                        "lock_my_influence":get_user_settings.lock_my_influence if get_user_settings.lock_my_influence else 0
-                                        }
+                                "lock_nugget":get_user_settings.lock_nugget if get_user_settings.lock_nugget else 0,
+                                "lock_fans":get_user_settings.lock_fans if get_user_settings.lock_fans else 0,
+                                "lock_my_connection":get_user_settings.lock_my_connection if get_user_settings.lock_my_connection else 0,
+                                "lock_my_influencer":get_user_settings.lock_my_influencer if get_user_settings.lock_my_influencer else 0
+                                        
                                 })
         
             return {"status":1,"msg":"Success","settings":result_list}
@@ -5180,11 +5269,13 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
            passcode_status:str=Form(None,description="1->Enabled,0->Disabled"),passcode:str=Form(None),waiting_room:str=Form(None,description="1->Enabled,0->Disabled"),schmoozing_status:str=Form(None,description="1->Enabled,0->Disabled"),breakout_status:str=Form(None,description="1->Enabled,0->Disabled"),join_before_host:str=Form(None,description="1->Enabled,0->Disabled"),auto_record:str=Form(None,description="1->Enabled,0->Disabled"),
            participant_join_sound:str=Form(None,description="1->Sound On,0->Sound Off"),screen_share_status:str=Form(None,description="1->Enabled,0->Disabled"),virtual_background:str=Form(None,description="1->Enabled,0->Disabled"),host_audio:str=Form(None,description="1->On,0->Off"),host_video:str=Form(None),participant_audio:str=Form(None,description="1->On,0->Off"),participant_video:str=Form(None,description="1->On,0->Off"),
            melody:str=Form(None),
-           meeting_header_image:UploadFile=File(None),language_id:str=Form(None,description="table 65"),time_zone:str=Form(None,description='get from 64'),date_format:str=Form(None),mobile_default_page:str=Form(None,description="1->nuggets,2->events,3->chats"),
+           meeting_header_image:UploadFile=File(None,description="event Banner"),language_id:str=Form(None,description="table 65"),time_zone:str=Form(None,description='get from 64'),date_format:str=Form(None),mobile_default_page:str=Form(None,description="1->nuggets,2->events,3->chats"),
            default_melody:UploadFile=File(None),event_type:str=Form(None),public_nugget_display:str=Form(None),
            public_event_display:str=Form(None),manual_acc_active_inactive:str=Form(None),
            lock_nugget:str=Form(None,description="1-Yes,0-No"),lock_fans:str=Form(None,description="1-Yes,0-No"),
-           lock_my_connection:str=Form(None,description="1-Yes,0-No"),lock_my_influence:str=Form(None,description="1-Yes,0-No")):
+           lock_my_connection:str=Form(None,description="1-Yes,0-No"),lock_my_influencer:str=Form(None,description="1-Yes,0-No"),
+           live_event_banner:UploadFile=File(None),talkshow_event_banner:UploadFile=File(None)
+           ):
     
     if token== None or token.strip()=="":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
@@ -5265,11 +5356,14 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                         else:
                             compress=None
                             uploaded_file_path=file_upload(default_melody,compress)
+                            
                             s3_file_path=f"eventsmelody/eventsmelody_{random.randint(1111,9999)}{int(datetime.now().timestamp())}{file_ext}"
                             if type == 'video' and file_ext != '.mp4':
                                 s3_file_path=f"eventsmelody/eventsmelody_{random.randint(1111,9999)}{int(datetime.now().timestamp())}.mp4"
-                            
+                                uploaded_file_path=video_file_upload(default_melody,compress=1)
+                                
                             result=upload_to_s3(uploaded_file_path,s3_file_path)
+                            
                             if result['status'] == 1:
                                 default_melody_list.update({"path":result['url'],
                                                             "type":media_type})
@@ -5280,13 +5374,15 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                                     
                                     default_melody_list.update({"title":edit_melody.title})
                                 else:
-                                    new_melody=EventMelody(title='Your default',is_default=1,path=url,type=media_type,
+                                    new_melody=EventMelody(title='Your default',is_default=1,path=result['url'],type=media_type,
                                                         created_at=datetime.now(),created_by=login_user_id)
                                     db.add(new_melody)
                                     db.commit()
                                     default_melody_list.update({"title":new_melody.title})
                             else:       
                                 return {"status":0,"msg":"Not able to upload"}
+                    
+                    header_image=settings.meeting_header_image if settings.meeting_header_image else None
                     
                     if meeting_header_image:
                         file_name=meeting_header_image.filename
@@ -5295,19 +5391,22 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                         file_ext = os.path.splitext(meeting_header_image.filename)[1]
                         local_file_upload=''
                         extensions=[".jpeg", ".jpg", ".png"]
-                        if file_ext in extensions:
+                        
+                        if not file_ext in extensions:
                             return {"status":0,"msg":"Image format does not support"}
+                        
                         elif file_size > 10240000:
                             return {"status":0,"msg":"Image size must be less than 10 MB"}
+                        
                         else:
                             if file_size > 1024:
                                 local_file_upload=file_upload(meeting_header_image,compress=1)
-                                meeting_header_image=local_file_upload
+                                header_image=local_file_upload
                             else:
                                 local_file_upload=file_upload(meeting_header_image,compress=None)
-                                meeting_header_image=local_file_upload
+                                header_image=local_file_upload
                         
-                        if meeting_header_image:
+                        if header_image:
                             s3_file_pth=f"meetingheaderimage/MeetingHeaderImage_{random.randint(1111,9999)}{int(datetime.now().timestamp())}{file_ext}"
                             
                             result=upload_to_s3(local_file_upload,s3_file_pth)
@@ -5315,6 +5414,71 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                                 meeting_header_image=result['url']
                             else:
                                 return result
+                    
+                    live_banner=settings.live_event_banner if settings.live_event_banner else None
+                    if live_event_banner:
+                        file_name=live_event_banner.filename
+                        file_temp=live_event_banner.content_type
+                        file_size=len(await live_event_banner.read())
+                        file_ext = os.path.splitext(live_event_banner.filename)[1]
+                        local_file_upload=''
+                        extensions=[".jpeg", ".jpg", ".png"]
+                        
+                        if not file_ext in extensions:
+                            return {"status":0,"msg":"Image format does not support"}
+                        
+                        elif file_size > 10240000:
+                            return {"status":0,"msg":"Image size must be less than 10 MB"}
+                        
+                        else:
+                            if file_size > 1024:
+                                local_file_upload=file_upload(live_event_banner,compress=1)
+                                live_banner=local_file_upload
+                            else:
+                                local_file_upload=file_upload(live_event_banner,compress=None)
+                                live_banner=local_file_upload
+                        
+                        if live_banner:
+                            s3_file_pth=f"meetingheaderimage/MeetingHeaderImage_{random.randint(1111,9999)}{int(datetime.now().timestamp())}{file_ext}"
+                            
+                            result=upload_to_s3(local_file_upload,s3_file_pth)
+                            if result['status'] == 1:
+                                live_banner=result['url']
+                            else:
+                                return result
+                    
+                    talkshow_banner=settings.talkshow_event_banner if settings.talkshow_event_banner else None
+                    if talkshow_event_banner:
+                        file_name=talkshow_event_banner.filename
+                        file_temp=talkshow_event_banner.content_type
+                        file_size=len(await talkshow_event_banner.read())
+                        file_ext = os.path.splitext(talkshow_event_banner.filename)[1]
+                        local_file_upload=''
+                        extensions=[".jpeg", ".jpg", ".png"]
+                        
+                        if not file_ext in extensions:
+                            return {"status":0,"msg":"Image format does not support"}
+                        
+                        elif file_size > 10240000:
+                            return {"status":0,"msg":"Image size must be less than 10 MB"}
+                        
+                        else:
+                            if file_size > 1024:
+                                local_file_upload=file_upload(talkshow_event_banner,compress=1)
+                                talkshow_banner=local_file_upload
+                            else:
+                                local_file_upload=file_upload(talkshow_event_banner,compress=None)
+                                talkshow_banner=local_file_upload
+                        
+                        if talkshow_banner:
+                            s3_file_pth=f"meetingheaderimage/MeetingHeaderImage_{random.randint(1111,9999)}{int(datetime.now().timestamp())}{file_ext}"
+                            
+                            result=upload_to_s3(local_file_upload,s3_file_pth)
+                            if result['status'] == 1:
+                                talkshow_banner=result['url']
+                            else:
+                                return result
+                        
 
                     breakout_status=int(breakout_status) if breakout_status and breakout_status.isnumeric() else settings.breakout_status
                     waiting_room=int(waiting_room) if waiting_room and waiting_room.isnumeric() else settings.waiting_room
@@ -5347,7 +5511,7 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                     lock_nugget=int(lock_nugget) if lock_nugget and lock_nugget.isnumeric() else settings.lock_nugget
                     lock_fans=int(lock_fans) if lock_fans and lock_fans.isnumeric() else settings.lock_fans
                     lock_my_connection=int(lock_my_connection) if lock_my_connection and lock_my_connection.isnumeric() else settings.lock_my_connection
-                    lock_my_influence=int(lock_my_influence) if lock_my_influence and lock_my_influence.isnumeric() else settings.lock_my_influence
+                    lock_my_influencer=int(lock_my_influencer) if lock_my_influencer and lock_my_influencer.isnumeric() else settings.lock_my_influencer
                     
                     settings.online_status=online_status if online_status  and online_status>=0 else settings.online_status
                     settings.phone_display_status=phone_display_status if phone_display_status and phone_display_status>=0 else settings.phone_display_status
@@ -5385,7 +5549,9 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                     settings.lock_nugget=lock_nugget
                     settings.lock_fans=lock_fans
                     settings.lock_my_connection=lock_my_connection
-                    settings.lock_my_influence=lock_my_influence
+                    settings.lock_my_influencer=lock_my_influencer
+                    settings.live_event_banner=live_banner
+                    settings.talkshow_event_banner =talkshow_banner
                     db.commit()
 
                     return {"status":1,"msg":"Success","url":meeting_header_image,"default_melody":default_melody if default_melody else None}
@@ -6078,8 +6244,11 @@ async def getsettings(db:Session=Depends(deps.get_db),token:str=Form(None)):
 # 68. Faq
 @router.post("/getfaq")
 async def getfaq(db:Session=Depends(deps.get_db)):
-    faqs = db.query(Faq.id, Faq.question, Faq.answer).filter_by(status=1).all()
-    return {"status":1,"msg":"","data":faq}
+    faqs = db.query(Faq).filter(Faq.status == 1).all()
+    faq_list=[]
+    for faq in faqs:
+        faq_list.append({"id":faq.id,"question":faq.question,"answer":faq.answer})
+    return {"status":1,"msg":"","data":faq_list}
 
 
 
@@ -6244,96 +6413,98 @@ async def followandunfollow(db:Session=Depends(deps.get_db),token:str=Form(None)
 async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),user_id:str=Form(None),type:str=Form(None,description="1->follower,2->following"),search_key:str=Form(None),page_number:str=Form(default=1)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    elif type == None:
+    elif type == None or not type.isnumeric():
         return {"status":0,"msg":"Type is missing"}
     elif not str(page_number).isnumeric():
         return {"status":0,"msg":"Invalid page Number"}
     else:
+        type=int(type)
         access_token=checkToken(db,token)
         
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
-            get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).all()
-            for res in get_token_details:
-                login_user_id=res.user_id
+            get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).order_by(ApiTokens.id.desc()).first()
+            login_user_id=get_token_details.user_id if get_token_details else None
 
-        current_page_no = int(page_number)
+            current_page_no = int(page_number)
 
-        get_follow_user =db.query(FollowUser)
-      
-        if type == 1:   # Followers
-            
-            if not user_id:
-                get_follow_user = get_follow_user.filter(FollowUser.follower_userid == login_user_id)
-            
-            else:
-                get_follow_user = get_follow_user.filter_by(follower_userid = user_id)
-                
-        else:  # Following
-            if not user_id:
-                get_follow_user=get_follow_user.filter(FollowUser.following_userid==login_user_id,FollowUser.status==1)
-            else:
-                get_follow_user = get_follow_user.filter(FollowUser.following_userid == user_id)
-
-        if search_key and search_key.strip() != '':
-            get_follow_user = get_follow_user.filter(or_(User.email_id.like('%'+search_key+'%'), 
-                                        User.display_name.like('%'+search_key+'%'),
-                                        User.first_name.like('%'+search_key+'%'),
-                                        User.last_name.like('%'+search_key+'%'),
-                                        func.concat(User.first_name, ' ', User.last_name).like('%'+search_key+'%')))
-            
-        get_row_count = get_follow_user.count()
+            get_follow_user =db.query(FollowUser)
         
-        if get_row_count < 1:
-            return {"status": 0, "msg": "No Result found"}
-        else:
-            default_page_size = 50
-            limit,offset,total_pages = get_pagination(get_row_count, current_page_no, default_page_size)
-            
-            get_result = get_follow_user.limit(limit).offset(offset).all()
-            
-            result_list = []
-            i=0
-            
-            for follow in get_result:
+            if type == 1:   # Followers
+                get_follow_user=get_follow_user.join(User,FollowUser.following_userid == User.id,isouter=True)
+                if not user_id:
+                    get_follow_user = get_follow_user.filter(FollowUser.follower_userid == login_user_id)
                 
-                if type == 1:
-                    followback=db.query(FollowUser).filter(and_(FollowUser.follower_userid==follow.following_userid , FollowUser.following_userid==follow.follower_userid),FollowUser.status==1).first()
-                    
-                    friend_details = {
-                        'user_id': follow.user2.id if follow.user2.id != '' else '',
-                        'user_ref_id': follow.user2.user_ref_id if follow.user2.user_ref_id != '' else '',
-                        'email_id': follow.user2.email_id if follow.user2.email_id != '' else '',
-                        'first_name': follow.user2.first_name if follow.user2.first_name != '' else '',
-                        'last_name': follow.user2.last_name if follow.user2.last_name != '' else '',
-                        'display_name': follow.user2.display_name if follow.user2.display_name != '' else '',
-                        'gender': follow.user2.gender if follow.user2.gender != '' else '',
-                        'profile_img': follow.user2.profile_img if follow.user2.profile_img != '' else '',
-                        'online': ProfilePreference(db,login_user_id, follow.user2.id, 'online_status', follow.user2.online),
-                        'last_seen': (common_date(follow.user2.last_seen) if follow.user2.last_seen else "") if follow.user2.last_seen != '' else '',
-                        'follow': True if followback else False   
-                    }
                 else:
+                    get_follow_user = get_follow_user.filter(FollowUser.follower_userid == user_id)
                     
-                    followback=db.query(FollowUser).filter(and_(FollowUser.follower_userid==follow.following_userid , FollowUser.following_userid==follow.follower_userid),FollowUser.status == 1).first()
-                    friend_details = {
-                        'user_id': follow.user1.id if follow.user1.id != '' else '',
-                        'user_ref_id':follow.user1.user_ref_id if follow.user1.user_ref_id != '' else '',
-                        'email_id': follow.user1.email_id if follow.user1.email_id != '' else '',
-                        'first_name': follow.user1.first_name if follow.user1.first_name != '' else '',
-                        'last_name': follow.user1.last_name if follow.user1.last_name != '' else '',
-                        'display_name': follow.user1.display_name if follow.user1.display_name != '' else '',
-                        'gender': follow.user1.gender if follow.user1.gender != '' else '',
-                        'profile_img': follow.user1.profile_img if follow.user1.profile_img != '' else '',
-                        'online': ProfilePreference(db,login_user_id, follow.user1.id, 'online_status', follow.user1.online),
-                        'last_seen': ((common_date(follow.user1.last_seen) if follow.user1.last_seen else "") if follow.user1.last_seen else "") if follow.user1.last_seen != '' else '',
-                        'follow': True if followback else False
-                    }
-                    i=i+1
-                result_list.append(friend_details)
+            else:  # Following
+                get_follow_user=get_follow_user.join(User,FollowUser.follower_userid == User.id,isouter=True)
+                
+                if not user_id:
+                    get_follow_user=get_follow_user.filter(FollowUser.following_userid==login_user_id,FollowUser.status==1)
+                else:
+                    get_follow_user = get_follow_user.filter(FollowUser.following_userid == user_id)
 
-            return {'status': 1, 'msg': 'Success', 'follow_count': get_row_count, 'total_pages': total_pages, 'current_page_no': current_page_no, 'follow_list': result_list}
+            if search_key and search_key.strip() != '':
+                get_follow_user = get_follow_user.filter(or_(User.email_id.like('%'+search_key+'%'), 
+                                            User.display_name.like('%'+search_key+'%'),
+                                            User.first_name.like('%'+search_key+'%'),
+                                            User.last_name.like('%'+search_key+'%'),
+                                            func.concat(User.first_name, ' ', User.last_name).like('%'+search_key+'%')))
+                
+            get_row_count = get_follow_user.count()
+            
+            if get_row_count < 1:
+                return {"status": 0, "msg": "No Result found"}
+            else:
+                default_page_size = 50
+                limit,offset,total_pages = get_pagination(get_row_count, current_page_no, default_page_size)
+                
+                get_result = get_follow_user.limit(limit).offset(offset).all()
+                
+                result_list = []
+                i=0
+                
+                for follow in get_result:
+                    
+                    if type == 1:
+                        followback=db.query(FollowUser).filter(and_(FollowUser.follower_userid==follow.following_userid , FollowUser.following_userid==follow.follower_userid),FollowUser.status==1).first()
+                        
+                        friend_details = {
+                            'user_id': follow.user2.id if follow.user2.id != '' else '',
+                            'user_ref_id': follow.user2.user_ref_id if follow.user2.user_ref_id != '' else '',
+                            'email_id': follow.user2.email_id if follow.user2.email_id != '' else '',
+                            'first_name': follow.user2.first_name if follow.user2.first_name != '' else '',
+                            'last_name': follow.user2.last_name if follow.user2.last_name != '' else '',
+                            'display_name': follow.user2.display_name if follow.user2.display_name != '' else '',
+                            'gender': follow.user2.gender if follow.user2.gender != '' else '',
+                            'profile_img': follow.user2.profile_img if follow.user2.profile_img != '' else '',
+                            'online': ProfilePreference(db,login_user_id, follow.user2.id, 'online_status', follow.user2.online),
+                            'last_seen': (common_date(follow.user2.last_seen) if follow.user2.last_seen else "") if follow.user2.last_seen != '' else '',
+                            'follow': True if followback else False   
+                        }
+                    else:
+                        
+                        followback=db.query(FollowUser).filter(and_(FollowUser.follower_userid==follow.following_userid , FollowUser.following_userid==follow.follower_userid),FollowUser.status == 1).first()
+                        friend_details = {
+                            'user_id': follow.user1.id if follow.user1.id != '' else '',
+                            'user_ref_id':follow.user1.user_ref_id if follow.user1.user_ref_id != '' else '',
+                            'email_id': follow.user1.email_id if follow.user1.email_id != '' else '',
+                            'first_name': follow.user1.first_name if follow.user1.first_name != '' else '',
+                            'last_name': follow.user1.last_name if follow.user1.last_name != '' else '',
+                            'display_name': follow.user1.display_name if follow.user1.display_name != '' else '',
+                            'gender': follow.user1.gender if follow.user1.gender != '' else '',
+                            'profile_img': follow.user1.profile_img if follow.user1.profile_img != '' else '',
+                            'online': ProfilePreference(db,login_user_id, follow.user1.id, 'online_status', follow.user1.online),
+                            'last_seen': ((common_date(follow.user1.last_seen) if follow.user1.last_seen else "") if follow.user1.last_seen else "") if follow.user1.last_seen != '' else '',
+                            'follow': True if followback else False
+                        }
+                        i=i+1
+                    result_list.append(friend_details)
+
+                return {'status': 1, 'msg': 'Success', 'follow_count': get_row_count, 'total_pages': total_pages, 'current_page_no': current_page_no, 'follow_list': result_list}
 
     
     
@@ -6447,14 +6618,9 @@ async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),even
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
    
-    elif event_type == None:
+    elif event_type == None or not event_type.isnumeric():
         return {"status":0,"msg":"Event type is missing"}
     
-    elif not event_type.isnumeric():
-        return {"status":0,"msg":"invalid Event type"}
-    elif event_type != 1 or event_type !=2 or event_type !=3 :
-        return {"status":0,"msg":"invalid Event type"}
-        
     # elif event_banner == None:
     #     return {"status":0,"msg":"Event Banner is missing"}
     
@@ -6549,17 +6715,16 @@ async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),even
                         file_temp=event_banner.content_type
                         file_size=len(await event_banner.read())
                         file_ext = os.path.splitext(event_banner.filename)[1]
-                        
-                        uploaded_file_path=file_upload(event_banner)
-                        
+                                                
                         type='image'
                         if 'video' in file_temp:
                             type ='video'
+                            
                         if file_size > 1024 and type == 'image' and file_ext != '.gif':
-                            # Compress Image
                             
                             s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.now().timestamp())}{file_ext}"
-                            # Upload to S3
+                            uploaded_file_path=file_upload(event_banner,compress=1)
+                            
                             result=upload_to_s3(uploaded_file_path,s3_path)
                             if result['status'] == 1:
                                 new_event.cover_img = result['url']
@@ -6569,9 +6734,10 @@ async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),even
                                 return result
                         else:
                             s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.now().timestamp())}{file_ext}"
+                            uploaded_file_path=file_upload(event_banner,compress=None)
+                            
                             result=upload_to_s3(uploaded_file_path,s3_path)
                             # Upload to S3
-                            result=upload_to_s3(uploaded_file_path,s3_path)
                             if result['status'] == 1:
                                 new_event.cover_img = result['url']
                                 db.commit()
@@ -6649,7 +6815,8 @@ async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),even
 # 75.Edit Live Event
 @router.post("/editliveevent")
 async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_id:str=Form(None),event_title:str=Form(None),event_type:str=Form(None),event_start_date:Any=Form(None),event_start_time:Any=Form(None),event_banner:UploadFile=File(None),
-                              event_invite_mails:str=Form(None,description="Example abc@mail.com,def@mail.com"),event_invite_groups:str=Form(None,description="Example 1,2,3"),event_invite_friends:str=Form(None,description="Example 1,2,3"),delete_invite_mails:str=Form(None,description=" Example abc@mail.com,def@mail.com"),
+                              event_invite_mails:str=Form(None,description="Example abc@mail.com,def@mail.com"),event_invite_groups:str=Form(None,description="Example 1,2,3"),event_invite_friends:str=Form(None,description="Example 1,2,3"),
+                              delete_invite_mails:str=Form(None,description=" Example abc@mail.com,def@mail.com"),
                               delete_invite_groups:str=Form(None,description="Example 1,2,3"),delete_invite_friends:str=Form(None,description="Example 2,3,4")):
     
     if token == None or token.strip() == "":
@@ -6756,6 +6923,7 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
                     type='image'
                     if 'video' in file_temp:
                         type ='video'
+                    
                     if file_size > 1024 and type == 'image' and file_ext != '.gif':
                         # Compress Image
                         compress=1
@@ -6775,8 +6943,6 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
                         uploaded_file_path=file_upload(event_banner,compress)
                         
                         s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.now().timestamp())}{file_ext}"
-                        result=upload_to_s3(uploaded_file_path,s3_path)
-                        # Upload to S3
                         result=upload_to_s3(uploaded_file_path,s3_path)
                         if result['status'] == 1:
                             edit_event.cover_img = result['url']
@@ -7358,9 +7524,10 @@ async def influencerfollow(db:Session=Depends(deps.get_db),token:str=Form(None),
 async def pollvote(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:str=Form(None),poll_option_id:str=Form(None)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    elif nugget_id == None:
+    elif nugget_id == None or not nugget_id.isnumeric():
         return {"status":0,"msg":"Nugget ID is missing"}
-    elif poll_option_id == None:
+    
+    elif poll_option_id == None or not poll_option_id.isnumeric():
         return {"status":0,"msg":"Poll option is missing"}
         
     else:
@@ -7374,7 +7541,7 @@ async def pollvote(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_i
             else:
                 get_token_details=db.query(ApiTokens).filter_by(token = access_token).first()
                 
-                login_user_id=get_token_details.user_id
+                login_user_id=get_token_details.user_id if get_token_details else None
                 
                 if IsAccountVerified(db,login_user_id) == False:
                     return {"status":0,"msg":"You need to complete your account validation before you can do this"}
@@ -7568,4 +7735,3 @@ async def saveandunsavenugget(db:Session=Depends(deps.get_db),token:str=Form(Non
                     return {"status":0,"msg":"Invalid nugget"}
                                   
                             
-                 
