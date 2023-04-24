@@ -13,6 +13,7 @@ import pytz
 import boto3
 from urllib.parse import urlparse
 from sqlalchemy.orm import aliased
+from .webservices_2 import croninfluencemember
 
 router = APIRouter() 
 
@@ -796,8 +797,7 @@ def user_profile(db,id):
         event_count=db.query(Events).filter_by(created_by = id,status = 1).count()
         
         friend_count=db.query(MyFriends).filter(MyFriends.status == 1,MyFriends.request_status == 1,or_(MyFriends.sender_id == get_user.id,MyFriends.receiver_id == get_user.id)).count()
-        
-        
+                
         user_details={}
         user_details.update({"user_id":get_user.id,
                             "user_ref_id":get_user.user_ref_id if get_user.user_ref_id else "",
@@ -1511,6 +1511,7 @@ async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(Non
 @router.post("/listallfriends")
 async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),search_key:str=Form(None),group_ids:str=Form(None,description="Like ['12','13','14']"),
                          nongrouped:str=Form(None,description="Send 1"),friends_count:str=Form(None),allfriends:str=Form(None,description="send 1"),
+                         age:str=Form(None),gender:str=Form(None),location:str=Form(None),
                          page_number:str=Form(default=1,description="send 1 for initial request")):
                          
     if token == None or token.strip() == "":
@@ -1608,7 +1609,20 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
             get_my_friends=get_my_friends.filter(MyFriends.status == 1,MyFriends.request_status == 1,MyFriends.id.in_(my_friends_ids))
             
             if search_key:
-                get_my_friends=get_my_friends.filter(or_(User.email_id.like(search_key),User.display_name.like(search_key),User.first_name.like(search_key),User.last_name.like(search_key),User.gender == search_key,User.geo_location.like(search_key+"%")))
+                get_my_friends=get_my_friends.filter(or_(User.email_id.like(search_key),User.display_name.like(search_key),User.first_name.like(search_key),User.last_name.like(search_key)))
+            
+            # if age:
+            #     get_my_friends=get_my_friends.filter(User.age == age)
+            
+            if location:
+                get_my_friends=get_my_friends.filter(User.geo_location.like("%"+location+"%"))
+            
+            if gender:
+                if not gender.isnumeric():
+                    return {"status":0,"msg":"Invalid Gender type"}
+                else:
+                    get_my_friends=get_my_friends.filter(User.gender == gender)
+                
             
             get_my_friends_count=get_my_friends.count()
             
@@ -4885,11 +4899,9 @@ async def getothersprofile(db:Session=Depends(deps.get_db),token:str=Form(None),
                     return {"status": 0, "msg": "No result found!"}
             
                 else:
-                    # get_user=db.query(User).join(FollowUser,FollowUser.following_userid == User.id).filter(User.id == user_id).first()
                     get_user = db.query(User, FollowUser.id.label('follow_id')).\
                         outerjoin(FollowUser, (FollowUser.following_userid == User.id) & (FollowUser.follower_userid == login_user_id)).\
                         filter(User.id == user_id).first()
-                    # get_user=db.query(User).join(FollowUser,FollowUser.following_userid == user_id,FollowUser.follower_userid == login_user_id).filter(User.id == user_id).first()
                     
                     followers_count=db.query(FollowUser).filter_by(following_userid = user_id).count()
                     
@@ -4909,30 +4921,29 @@ async def getothersprofile(db:Session=Depends(deps.get_db),token:str=Form(None),
                         
                         result_list={
                                         "user_id":int(user_id),
-                                        "user_ref_id":get_user['User'].user_ref_id if get_user.follow_id else "",
-                                        "name":get_user["User"].display_name if get_user.follow_id else "",
-                                        "email_id":get_user["User"].email_id if get_user.follow_id else "",
-                                        
-                                        "mobile":get_user['User'].mobile_no if get_user.follow_id else "",
-                                        "dob":get_user['User'].dob if get_user.follow_id else "",
-                                        "geo_location":get_user['User'].geo_location if get_user.follow_id else "",
+                                        "user_ref_id":get_user['User'].user_ref_id if get_user['User'].user_ref_id else "",
+                                        "name":get_user["User"].display_name if get_user["User"].display_name else "",
+                                        "email_id":get_user["User"].email_id if get_user["User"].email_id else "",
+                                        "mobile":get_user['User'].mobile_no if get_user['User'].mobile_no else "",
+                                        "dob":get_user['User'].dob if get_user['User'].dob else "",
+                                        "geo_location":get_user['User'].geo_location if get_user['User'].geo_location else "",
                                         "bio_data":ProfilePreference(db,login_user_id,get_user['User'].id,field,get_user["User"].bio_data),
                                         
-                                        "profile_image":get_user['User'].profile_img if get_user.follow_id else "",
-                                        "cover_image":get_user['User'].cover_image if get_user.follow_id else "",
-                                        "website":get_user['User'].website if get_user.follow_id else "",
-                                        "first_name":get_user['User'].first_name if get_user.follow_id else "",
-                                        "last_name":get_user['User'].last_name if get_user.follow_id else "",
-                                        "gender":get_user['User'].gender if get_user.follow_id else "",
-                                        "country_code":get_user['User'].country_code if get_user.follow_id else "",
-                                        "country_id":get_user['User'].country_id if get_user.follow_id else "",
-                                        "user_code":get_user['User'].user_code if get_user.follow_id else "",
-                                        "latitude":get_user['User'].latitude if get_user.follow_id else "",
-                                        "longitude":get_user['User'].longitude if get_user.follow_id else "",
-                                        "date_of_join":get_user['User'].created_at if get_user.follow_id else "",
-                                        "user_type":get_user['User'].user_type_master.name if get_user.follow_id else "",
-                                        "user_status":get_user['User'].user_status_master.name if get_user.follow_id else "",
-                                        "user_status_id":get_user['User'].user_status_id if get_user.follow_id else "",
+                                        "profile_image":get_user['User'].profile_img if get_user['User'].profile_img else "",
+                                        "cover_image":get_user['User'].cover_image if get_user['User'].cover_image else "",
+                                        "website":get_user['User'].website if get_user['User'].website else "",
+                                        "first_name":get_user['User'].first_name if get_user['User'].first_name else "",
+                                        "last_name":get_user['User'].last_name if get_user['User'].last_name else "",
+                                        "gender":get_user['User'].gender if get_user['User'].gender else "",
+                                        "country_code":get_user['User'].country_code if get_user['User'].country_code else "",
+                                        "country_id":get_user['User'].country_id if get_user['User'].country_id else "",
+                                        "user_code":get_user['User'].user_code if get_user['User'].user_code else "",
+                                        "latitude":get_user['User'].latitude if get_user['User'].latitude else "",
+                                        "longitude":get_user['User'].longitude if get_user['User'].longitude else "",
+                                        "date_of_join":common_date(get_user['User'].created_at) if get_user['User'].created_at else "",
+                                        "user_type":get_user['User'].user_type_master.name if get_user['User'].user_type_master.name else "",
+                                        "user_status":get_user['User'].user_status_master.name if get_user['User'].user_status_master.name else "",
+                                        "user_status_id":get_user['User'].user_status_id if get_user['User'].user_status_id else "",
                                         "friends_count":FriendsCount(db,get_user["User"].id),
                                         "friend_status":None,
                                         "friend_request_id":None,
@@ -4952,6 +4963,8 @@ async def getothersprofile(db:Session=Depends(deps.get_db),token:str=Form(None),
                                 }
                     
                         return {"status":1,"msg":"Success","profile":result_list}
+
+
 
 
 # 52. List all Blocked users
@@ -6383,6 +6396,8 @@ async def followandunfollow(db:Session=Depends(deps.get_db),token:str=Form(None)
                             db.add(add_frnd_group)
                             db.commit()
                     
+                    get_influence_count=croninfluencemember(db,get_user.id)
+                    
                     return {"status":1,"msg":f"Now you are fan of {add_follow_user.user2.display_name}"}
                         
                             
@@ -6392,6 +6407,7 @@ async def followandunfollow(db:Session=Depends(deps.get_db),token:str=Form(None)
                         db.commit()
                     
                     msg=f"{follow_user.user2.display_name if follow_user else ''} not influencing you"
+                    get_influence_count=croninfluencemember(db,get_user.id)
                     
                     del_follow_user=db.query(FollowUser).filter(FollowUser.follower_userid == login_user_id,FollowUser.following_userid == follow_userid).delete()
                     db.commit()
@@ -7117,7 +7133,7 @@ async def enablegoliveevent(db:Session=Depends(deps.get_db),token:str=Form(None)
                     db.commit()
                     totalfriends=[]
                     message_detail=[]
-                    if edit_event.event_type_id==1:
+                    if edit_event.event_type_id == 1:
                         totalfriends=get_friend_requests(login_user_id,requested_by=None,request_status=1,response_type=1,search_key=None)
                         totalfriends.append(totalfriends.accepted)
                     if totalfriends and len(totalfriends)>0:
@@ -7183,49 +7199,54 @@ async def socialmedialogin(db:Session=Depends(deps.get_db),signin_type:str=Form(
         return {"status":0,"msg":"Auth Code is missing"}
     elif first_name.strip()=="" or first_name.strip()==None:
         return {"status":0,"msg":"Please provide your first name"}
-    elif signin_type and signin_type <= 1:
+    elif signin_type and not signin_type.isnumeric():
+        return {"status":0,"msg":"Invalid Signin type"}
+    elif signin_type and int(signin_type) <= 1:
         return {"status":0,"msg":"signin type is missing"}
     elif first_name == None or first_name.strip() == '':
         return {"status":0,"msg":"First Name is missing"}
     elif auth_code == None or auth_code.strip() == '':
         return {"status":0,"msg":"Auth code is missing"}
-    elif app_type == None:
+    elif app_type == None or not app_type.isnumeric():
         return {"status":0,"msg":"App type is missing"}
     elif password == None or password.strip() == "":
         return {"status":0,"msg":"Password is missing"}
     elif dob and is_date(dob) == False:
         return {"status":0,"msg":"Invalid Date"}
     else:
-        mobile_no=mobile_no if mobile_no.strip() !="" or mobile_no.strip()!=None else None
+        signin_type=int(signin_type)
+        
+        mobile_no=mobile_no if mobile_no !="" or mobile_no !=None else None
 
-        password=password if password.strip() !="" or password.strip() !=None or password.strip()>6 else None
-        last_name=last_name if last_name.strip()!="" or last_name.strip() !=None else None
+        password=password.strip() if password !="" or password.strip() !=None or password.strip()>6 else None
+        last_name=last_name.strip() if last_name !="" or last_name !=None else None
         display_name=first_name.strip()+''+last_name.strip()
         profile_img=defaultimage('profile_img')
-        geo_location=geo_location if geo_location.strip !="" or geo_location.strip()!=None else None
-        latitude=latitude if latitude.strip() !="" or latitude.strip()!=None else None
-        longitude=longitude if longitude.strip()!="" or longitude.strip()!=None else None
-        friend_ref_code=ref_id if ref_id.strip !="" or ref_id.strip !=None else None
+        geo_location=geo_location.strip() if geo_location and geo_location.strip() != '' else None
+        latitude=latitude.strip() if latitude and latitude.strip() != '' else None
+        longitude=longitude.strip() if longitude and longitude.strip() != '' else None
+        friend_ref_code=ref_id.strip() if ref_id and  ref_id.strip() != '' else None
 
-        device_type=device_type if device_type>0 else None
-        device_id=device_id if device_id.strip() !="" or device_id.strip() !=None else None
-        push_id=push_id if push_id.strip() !="" or push_id.strip() !=None else None
-        auth_code=auth_code if auth_code.strip() !="" or auth_code.strip() !=None else None
-        login_from=login_from if login_from.strip() !="" or login_from.strip() !=None else 2
-        voip_token=voip_token if voip_token.strip()!="" or voip_token.strip()!=None else None
-        app_type=app_type if app_type>0 else 0
+        device_type=device_type if device_type and int(device_type) > 0 else None
+        device_id=device_id if device_id != "" or device_id !=None else None
+        push_id=push_id if push_id != "" or push_id !=None else None
+        auth_code=auth_code if auth_code != "" or auth_code !=None else None
+        login_from=login_from if login_from != "" or login_from !=None else 2
+        voip_token=voip_token if voip_token != "" or voip_token !=None else None
+        app_type=app_type if int(app_type) > 0 else 0
 
         #Extra parameter
-        gender=gender if gender>0 else None
-        signup_social_ref_id=signup_social_ref_id if signup_social_ref_id.strip() !="" or signup_social_ref_id.strip()!=None else None
+        gender=gender if gender and int(gender) > 0 else None
+        signup_social_ref_id=signup_social_ref_id if signup_social_ref_id and signup_social_ref_id.strip() !="" else None
 
         auth_text=email_id
-        if checkAuthCode(auth_code,auth_text)==False:
+        if checkAuthCode(auth_code,auth_text) == False:
             return {"sttaus":0,"msg":"Authentication failed!"}
         else:
             check_email_or_mobile=EmailorMobileNoValidation(db,email_id)
-            if check_email_or_mobile['status'] and check_email_or_mobile['status']==1:
-                if check_email_or_mobile['type'] and (check_email_or_mobile['type']==1 or check_email_or_mobile['type']==2):
+            if check_email_or_mobile['status'] and check_email_or_mobile['status'] == 1:
+                
+                if check_email_or_mobile['type'] and (check_email_or_mobile['type'] == 1 or check_email_or_mobile['type']==2):
                     if check_email_or_mobile['type']==1:
                         email_id= check_email_or_mobile['email']
                         mobile_no=None
@@ -7236,6 +7257,7 @@ async def socialmedialogin(db:Session=Depends(deps.get_db),signin_type:str=Form(
                     return {"status":0 ,"msg":"Unable to signup"}
             else:
                     return {"status":0 ,"msg":"Unable to signup"}
+                
             check_email_id=0
             check_phone=0
             if email_id !='':
@@ -7437,7 +7459,7 @@ async def influencerfollow(db:Session=Depends(deps.get_db),token:str=Form(None),
         
     else:
         auth_code = auth_code
-        auth_text = token
+        auth_text = token.strip()
         if checkAuthCode(auth_code,auth_text) == False:
             return {"status":0,"msg":"Authentication failed!"}
         else:

@@ -55,3 +55,4 @@ from .nuggets_likes import NuggetsLikes
 
 # New
 from .event_abuse_report import EventAbsueReport
+from .claim_accounts import ClaimAccounts
