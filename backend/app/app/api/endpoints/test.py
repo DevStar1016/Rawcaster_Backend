@@ -44,19 +44,19 @@ async def upload_video(video: UploadFile = File(...), target_size_kb: int = 100)
   
      
     file_path = os.path.abspath(video.filename)
-    print(file_path)
+    
     with open(file_path, "wb") as buffer:
         buffer.write(await video.read())
 
-    output_file = f"/home/mae3/Music/{video.filename[:-4]}_converted.mp4"
-    command = f"ffmpeg -i {file_path} -vcodec libx265 -crf 50 {output_file}"
-    subprocess.run(command, shell=True, check=True)
+    # output_file = f"s_converted.mp4"
+    # command = f"ffmpeg -i {file_path} -vcodec libx265 -crf 50 {output_file}"
+    # subprocess.run(command, shell=True, check=True)
 
-    compressed_size = os.path.getsize(output_file) // 1024
+    # compressed_size = os.path.getsize(output_file) // 1024
 
  
 
-    return compressed_size
+    # return compressed_size
 
 
 # from io import BytesIO

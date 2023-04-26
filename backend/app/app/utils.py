@@ -26,13 +26,14 @@ from dateutil.parser import parse
 import subprocess
 
 def is_date(string, fuzzy=False):
-    try: 
-        parse(string, fuzzy=fuzzy)
+
+    date_format = '%Y-%m-%d'  # example format to check
+    try:
+        date = datetime.strptime(string, date_format)
         return True
-
-    except ValueError:
+    except ValueError: 
         return False
-
+    
 
 def isTimeFormat(input):
     try:
@@ -135,8 +136,8 @@ async def audio_file_upload(upload_file,compress):
 def upload_to_s3(local_file_pth,s3_bucket_path):
     bucket_name='rawcaster'
     
-    access_key="AKIAYFYE6EFYG6RJOPMF"
-    access_secret="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"
+    access_key="AKIAYFYE6EFYGNPCA32D"
+    access_secret="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"
     try:
         client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
         
@@ -149,7 +150,7 @@ def upload_to_s3(local_file_pth,s3_bucket_path):
         url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{s3_bucket_path}'
         return {"status":1,"url":url}
     except:
-        return {"staus":0,"msg":"Unable to Upload"}
+        return {"status":0,"msg":"Unable to Upload"}
     
 
 async def send_email(db,to_mail, subject, message):
@@ -330,7 +331,7 @@ def friendRequestNotifcationEmail(db,senderId,receiverId,flag):   # flag = 1 Fri
         phone=''
         sms_message=''
         
-        my_friends=db.query(MyFriends).filter(MyFriends.sender_id == senderId,MyFriends.receiver_id == receiverId)
+        my_friends=db.query(MyFriends).filter(MyFriends.sender_id == senderId,MyFriends.receiver_id == receiverId,MyFriends.status == 1)
         if flag == 1:
             my_friends=my_friends.filter(MyFriends.request_status == 0).first()
             
@@ -363,8 +364,8 @@ def friendRequestNotifcationEmail(db,senderId,receiverId,flag):   # flag = 1 Fri
                 to=email_id
                 subject="Connection Accepted Notification"
                 invite_url=inviteBaseurl()
-                encrypt_string=encryptionString()
-                url_path=base64.b64encode(senderId.encode('utf-8') + encrypt_string.encode('utf-8'))
+                url_path=base64.b64encode(str(receiverId).encode('utf-8'))
+
                 url=f"{invite_url}signin/{url_path}/connectionrequest"
                 
                 body =''
@@ -386,7 +387,7 @@ def addNotificationSmsEmail(db,user,email_detail,login_user_id):
     mobile_nos = ""
     if user:
         get_user =db.query(User.id,User.country_code,User.email_id,User.mobile_no,UserSettings.nuggets,UserSettings.events,UserSettings.friend_request)
-        get_user=get_user.filter(UserSettings.user_id == User.id,User.status == 1,User.id.in_(user)).all()
+        get_user=get_user.filter(UserSettings.user_id == User.id,User.status == 1,User.id.in_([user])).all()
         
         for user in get_user:
             permission_arr = list(user[type_])
@@ -881,7 +882,7 @@ def get_friend_requests(db,login_user_id,requested_by,request_status,response_ty
             friend_details=[]
             if frnd_request.sender_id == login_user_id:    # Receiver
                 friend_id=frnd_request.receiver_id
-                print(friend_id)
+                
                 friend_details.append({"friend_request_id":frnd_request.id,
                                        "user_ref_id":frnd_request.user1.user_ref_id if frnd_request.receiver_id else None,
                                        "user_id":frnd_request.user1.id if frnd_request.receiver_id else None,
@@ -894,7 +895,7 @@ def get_friend_requests(db,login_user_id,requested_by,request_status,response_ty
                                     })
                 
             else:
-                print(frnd_request.sender_id)
+                
                 friend_id=frnd_request.sender_id
                 friend_details.append({"friend_request_id":frnd_request.id,
                                        "user_ref_id":frnd_request.user1.user_ref_id if frnd_request.sender_id else None,
@@ -1354,12 +1355,17 @@ def SendOtp(db,user_id,signup_type):
 
 
 def ProfilePreference(db,myid,otherid,field,value):
+    
     settings=db.query(UserSettings).filter(UserSettings.user_id == otherid).first()
+    
     if hasattr(settings, field):
+        
         if getattr(settings, field) == 0:
             return ""
+        
         elif getattr(settings, field) == 1:
             return value
+        
         elif getattr(settings, field) == 2:
             if FriendsandGroupPermission(db,myid,otherid,1):
                 return value
@@ -1372,7 +1378,7 @@ def ProfilePreference(db,myid,otherid,field,value):
             if online_group_list:
                 for group_list in online_group_list:
                     lists.append(group_list)
-            if len(list)>0:
+            if len(lists)>0:
                 if FriendsandGroupPermission(db,myid,lists,2):
                     return value
                 else:
