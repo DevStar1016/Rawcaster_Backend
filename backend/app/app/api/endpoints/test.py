@@ -24,19 +24,40 @@ access_secret="Os6IsUAOPbJybMYxAdqUAAUL58xCIUlaD08Tsgj2"
 
 
 
+
 @router.post("/upload_audio/")
 async def upload_audio(audio: UploadFile = File(...)):
+    uploads_file_name=audio.filename
+    
+    base_dir = f"{st.BASE_DIR}/rawcaster"
+    try:
+        os.makedirs(base_dir, mode=0o777, exist_ok=True)
+    except OSError as e:
+        sys.exit("Can't create {dir}: {err}".format(
+            dir=base_dir, err=e))
+
+    output_dir = base_dir + "/"
+    
+    characters = string.ascii_letters + string.digits
+    # Generate the random string
+    
+    ext = os.path.splitext(uploads_file_name)[-1].lower()
+    filename=f"audio_{random.randint(1111,9999)}{datetime.now().timestamp()}{ext}"    
+   
+    save_full_path=f'{output_dir}{filename}'  
+    
     filename = audio.filename
     input_path = os.path.abspath(audio.filename)
     
-    output_path = f"/home/mae3/Music/{audio.filename}_compressed.mp3"
+    output_path = f"{filename}.mp3"
    
 
-    with open(input_path, "wb") as buffer: 
+    with open(save_full_path, "wb") as buffer: 
         buffer.write(await audio.read())
 
-    subprocess.run(["ffmpeg", "-i", input_path, "-ab", "32k", "-y", output_path])
+    subprocess.run(["ffmpeg", "-i", save_full_path, "-ab", "32k", "-y", output_path])
 
+    os.remove(save_full_path)
 
 
 @router.post("/upload-video/")

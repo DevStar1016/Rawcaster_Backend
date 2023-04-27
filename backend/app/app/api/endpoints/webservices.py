@@ -233,7 +233,7 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(defaul=1,d
                     
                     # reply=logins(db,email_id,password,device_type,device_id,push_id,login_from,voip_token,app_type)
                     
-                    return {"status":1, "msg": "Success", "email": email_id,"otp_ref_id":otp_ref_id,"user_id":add_user.id,"acc_verify_status": 0,"first_time":1}  # First Time (1 - New to rawcaster, 0 - existing user)
+                    return {"status":1, "msg": "Success", "email": email_id,"otp_ref_id":otp_ref_id,"user_id":add_user.id,"acc_verify_status": 0,"first_time":1,"remaining_seconds":90}  # First Time (1 - New to rawcaster, 0 - existing user)
                     
                 else:
                     return {"status":0,"msg":"Failed to add User"}
@@ -982,6 +982,9 @@ async def updatemyprofile(db:Session=Depends(deps.get_db),token:str=Form(None),n
                     get_user_profile.work_at =work_at
                     get_user_profile.studied_at=studied_at
                     get_user_profile.influencer_category = influencer_category.strip() if influencer_category else None
+                    get_user_profile.profile_img = defaultimage('profile_img')
+                    get_user_profile.cover_image = defaultimage('cover_img')
+                    
                     db.commit()
                     
                     # Image Part Pending
@@ -2055,11 +2058,12 @@ async def deletefriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None)
 @router.post("/addnuggets")
 async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),content:str=Form(None),share_type:str=Form(None),share_with:str=Form(None,description='friends":[1,2,3],"groups":[1,2,3]}'),
                      nuggets_media:List[UploadFile]=File(None),poll_option:str=Form(None),poll_duration:str=Form(None),metadata:str=Form(None)):
-                         
+               
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    elif content == None or content.strip() == '':
+    elif not content and not nuggets_media:
         return {"status": 0, "msg": "Sorry! Nuggets content or Media can not be empty."}
+    
     elif share_type == None:
         return {"status": 0, "msg": "Sorry! Share type can not be empty."}
     # elif nuggets_media == None:
@@ -2183,9 +2187,11 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),conten
                                     elif type == 'audio':
                                         s3_file_path=f"nuggets/audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
                                         uploaded_file_path=audio_file_upload(nugget_media,compress=1)
+                                    
                                     else:
                                         uploaded_file_path=file_upload(nugget_media,compress=0)
-                                        
+                                    
+                                    
                                     result=upload_to_s3(uploaded_file_path,s3_file_path)
                                     if result['status'] == 1:
                                         add_nugget_attachment.path = result['url']
@@ -2485,7 +2491,7 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
                     total_comments=db.query(NuggetsComments).filter(NuggetsComments.nugget_id == nuggets.id).count()
                     total_views=db.query(NuggetView).filter(NuggetView.nugget_id == nuggets.id,NuggetView.user_id == login_user_id).count()
                     
-                    total_vote=db.query(NuggetPollVoted).filter(NuggetPollVoted.user_id == login_user_id,NuggetPollVoted.nugget_master_id == Nuggets.nuggets_id).count()
+                    total_vote=db.query(NuggetPollVoted).filter(NuggetPollVoted.nugget_id == nuggets.id).count()
                     
                     
                     img_count= 0
@@ -3634,9 +3640,8 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                 flag='event_banner' if event_type == 1 else "talkshow" if event_type == 2 else "live" if event_type == 3 else None
                 
                 cover_img=defaultimage(flag)
-                
-                if setting and setting.meeting_header_image != None:  
-                    cover_img=setting.meeting_header_image
+                if setting:
+                    cover_img=setting.meeting_header_image if setting.meeting_header_image else defaultimage(flag)
                 
                 server_id =None
                 
@@ -4125,7 +4130,7 @@ async def listevents(db:Session=Depends(deps.get_db),token:str=Form(None),user_i
                             default_guest_audio.append(def_av.default_guest_audio)
                             default_guest_video.append(def_av.default_guest_video)
                         
-                        banner_image= (settings.meeting_header_image if settings.meeting_header_image else "") if event.type == 1 else (settings.talkshow_event_banner if settings.talkshow_event_banner else "") if event.type == 2 else (settings.live_event_banner if settings.live_event_banner else "") if event.type == 3 else event.cover_img
+                        banner_image= (settings.meeting_header_image if settings.meeting_header_image else event.cover_img) if event.type == 1 else (settings.talkshow_event_banner if settings.talkshow_event_banner else event.cover_img) if event.type == 2 else (settings.live_event_banner if settings.live_event_banner else event.cover_img) if event.type == 3 else event.cover_img
                         
                         result_list.append({
                                             "event_id":event.id,
@@ -5252,8 +5257,9 @@ async def getusersettings(db:Session=Depends(deps.get_db),token:str=Form(None)):
                                 "lock_nugget":get_user_settings.lock_nugget if get_user_settings.lock_nugget else 0,
                                 "lock_fans":get_user_settings.lock_fans if get_user_settings.lock_fans else 0,
                                 "lock_my_connection":get_user_settings.lock_my_connection if get_user_settings.lock_my_connection else 0,
-                                "lock_my_influencer":get_user_settings.lock_my_influencer if get_user_settings.lock_my_influencer else 0
-                                        
+                                "lock_my_influencer":get_user_settings.lock_my_influencer if get_user_settings.lock_my_influencer else 0,
+                                "live_event_banner":get_user_settings.live_event_banner if get_user_settings.live_event_banner else "",
+                                "talkshow_event_banner":get_user_settings.talkshow_event_banner if get_user_settings.talkshow_event_banner else ""
                                 })
         
             return {"status":1,"msg":"Success","settings":result_list}
@@ -5390,7 +5396,7 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                         file_ext = os.path.splitext(meeting_header_image.filename)[1]
                         local_file_upload=''
                         extensions=[".jpeg", ".jpg", ".png"]
-                        
+                        print(file_size)
                         if not file_ext in extensions:
                             return {"status":0,"msg":"Image format does not support"}
                         
@@ -5410,7 +5416,7 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                             
                             result=upload_to_s3(local_file_upload,s3_file_pth)
                             if result['status'] == 1:
-                                meeting_header_image=result['url']
+                                header_image=result['url']
                             else:
                                 return result
                     
@@ -5535,7 +5541,7 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                     settings.participant_audio=participant_audio if participant_audio and 0<=participant_audio<=1 else settings.participant_audio
                     settings.participant_video=participant_video if participant_video and 0<=participant_video<=1 else settings.participant_video
                     settings.melody=melody if melody and melody >= 0 else settings.melody
-                    settings.meeting_header_image=meeting_header_image
+                    settings.meeting_header_image=header_image
                     settings.language_id=language_id if language_id and language_id>0 else settings.language_id
                     settings.time_zone=time_zone if time_zone else settings.time_zone
                     settings.date_format=date_format if date_format!="" and date_format!=None else settings.date_format
@@ -7193,10 +7199,10 @@ async def socialmedialogin(db:Session=Depends(deps.get_db),signin_type:str=Form(
         return {"status":0,"msg":"First Name is missing"}
     elif auth_code == None or auth_code.strip() == '':
         return {"status":0,"msg":"Auth code is missing"}
-    elif app_type == None or not app_type.isnumeric():
+    elif app_type and not app_type.isnumeric():
         return {"status":0,"msg":"App type is missing"}
-    elif password == None or password.strip() == "":
-        return {"status":0,"msg":"Password is missing"}
+    # elif password == None or password.strip() == "":
+    #     return {"status":0,"msg":"Password is missing"}
     elif dob and is_date(dob) == False:
         return {"status":0,"msg":"Invalid Date"}
     else:
@@ -7204,9 +7210,9 @@ async def socialmedialogin(db:Session=Depends(deps.get_db),signin_type:str=Form(
         
         mobile_no=mobile_no if mobile_no !="" or mobile_no !=None else None
 
-        password=password.strip() if password !="" or password.strip() !=None or password.strip()>6 else None
-        last_name=last_name.strip() if last_name !="" or last_name !=None else None
-        display_name=first_name.strip()+''+last_name.strip()
+        password=password.strip() if password else None
+        last_name=last_name.strip() if last_name else None
+        display_name=f"{first_name.strip()} {last_name.strip() if last_name else None}"
         profile_img=defaultimage('profile_img')
         geo_location=geo_location.strip() if geo_location and geo_location.strip() != '' else None
         latitude=latitude.strip() if latitude and latitude.strip() != '' else None
@@ -7219,7 +7225,7 @@ async def socialmedialogin(db:Session=Depends(deps.get_db),signin_type:str=Form(
         auth_code=auth_code if auth_code != "" or auth_code !=None else None
         login_from=login_from if login_from != "" or login_from !=None else 2
         voip_token=voip_token if voip_token != "" or voip_token !=None else None
-        app_type=app_type if int(app_type) > 0 else 0
+        app_type= int(app_type) if app_type else 0
 
         #Extra parameter
         gender=gender if gender and int(gender) > 0 else None
@@ -7229,7 +7235,7 @@ async def socialmedialogin(db:Session=Depends(deps.get_db),signin_type:str=Form(
         if checkAuthCode(auth_code,auth_text) == False:
             return {"sttaus":0,"msg":"Authentication failed!"}
         else:
-            check_email_or_mobile=EmailorMobileNoValidation(db,email_id)
+            check_email_or_mobile=EmailorMobileNoValidation(email_id)
             if check_email_or_mobile['status'] and check_email_or_mobile['status'] == 1:
                 
                 if check_email_or_mobile['type'] and (check_email_or_mobile['type'] == 1 or check_email_or_mobile['type']==2):
@@ -7281,62 +7287,65 @@ async def socialmedialogin(db:Session=Depends(deps.get_db),signin_type:str=Form(
                               longitude=longitude,created_at=datetime.utcnow(),status=1)
                 db.add(model)
                 db.commit()
+                db.refresh(model)
+                if model:
+                    user_ref_id =GenerateUserRegID(model.id)
+                    password=user_ref_id
                 
-                user_ref_id =GenerateUserRegID(model.id)
-                password=user_ref_id
-               
-                db.query(User).filter_by(id=model.id).update({'user_ref_id': user_ref_id, 'password': hashlib.sha1(user_ref_id.encode()).hexdigest()})
-                db.commit()
+                    db.query(User).filter_by(id=model.id).update({'user_ref_id': user_ref_id, 'password': hashlib.sha1(user_ref_id.encode()).hexdigest()})
+                    db.commit()
 
-                #Set Default user settings 
-                user_settings_model=UserSettings(user_id=model.id,online_status=1,friend_request='000',nuggets='000',events='000',status=1,chat_enabled=0)
-                db.add(user_settings_model)
-                db.commit()
+                    #Set Default user settings 
+                    user_settings_model=UserSettings(user_id=model.id,online_status=1,friend_request='000',nuggets='000',events='000',status=1,chat_enabled=0)
+                    db.add(user_settings_model)
+                    db.commit()
 
-                #Set Default user settings
-                friends_group=FriendGroups(group_name="My Fans",group_icon=defaultimage('group_icon'),created_by=model.id,created_at=datetime.utcnow(),status=1,chat_enabled=0)
-                db.add(friends_group)
-                db.commit()
+                    #Set Default user settings
+                    friends_group=FriendGroups(group_name="My Fans",group_icon=defaultimage('group_icon'),created_by=model.id,created_at=datetime.utcnow(),status=1,chat_enabled=0)
+                    db.add(friends_group)
+                    db.commit()
 
-                referred_id=0
-                if friend_ref_code !=None:
-                    friend_ref_code = base64.b64decode(friend_ref_code)
-                    referrer_ref_id = friend_ref_code.split('//')
-                    if len(referrer_ref_id) == 2:
-                        referred_user=db.query(User).filter(User.user_ref_id==referrer_ref_id[0],User.status==1).first()
-                        if referred_user:
-                            referred_id=referred_user.id
-                            update_data = {'referrer_id': referred_user.id, 'invited_date': datetime.strptime(referrer_ref_id[1], '%Y-%m-%d %H:%M:%S')}
-                            db.query(User).filter_by(id=model.id).update(update_data)
+                    referred_id=0
+                    if friend_ref_code !=None:
+                        friend_ref_code = base64.b64decode(friend_ref_code)
+                        referrer_ref_id = friend_ref_code.split('//')
+                        if len(referrer_ref_id) == 2:
+                            referred_user=db.query(User).filter(User.user_ref_id==referrer_ref_id[0],User.status==1).first()
+                            if referred_user:
+                                referred_id=referred_user.id
+                                update_data = {'referrer_id': referred_user.id, 'invited_date': datetime.strptime(referrer_ref_id[1], '%Y-%m-%d %H:%M:%S')}
+                                db.query(User).filter_by(id=model.id).update(update_data)
 
-                            db.commit()
-                            ref_friend=MyFriends(sender_id=referred_user.id,receiver_id=model.id,request_date=datetime.utcnow(),request_status=1,status_date=None,status=1)
-                            db.add(ref_friend)
-                            db.commit()
-                            query = db.query(FriendGroups).filter(FriendGroups.group_name == 'My Fans', FriendGroups.created_by == referred_user.id)
-                            group = query.first()
-
-                            if group:
-                                Followmodel=FollowUser(follower_userid=model.id,following_userid=referred_user.id,created_date=datetime.utcnow())
-                                db.add(Followmodel)
                                 db.commit()
-                                friend_group_member=db.query(FriendGroupMembers).filter(FriendGroupMembers.group_id==group.id,FriendGroupMembers.user_id==referred_user.id).all()
-                                if not friend_group_member:
-                                    friend_model=FriendGroupMembers(group_id=group.id,user_id=model.id,added_date=datetime.utcnow(),added_by=referred_user.id,is_admin=0,disable_notification=1,status=1)
-                                    db.add(friend_model)
+                                ref_friend=MyFriends(sender_id=referred_user.id,receiver_id=model.id,request_date=datetime.utcnow(),request_status=1,status_date=None,status=1)
+                                db.add(ref_friend)
+                                db.commit()
+                                query = db.query(FriendGroups).filter(FriendGroups.group_name == 'My Fans', FriendGroups.created_by == referred_user.id)
+                                group = query.first()
+
+                                if group:
+                                    Followmodel=FollowUser(follower_userid=model.id,following_userid=referred_user.id,created_date=datetime.utcnow())
+                                    db.add(Followmodel)
                                     db.commit()
-            #Referral Auto Add Friend Ends
-            rawcaster_support_id=GetRawcasterUserID(2)
-            if rawcaster_support_id and referred_id !=rawcaster_support_id:
-                myfriend=MyFriends(sender_id=rawcaster_support_id,receiver_id=model.id,request_date=datetime.utcnow(),request_status=1,status_date=None,status=1)
-                db.add(myfriend)
-                db.commit()
-            
-            password = hashlib.sha1(password.encode()).hexdigest()
-            if email_id=='':
-                email_id=mobile_no
-            reply=login(email_id,password,device_type,device_id,push_id,login_from,voip_token,app_type)
-        
+                                    friend_group_member=db.query(FriendGroupMembers).filter(FriendGroupMembers.group_id==group.id,FriendGroupMembers.user_id==referred_user.id).all()
+                                    if not friend_group_member:
+                                        friend_model=FriendGroupMembers(group_id=group.id,user_id=model.id,added_date=datetime.utcnow(),added_by=referred_user.id,is_admin=0,disable_notification=1,status=1)
+                                        db.add(friend_model)
+                                        db.commit()
+                                        
+                    #Referral Auto Add Friend Ends
+                    rawcaster_support_id=GetRawcasterUserID(db,2)  # Type = 2
+                    if rawcaster_support_id and referred_id != rawcaster_support_id:
+                        myfriend=MyFriends(sender_id=rawcaster_support_id,receiver_id=model.id,request_date=datetime.utcnow(),request_status=1,status_date=None,status=1)
+                        db.add(myfriend)
+                        db.commit()
+                    
+                    password = hashlib.sha1(password.encode()).hexdigest()
+                    if email_id=='':
+                        email_id=mobile_no
+                    reply=login(email_id,password,device_type,device_id,push_id,login_from,voip_token,app_type)
+                else:
+                    reply={"status":0,"msg":"Something went wrong when creating a User"}
     return reply
 
 
@@ -7572,11 +7581,15 @@ async def pollvote(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_i
                                                     )
                     db.add(add_nugget_vote)
                     db.commit()
+                    db.refresh(add_nugget_vote)
                     if add_nugget_vote:
                         poll_vote_calc=PollVoteCalculation(db,check_nuggets.nuggets_id)
+                        
                         ref_id=13
                         insert_notify=Insertnotification(db,check_nuggets.user_id,login_user_id,ref_id,nugget_id)
-
+                        add_nugget_vote.status = 1
+                        db.commit()
+                        
                         return {"status":1,"msg":"Success"}
 
                     else:

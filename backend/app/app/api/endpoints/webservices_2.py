@@ -136,7 +136,7 @@ async def add_claim_account(db:Session=Depends(deps.get_db),token:str=Form(None)
                                     telephone=telephone,email_id=email_id,claim_date=datetime.now(),created_at=datetime.now(),status=1,admin_status=0)
             db.add(add_clain)
             db.commit()
-            return {"status":1,"msg":"Success"}
+            return {"status":1,"msg":"You have placed a claim on a predefined influencer profile; We will contact you to validate your claim. Please contact us at info@rawcaster.com if you have any questions."}
     
     
 

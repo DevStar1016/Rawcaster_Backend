@@ -46,7 +46,7 @@ def isTimeFormat(input):
 def file_upload(file_name,compress):
     uploads_file_name=file_name.filename
     
-    base_dir = os.getcwd()
+    base_dir = f"{st.BASE_DIR}/rawcaster"
     try:
         os.makedirs(base_dir, mode=0o777, exist_ok=True)
     except OSError as e:
@@ -73,10 +73,10 @@ def file_upload(file_name,compress):
     return save_full_path
 
 
-async def video_file_upload(upload_file,compress):
-    uploads_file_name=upload_file.filename
+def video_file_upload(upload_file,compress):
+    import cv2
     
-    base_dir = os.getcwd()
+    base_dir = f"{st.BASE_DIR}/rawcaster"
     try:
         os.makedirs(base_dir, mode=0o777, exist_ok=True)
     except OSError as e:
@@ -88,17 +88,20 @@ async def video_file_upload(upload_file,compress):
     characters = string.ascii_letters + string.digits
     # Generate the random string
     random_string = ''.join(random.choice(characters) for i in range(18))
-    
-    ext = os.path.splitext(uploads_file_name)[-1].lower()
-    filename=f"Image_{random_string}.mp4"    
+    filename=f"video_{random_string}.mp4"    
    
     save_full_path=f'{output_dir}{filename}'  
+    video_cap = cv2.VideoCapture(upload_file)
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    
+    output = cv2.VideoWriter(save_full_path, fourcc)
+    
       
-    with open(save_full_path, "wb") as buffer:
-        buffer.write(await upload_file.read())
-    if compress:
-        command = f"ffmpeg -i {save_full_path} -vcodec libx265 -crf 50 {save_full_path}"
-        subprocess.run(command, shell=True, check=True)
+    # with open(save_full_path, "wb") as buffer:
+    #     buffer.write(upload_file.read())
+    # if compress:
+    #     command = f"ffmpeg -i {save_full_path} -vcodec libx265 -crf 50 {save_full_path}"
+    #     subprocess.run(command, shell=True, check=True)
          
     return save_full_path
     
@@ -106,7 +109,7 @@ async def video_file_upload(upload_file,compress):
 async def audio_file_upload(upload_file,compress):
     uploads_file_name=upload_file.filename
     
-    base_dir = os.getcwd()
+    base_dir = f"{st.BASE_DIR}/rawcaster"
     try:
         os.makedirs(base_dir, mode=0o777, exist_ok=True)
     except OSError as e:
@@ -117,19 +120,24 @@ async def audio_file_upload(upload_file,compress):
     
     characters = string.ascii_letters + string.digits
     # Generate the random string
-    random_string = ''.join(random.choice(characters) for i in range(18))
     
     ext = os.path.splitext(uploads_file_name)[-1].lower()
-    filename=f"Image_{random_string}.mp3"    
+    filename=f"audio_{random.randint(1111,9999)}{datetime.now().timestamp()}{ext}"    
    
     save_full_path=f'{output_dir}{filename}'  
-      
-    with open(save_full_path, "wb") as buffer:
+    
+    filename = upload_file.filename
+    input_path = os.path.abspath(upload_file.filename)
+    
+    output_path = f"{filename}.mp3"
+   
+
+    with open(save_full_path, "wb") as buffer: 
         buffer.write(await upload_file.read())
-    if compress:
-        subprocess.run(["ffmpeg", "-i", save_full_path, "-ab", "32k", "-y", save_full_path])
-         
-    return save_full_path
+
+    subprocess.run(["ffmpeg", "-i", save_full_path, "-ab", "32k", "-y", output_path])
+
+    return output_path
     
 
 
@@ -387,7 +395,7 @@ def addNotificationSmsEmail(db,user,email_detail,login_user_id):
     mobile_nos = ""
     if user:
         get_user =db.query(User.id,User.country_code,User.email_id,User.mobile_no,UserSettings.nuggets,UserSettings.events,UserSettings.friend_request)
-        get_user=get_user.filter(UserSettings.user_id == User.id,User.status == 1,User.id.in_([user])).all()
+        get_user=get_user.filter(UserSettings.user_id == User.id,User.status == 1,User.id.in_(user)).all()
         
         for user in get_user:
             permission_arr = list(user[type_])
@@ -1087,14 +1095,31 @@ def get_pagination(row_count, current_page_no, default_page_size):
 
 
 def PollVoteCalculation(db,nugget):
-    getvotes=db.query(NuggetPollOption.id,NuggetPollOption.option_name,func.count(NuggetPollVoted.id).label('total_votes')).filter(NuggetPollVoted.poll_option_id == NuggetPollOption.id).filter(NuggetPollOption.nuggets_master_id == nugget).all()
-    if getvotes:
-        total_votes = sum(map(itemgetter('total_votes'), getvotes))
-        for votes in getvotes:
-            percentage = round((votes.total_votes / total_votes) * 100, 2)
+    
+    get_nugget_votes=db.query(NuggetPollVoted).filter(NuggetPollVoted.nugget_master_id == nugget,NuggetPollVoted.status == 1)
+    tot_nugget_vote=get_nugget_votes.count()
+    
+    nugget_vote_ids={poll_vote.poll_option_id for poll_vote in get_nugget_votes.all()} 
+    
+    for poll in nugget_vote_ids:
+        individual_poll=db.query(NuggetPollVoted).filter(NuggetPollVoted.poll_option_id == poll,NuggetPollVoted.status == 1)
+        individual_poll_id=individual_poll.first()
+        individual_poll_count=individual_poll.count()
+        
+        percentage = round((individual_poll_count/ tot_nugget_vote) * 100, 2)
+        update_nugget_poll=db.query(NuggetPollOption).filter(NuggetPollOption.id == individual_poll_id.poll_option_id).update({"poll_vote_percentage" :percentage,"votes":individual_poll_count})
+        db.commit()
 
-            update_nugget_poll=db.query(NuggetPollOption).filter(NuggetPollOption.id == votes.id).update({"poll_vote_percentage" :percentage,"votes":votes.total_votes})
-            db.commit()
+    
+    # getvotes=db.query(NuggetPollOption.id,NuggetPollOption.option_name,func.count(NuggetPollVoted.id).label('total_votes')).filter(NuggetPollVoted.poll_option_id == NuggetPollOption.id).filter(NuggetPollOption.nuggets_master_id == nugget).all()
+    
+    # if getvotes:
+    #     total_votes = sum(map(itemgetter('total_votes'), getvotes))
+    #     print(total_votes)
+    #     for votes in getvotes:
+    #         print(votes.id,"id")
+
+            
             
             
 
@@ -1222,29 +1247,22 @@ def get_event_detail(db,event_id,login_user_id):
 def defaultimage(flag):
     url = ''
     if flag == 'profile_img':
-        url_parts = urlparse('/uploads/user/default.png')
-        url_parts = url_parts._replace(scheme='https')
-        url = urlunparse(url_parts)
+        url="https://rawcaster.s3.us-west-2.amazonaws.com/profileimage/Image_94081682594499.png"
+       
     elif flag == 'cover_img':
-        url_parts = urlparse('/uploads/user/default_cover.png')
-        url_parts = url_parts._replace(scheme='https')
-        url = urlunparse(url_parts)
+        url="https://rawcaster.s3.us-west-2.amazonaws.com/profileimage/Image_81501682594590.png"
+       
     elif flag == 'group_icon':
-        url_parts = urlparse('/uploads/group/default.png')
-        url_parts = url_parts._replace(scheme='https')
-        url = urlunparse(url_parts)
+        url="https://rawcaster.s3.us-west-2.amazonaws.com/profileimage/Image_16461682594653.png"
+       
     elif flag == 'event_banner':
-        url_parts = urlparse('/uploads/eventbanner/eventbanner_default.jpg')
-        url_parts = url_parts._replace(scheme='https')
-        url = urlunparse(url_parts)
+        url="https://rawcaster.s3.us-west-2.amazonaws.com/profileimage/Image_53341682575319.jpg"
+        
     elif flag == 'talkshow':
-        url_parts = urlparse('/uploads/eventbanner/talkshowbanner_default.jpg')
-        url_parts = url_parts._replace(scheme='https')
-        url = urlunparse(url_parts)
+        url="https://rawcaster.s3.us-west-2.amazonaws.com/profileimage/Image_39631682575151.jpg"
+       
     elif flag == 'live':
-        url_parts = urlparse('/uploads/eventbanner/livebanner_default.jpg')
-        url_parts = url_parts._replace(scheme='https')
-        url = urlunparse(url_parts)
+        url="https://rawcaster.s3.us-west-2.amazonaws.com/profileimage/Image_31431682575389.jpg"
         
     return url
 
