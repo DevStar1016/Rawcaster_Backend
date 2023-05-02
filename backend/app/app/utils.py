@@ -1,5 +1,4 @@
 from sqlalchemy import or_,and_,func
-import datetime
 import math
 from app.core.config import settings as st
 from datetime import datetime,timedelta
@@ -24,12 +23,13 @@ from PIL import Image
 import time
 from dateutil.parser import parse
 import subprocess
+from mail_templates.mail_template import *
 
 def is_date(string, fuzzy=False):
 
     date_format = '%Y-%m-%d'  # example format to check
     try:
-        date = datetime.strptime(string, date_format)
+        date = datetime.datetime.strptime(string, date_format)
         return True
     except ValueError: 
         return False
@@ -73,9 +73,8 @@ def file_upload(file_name,compress):
     return save_full_path
 
 
-def video_file_upload(upload_file,compress):
-    import cv2
-    
+
+def video_file_upload(upload_file,compress):    
     base_dir = f"{st.BASE_DIR}/rawcaster"
     try:
         os.makedirs(base_dir, mode=0o777, exist_ok=True)
@@ -91,24 +90,18 @@ def video_file_upload(upload_file,compress):
     filename=f"video_{random_string}.mp4"    
    
     save_full_path=f'{output_dir}{filename}'  
-    video_cap = cv2.VideoCapture(upload_file)
-    fourcc = cv2.VideoWriter_fourcc(*'XVID')
-    
-    output = cv2.VideoWriter(save_full_path, fourcc)
-    
       
-    # with open(save_full_path, "wb") as buffer:
-    #     buffer.write(upload_file.read())
-    # if compress:
-    #     command = f"ffmpeg -i {save_full_path} -vcodec libx265 -crf 50 {save_full_path}"
-    #     subprocess.run(command, shell=True, check=True)
+    with open(save_full_path, "wb") as buffer:
+        buffer.write(upload_file)
+    
+    if compress:
+        command = f"ffmpeg -i {save_full_path} -vcodec libx265 -crf 50 {save_full_path}"
+        subprocess.run(command, shell=True, check=True)
          
     return save_full_path
     
 
 async def audio_file_upload(upload_file,compress):
-    uploads_file_name=upload_file.filename
-    
     base_dir = f"{st.BASE_DIR}/rawcaster"
     try:
         os.makedirs(base_dir, mode=0o777, exist_ok=True)
@@ -118,26 +111,18 @@ async def audio_file_upload(upload_file,compress):
 
     output_dir = base_dir + "/"
     
-    characters = string.ascii_letters + string.digits
-    # Generate the random string
-    
-    ext = os.path.splitext(uploads_file_name)[-1].lower()
-    filename=f"audio_{random.randint(1111,9999)}{datetime.now().timestamp()}{ext}"    
+    filename=f"audio_{random.randint(1111,9999)}_{datetime.datetime.now().timestamp()}.mp4"    
    
     save_full_path=f'{output_dir}{filename}'  
+      
+    with open(save_full_path, "wb") as buffer:
+        buffer.write(upload_file)
     
-    filename = upload_file.filename
-    input_path = os.path.abspath(upload_file.filename)
-    
-    output_path = f"{filename}.mp3"
-   
+    return save_full_path
 
-    with open(save_full_path, "wb") as buffer: 
-        buffer.write(await upload_file.read())
+    # subprocess.run(["ffmpeg", "-i", save_full_path, "-ab", "32k", "-y", output_path])
 
-    subprocess.run(["ffmpeg", "-i", save_full_path, "-ab", "32k", "-y", output_path])
-
-    return output_path
+    # return output_path
     
 
 
@@ -169,7 +154,7 @@ async def send_email(db,to_mail, subject, message):
             MAIL_PASSWORD="BPkaC3u48gAj15i/YBLMDnICroNWdHXRWHMBYGWlDT6Q",  
             MAIL_FROM="rawcaster@rawcaster.com", 
             MAIL_PORT=587,
-            MAIL_SERVER="email-smtp.ap-south-1.amazonaws.com",
+            MAIL_SERVER="email-smtp.us-west-2.amazonaws.com",
             MAIL_FROM_NAME='Rawcaster',
             MAIL_STARTTLS = True,
             MAIL_SSL_TLS = False,
@@ -179,20 +164,23 @@ async def send_email(db,to_mail, subject, message):
         
         message = MessageSchema(
             subject=subject,
+            subtype='html',
             recipients=[to_mail],
             body=message
         )
 
         fm = FastMail(conf)
         await fm.send_message(message)
-        return ({"msg": "Email has been sent"})
+        
+        return True
     
     else:
-        print(":sdfsfsdf")
+        print("sdfsfsdf121212")
+        
+        return False
 
 def sendSMS(mobile_no,message):
     # Create an SNS client
-    
     sns = boto3.client('sns',aws_access_key_id='AKIAYFYE6EFYFBWQRGPB',aws_secret_access_key="7HlZXvuVccwoOnVb7HuTVTZ4YeZGvBCy5thSJ6KO", region_name='us-west-2')  # Replace 'us-west-2' with your desired AWS region
 
     # Send the SMS
@@ -411,7 +399,7 @@ def addNotificationSmsEmail(db,user,email_detail,login_user_id):
             mobile_no_email_id=email,
             subject=subject,
             message=mail_message,
-            created_at=datetime.now(),
+            created_at=datetime.datetime.utcnow(),
             status=0
         )
         db.add(add_notification)
@@ -424,7 +412,7 @@ def addNotificationSmsEmail(db,user,email_detail,login_user_id):
             mobile_no_email_id=mobile_nos,
             subject="",
             message=sms_message,
-            created_at=datetime.now(),
+            created_at=datetime.datetime.utcnow(),
             status=0
         )
         db.add(add_notification)
@@ -741,7 +729,7 @@ def getFollowers(db,login_user_id):
     
 def Insertnotification(db,user_id,notification_origin_id,notification_type,ref_id):
     if user_id != notification_origin_id:
-        add_notification=Notification(user_id=user_id,notification_origin_id=notification_origin_id,notification_type=notification_type,ref_id=ref_id,created_datetime=datetime.now())
+        add_notification=Notification(user_id=user_id,notification_origin_id=notification_origin_id,notification_type=notification_type,ref_id=ref_id,created_datetime=datetime.datetime.utcnow())
         db.add(add_notification)
         db.commit()
         
@@ -780,7 +768,7 @@ def FindLocationbyIP(userIP):
             "ip": userIP,
             "city": response.get("city"),
             "region": response.get("region"),
-            "country": response.get("country_name"),
+            "country": response.get("country"),
             "latitude":response.get("latitude"),
             "longitude":response.get("longitude")
             }
@@ -789,23 +777,23 @@ def FindLocationbyIP(userIP):
     
 def CheckMobileNumber(db,mobile_no,geo_location):
     result= {'status':0,'msg':'Please enter a valid phone number.'}
-    if geo_location != "" and geo_location != None:
-       
+    if geo_location:
         country=geo_location.split(',')
-        
         if (country != "") and mobile_no != "":
             found=0
             
             for place in country:
+                cty=(place.replace(".", "")).strip()
                 
-                cty=str(place).strip()
                 user_country=db.query(Country).filter(Country.name == cty).first()
+                
                 if user_country and user_country.mobile_no_length != "":
+                    
                     mobileno=str(mobile_no).replace("+" ,"")
                     mobileno=str(mobile_no).replace("-" ,"")
                     if user_country.id == 156 and geo_location[0:1] == 0:
                         mobileno=geo_location[1:]
-                  
+                    
                     if str(user_country.mobile_no_length) in str(len(mobile_no)):
                         
                         found = 1
@@ -987,7 +975,7 @@ def StoreHashTags(db,nugget):
         
         if tags:
             for tag in tags:
-                add_NuggetHashTags=NuggetHashTags(nugget_master_id=get_nugget.nuggets_id,nugget_id=get_nugget.id,user_id=get_nugget.user_id,country_id=get_nugget.user.country_id,hash_tag=tag,created_date=datetime.now())
+                add_NuggetHashTags=NuggetHashTags(nugget_master_id=get_nugget.nuggets_id,nugget_id=get_nugget.id,user_id=get_nugget.user_id,country_id=get_nugget.user.country_id,hash_tag=tag,created_date=datetime.datetime.utcnow())
                 db.add(add_NuggetHashTags)
                 db.commit()
                 
@@ -1131,18 +1119,19 @@ def eventPostNotifcationEmail(db,event_id):
         phone = ''
         event = db.query(Events).filter_by(id=event_id, status=1).first()
         if event:
-            # event_invitations = event.event_invitations
-            # cover_img = event.cover_img
+            event_invitations = event.event_invitations
+            cover_img = event.cover_img
             event_title = event.title
-            # event_start_time = event.start_date_time
-            # event_start_time = datetime.strptime(event_start_time, '%Y-%m-%d %H:%M:%S')
-            # eventStartTime = event_start_time.strftime('%-d %B %Y %-I:%M %p')
-            # subject = 'New Event Created'
+            event_start_time = event.start_date_time
+            event_start_time = datetime.datetime.strptime(str(event_start_time), '%Y-%m-%d %H:%M:%S')
+            eventStartTime = event_start_time.strftime('%-d %B %Y %-I:%M %p')
+            subject = 'New Event Created'
             invite_url=inviteBaseurl()
             meeting_url =f"{invite_url}joinmeeting/{event.ref_id}"
             event_creator_name = event.created_by.display_name if event.created_by and event.created_by.display_name else "N/A"
             sms_message = f"Hi, {event_creator_name} is inviting you to join a web event called {event_title}. The link for this Rawcaster event is: {meeting_url}"
-            body = 'Pending'
+            
+            body = event_shared(event_creator_name,cover_img,event_title,eventStartTime,meeting_url)
             return sms_message, body
     else:
         print("Invalid Event Id")
@@ -1332,12 +1321,13 @@ def paginate(page, size, data, total):
     return reply 
         
         
-def SendOtp(db,user_id,signup_type):
+async def SendOtp(db,user_id,signup_type):
     # Send OTP for Email or MObile number Verification
     otp=generateOTP()
-    otp_time=datetime.now()
+    otp_time=datetime.datetime.utcnow()
     
     check_user_otp_log=db.query(OtpLog).filter(OtpLog.user_id == user_id).first()
+    
     if check_user_otp_log:
         
         check_user_otp_log.otp=otp
@@ -1358,15 +1348,23 @@ def SendOtp(db,user_id,signup_type):
         db.commit()
         
         otp_ref_id=add_otp_to_log.id
+        
+        
+    # Generate Token
+    
     
     get_user=db.query(User).filter(User.id == user_id).first()
     to_mail=get_user.email_id
     subject=f"One Time Password - {otp}"
     message=f"{otp} is your One Time Password"
-    if signup_type == 1:
-        mail_send=send_email(to_mail,subject,message)
-    elif signup_type == 2:
-        print("SEND SMS")
+    if int(signup_type) == 1:
+        
+        await send_email(db,to_mail,subject,message)
+        
+    elif int(signup_type) == 2:
+        mobile_no=f"{get_user.country_code}{get_user.mobile_no}"
+        
+        send_sms=sendSMS(mobile_no,message)
     else:
         pass
     return otp_ref_id
@@ -1439,20 +1437,22 @@ def eventPostNotifcationEmail(db,eventId):
         event = db.query(Events).filter_by(id = eventId, status = 1).first()
         if event:
             # eventInvitations = event.eventInvitations
-            # coverImg = event.cover_img
+            coverImg = event.cover_img
             eventTitle = event.title
             event_start_time = event.start_date_time
-            # eventStartTime = datetime.strptime(event_start_time, '%Y-%m-%d %H:%M:%S').strftime('%-d %b %Y %-I:%M %p')
+            eventStartTime = datetime.datetime.strptime(str(event_start_time), '%Y-%m-%d %H:%M:%S').strftime('%-d %b %Y %-I:%M %p')
             subject = 'New Event Created'
             meetingUrl = inviteBaseurl() + 'joinmeeting/' + event.ref_id
             eventCreatorName = event.user.display_name if event.created_by else None
             sms_message =f'Hi,{eventCreatorName} is inviting you to join a web event called {eventTitle}. The link for this Rawcaster event is: {meetingUrl}'
+            
+            body=event_shared(eventCreatorName,coverImg,eventTitle,eventStartTime,meetingUrl)
             return (sms_message, body)
         
         
 
 def GenerateUserRegID(id):
-    dt = str(int(datetime.utcnow().timestamp()))
+    dt = str(int(datetime.datetime.utcnow().timestamp()))
     
     refid = "RA"+str(id)+str(dt)+str(random.randint(10000,50000))
     return refid
@@ -1471,8 +1471,8 @@ def GetRawcasterUserID(db,type):
     
     
     
-def logins(db,username, password, device_type, device_id, push_id,login_from,voip_token,app_type,socual=0):
-    username=username.strip()
+async def logins(db,username, password, device_type, device_id, push_id,login_from,voip_token,app_type,socual=0):
+    username=username.strip() if username else None
    
     get_user=db.query(User).filter(or_(
                             and_(User.email_id == username, User.email_id != None),
@@ -1487,26 +1487,32 @@ def logins(db,username, password, device_type, device_id, push_id,login_from,voi
             return {"status":2,'type':type['type'],"msg" : "Login Failed. Invalid email id or password"}
         else:
             return {"status":0,"msg" : "Login Failed. Invalid email id or password"}
-            
+        
+    elif get_user.status == 0:
+        signup_type=1 if get_user.email_id else 2
+        send_otp=await SendOtp(db,get_user.id,signup_type)
+                
+        return {"status" : 1,"acc_verify_status":0,"otp_ref_id":send_otp, "msg" : "Verification Pending, Redirect to OTP Verify Page","first_time":0}
+                        
     elif get_user.password != password and socual != 1: #  Invalid password!
-      
+        
         if get_user.status == 2:
             return {"status":0,"msg" : "Your account is currently blocked!"}
         else:
            
             userIP = get_ip()
-            add_failure_login=LoginFailureLog(user_id=get_user.id,ip=userIP,create_at=datetime.now(),status=1)
+            add_failure_login=LoginFailureLog(user_id=get_user.id,ip=userIP,create_at=datetime.datetime.utcnow(),status=1)
             db.add(add_failure_login)
             db.commit()
             
             get_settings=db.query(Settings).filter(Settings.settings_topic == 'login_block_time').first()
             if get_settings:
                 total_block_dur=get_settings.settings_value
-                curretTime=datetime.now() - timedelta(minutes=int(total_block_dur))
+                curretTime=datetime.datetime.utcnow() - timedelta(minutes=int(total_block_dur))
                 
             else:
                 total_block_dur=30
-                curretTime=datetime.now() - timedelta(minutes=30)
+                curretTime=datetime.datetime.utcnow() - timedelta(minutes=30)
             
                 failure_count=db.query(LoginFailureLog).filter(LoginFailureLog.user_id == get_user.id,LoginFailureLog.create_at > curretTime).count()
                 
@@ -1540,7 +1546,7 @@ def logins(db,username, password, device_type, device_id, push_id,login_from,voi
         user_id=get_user.id
         characters=''.join(random.choices(string.ascii_letters+string.digits, k=8))
         token_text=""
-        dt = str(int(datetime.utcnow().timestamp()))
+        dt = str(int(datetime.datetime.utcnow().timestamp()))
         
         token_text=token_text + str(user_id)+str(characters)+str(dt)
         
@@ -1554,7 +1560,7 @@ def logins(db,username, password, device_type, device_id, push_id,login_from,voi
         salt_token=token_text
         userIP = get_ip()
         
-        add_token=ApiTokens(user_id=user_id,token=token_text,created_at=datetime.now(),renewed_at=datetime.now(),validity=1,
+        add_token=ApiTokens(user_id=user_id,token=token_text,created_at=datetime.datetime.utcnow(),renewed_at=datetime.datetime.utcnow(),validity=1,
                             device_type=login_from,app_type=app_type,device_id=device_id,push_device_id=push_id,voip_token=voip_token,
                             device_ip=userIP,status=1)
         db.add(add_token)
@@ -1579,11 +1585,11 @@ def logins(db,username, password, device_type, device_id, push_id,login_from,voi
             
             token_text = jwt.encode(paylod, st.SECRET_KEY) 
             
-            exptime= datetime.fromtimestamp(int(exptime))
+            exptime= datetime.datetime.fromtimestamp(int(exptime))
             if login_from == 2:
                 # Update Sender
-                update_sender=db.query(FriendsChat).filter(FriendsChat.sender_id == user_id).update({"sender_delete":1,"sender_deleted_datetime":datetime.now()}).all()
-                update_recevicr=db.query(FriendsChat).filter(FriendsChat.receiver_id == user_id).update({"receiver_delete":1,"receiver_deleted_datetime":datetime.now()}).all()
+                update_sender=db.query(FriendsChat).filter(FriendsChat.sender_id == user_id).update({"sender_delete":1,"sender_deleted_datetime":datetime.datetime.utcnow()}).all()
+                update_recevicr=db.query(FriendsChat).filter(FriendsChat.receiver_id == user_id).update({"receiver_delete":1,"receiver_deleted_datetime":datetime.datetime.utcnow()}).all()
                 db.commit()
             
             if get_user.referral_expiry_date != None and get_user.user_status_id == 3:
@@ -1615,10 +1621,10 @@ def ChangeReferralExpiryDate(db,referrerid):
             if user_status:
                 total_referral_point=int(referrer.total_referral_point)+ 1
                 if user_status.referral_needed <= total_referral_point:
-                    expiry_date=datetime.now()
+                    expiry_date=datetime.datetime.utcnow()
                     if referrer.referral_expiry_date != None:
                         expiry_date=referrer.referral_expiry_date
-                    expiry_date=datetime.now() + relativedelta(months = 1)
+                    expiry_date=datetime.datetime.utcnow() + relativedelta(months = 1)
                   
                     total_referral_point=total_referral_point - user_status.referral_needed
                     user_status_id=3
@@ -1640,7 +1646,7 @@ def checkToken(db,access_token):
             get_token_details=db.query(ApiTokens).filter(ApiTokens.status == 1,ApiTokens.token == access_token).first()
             if not get_token_details:
                 return False
-            current_time=int(datetime.utcnow().timestamp())
+            current_time=int(datetime.datetime.utcnow().timestamp())
 
             last_request_time= int(round((get_token_details.renewed_at).timestamp()))
             if last_request_time + 604800 < current_time:
@@ -1648,7 +1654,7 @@ def checkToken(db,access_token):
                 db.commit()
                 return False
             else:
-                get_token_details.renewed_at =datetime.now()
+                get_token_details.renewed_at =datetime.datetime.utcnow()
                 db.commit()
                 return access_token
                 

@@ -24,6 +24,34 @@ access_secret="Os6IsUAOPbJybMYxAdqUAAUL58xCIUlaD08Tsgj2"
 
 
 
+@router.post("/send_test_mail")
+async def send_test_mail():
+
+    conf =  ConnectionConfig(
+        MAIL_USERNAME="AKIAYFYE6EFYF3SQOJHI",
+        MAIL_PASSWORD="BPkaC3u48gAj15i/YBLMDnICroNWdHXRWHMBYGWlDT6Q",  
+        MAIL_FROM="rawcaster@rawcaster.com", 
+        MAIL_PORT=587,
+        MAIL_SERVER="email-smtp.us-west-2.amazonaws.com",
+        MAIL_FROM_NAME='Rawcaster',
+        MAIL_STARTTLS = True,
+        MAIL_SSL_TLS = False,
+        USE_CREDENTIALS = True,
+        VALIDATE_CERTS = True
+        )
+    
+    message = MessageSchema(
+        subject="Test",
+        subtype='html',
+        recipients=['suryadurai11@gmail.com'],
+        body="Test"
+    )
+
+    fm = FastMail(conf)
+    await fm.send_message(message)
+    
+    return True
+
 
 @router.post("/upload_audio/")
 async def upload_audio(audio: UploadFile = File(...)):
@@ -69,15 +97,13 @@ async def upload_video(video: UploadFile = File(...), target_size_kb: int = 100)
     with open(file_path, "wb") as buffer:
         buffer.write(await video.read())
 
-    # output_file = f"s_converted.mp4"
-    # command = f"ffmpeg -i {file_path} -vcodec libx265 -crf 50 {output_file}"
-    # subprocess.run(command, shell=True, check=True)
+    output_file = f"s_converted.mp4"
+    command = f"ffmpeg -i {file_path} -vcodec libx265 -crf 50 {output_file}"
+    subprocess.run(command, shell=True, check=True)
 
-    # compressed_size = os.path.getsize(output_file) // 1024
+    compressed_size = os.path.getsize(output_file) // 1024
 
- 
-
-    # return compressed_size
+    return compressed_size
 
 
 # from io import BytesIO
@@ -119,30 +145,50 @@ async def upload_image(image: UploadFile = File(...)):
     
     # print('done..')
         
-# # 1 Video Spliting
-# @router.post("/video_split")
-# async def video_split(db:Session=Depends(deps.get_db)):
+# 1 Video Spliting
+@router.post("/video_split")
+async def video_split(db:Session=Depends(deps.get_db),video_file:UploadFile=File(...)):
+    base_dir = f"{st.BASE_DIR}/rawcaster"
+    try:
+        os.makedirs(base_dir, mode=0o777, exist_ok=True)
+    except OSError as e:
+        sys.exit("Can't create {dir}: {err}".format(
+            dir=base_dir, err=e))
 
-#     segment_duration = 5 * 60
+    output_dir = base_dir + "/"
+    
+    characters = string.ascii_letters + string.digits
+    # Generate the random string
+    random_string = ''.join(random.choice(characters) for i in range(18))
+    filename=f"video_{random_string}.mp4"    
+   
+    save_full_path=filename 
+      
+    with open(save_full_path, "wb") as buffer:
+        buffer.write(await video_file.read())
 
-#     video = VideoFileClip("/home/radhakrishnan/Desktop/videoplayback.mp4")
-#     duration = video.duration
+    segment_duration = 5 * 60
 
-#     total_duration = video.duration
-#     if duration < 3000:
-#         num_segments = math.ceil(total_duration / segment_duration)
-#         for i in range(num_segments):
+    video = VideoFileClip(save_full_path)
+    duration = video.duration
+    url=[]
+    total_duration = video.duration
+    if duration < 3000:
+        num_segments = math.ceil(total_duration / segment_duration)
+        for i in range(num_segments):
         
-#             start_time = i * segment_duration
-#             end_time = min((i+1) * segment_duration, total_duration)
+            start_time = i * segment_duration
+            end_time = min((i+1) * segment_duration, total_duration)
             
-#             segment = video.subclip(start_time, end_time)
+            segment = video.subclip(start_time, end_time)
             
-#             # Save the segment as a new file
-#             segment_filename = f"output_segment_{i+1}.mp4"
-#             segment.write_videofile(segment_filename, codec="libx264")
-#     else:
-#         print("fail")
+            # Save the segment as a new file
+            segment_filename = f"output_segment_{i+1}.mp4"
+            segment.write_videofile(segment_filename, codec="libx264")
+            url.append(segment_filename)
+        return url
+    else:
+        print("fail")
 
 
 # # def get_ip():

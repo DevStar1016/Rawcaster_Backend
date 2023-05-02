@@ -38,7 +38,7 @@ async def add_event_abuse_report(db:Session=Depends(deps.get_db),token:str=Form(
             check_event=db.query(Events).filter(Events.id == event_id,Events.status == 1).first()
             
             if check_event:
-                add_abuse_report=EventAbsueReport(event_id=event_id,user_id=login_user_id,message=message,created_at=datetime.now(),status = 0)
+                add_abuse_report=EventAbsueReport(event_id=event_id,user_id=login_user_id,message=message,created_at=datetime.utcnow(),status = 0)
                 db.add(add_abuse_report)
                 db.commit()
                 db.refresh(add_abuse_report)
@@ -52,7 +52,7 @@ async def add_event_abuse_report(db:Session=Depends(deps.get_db),token:str=Form(
                                    
                     if file_ext in file_extensions:
                         try:
-                            s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.now().timestamp())}{file_ext}"
+                            s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.utcnow().timestamp())}{file_ext}"
                             uploaded_file_path=file_upload(attachment,compress=None)
                             
                             result=upload_to_s3(uploaded_file_path,s3_path)
@@ -133,7 +133,7 @@ async def add_claim_account(db:Session=Depends(deps.get_db),token:str=Form(None)
             login_user_id = get_token_details.user_id if get_token_details else None
             
             add_clain=ClaimAccounts(user_id=login_user_id,influencer_id=influencer_id,first_name=first_name.strip(),dob=dob,last_name=last_name,location=location,
-                                    telephone=telephone,email_id=email_id,claim_date=datetime.now(),created_at=datetime.now(),status=1,admin_status=0)
+                                    telephone=telephone,email_id=email_id,claim_date=datetime.utcnow(),created_at=datetime.utcnow(),status=1,admin_status=0)
             db.add(add_clain)
             db.commit()
             return {"status":1,"msg":"You have placed a claim on a predefined influencer profile; We will contact you to validate your claim. Please contact us at info@rawcaster.com if you have any questions."}

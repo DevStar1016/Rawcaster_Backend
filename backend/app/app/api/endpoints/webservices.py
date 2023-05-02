@@ -4,6 +4,7 @@ from app.core.security import *
 from typing import List
 from app.utils import *
 from app.api import deps
+import datetime
 from sqlalchemy.orm import Session,joinedload
 from datetime import datetime,date
 from sqlalchemy import func,case,text,Date,extract
@@ -16,6 +17,8 @@ from urllib.parse import urlparse
 from sqlalchemy.orm import aliased
 from .webservices_2 import croninfluencemember
 import ast
+from mail_templates.mail_template import *
+from moviepy.video.io.VideoFileClip import VideoFileClip
 
 router = APIRouter() 
 
@@ -61,19 +64,23 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(defaul=1,d
         return {"status":0,"msg":"Invalid Date"}
             
     else:
+        mobile_no=None
         auth_text=email_id.strip() if email_id else None
         if checkAuthCode(auth_code,auth_text) == False:
             return {"status":0,"msg":"Authentication failed!"}
         
         else:
+            signup_type=int(signup_type)
             email_id=email_id.strip()
             check_email_or_mobile= EmailorMobileNoValidation(email_id)
             
             if check_email_or_mobile['status'] == 1:
+                
                 if check_email_or_mobile['type'] == signup_type:
                     if signup_type == 1:
                         email_id=check_email_or_mobile['email']
                         mobile_no=None
+                        
                     elif signup_type == 2:
                         email_id=None
                         mobile_no=check_email_or_mobile['mobile']
@@ -85,28 +92,61 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(defaul=1,d
                         return {"status":0,"msg":"Phone number is not valid"}
                      
             else:
+                
                 if signup_type == 1:
-                    
                     return {"status":0,"msg":"Email ID is not valid"}
                 if signup_type == 2:
                     
                     return {"status":0,"msg":"Phone number is not valid"}
             
+            check_user=db.query(User).filter(or_(
+                                        and_(User.email_id == email_id, User.email_id != None),
+                                        and_(User.mobile_no == mobile_no, User.mobile_no != None)
+                                                            ),User.status == 0).first()            
+            if check_user:
+                
+                send_otp=await SendOtp(db,check_user.id,signup_type)
+                
+                # Generate token
+                user_id=check_user.id
+                characters=''.join(random.choices(string.ascii_letters+string.digits, k=8))
+                token_text=""
+                dt = str(int(datetime.datetime.utcnow().timestamp()))
+        
+                salt_token=token_text + str(user_id)+str(characters)+str(dt)
+                
+                salt=st.SALT_KEY
+                hash_code=str(token_text)+str(salt)
+                
+                new_auth_code=hashlib.sha1(hash_code.encode()).hexdigest()
+                
+                user_id=check_user.id
+                exptime=int(dt)+int(dt)
+                
+                paylod={ 'iat': dt,
+                        'iss' : 'localhost',
+                        'exp' : exptime,
+                        'token' : token_text}
+            
+                token = jwt.encode(paylod, st.SECRET_KEY) 
+                userIP = get_ip()
+                
+                add_token=ApiTokens(user_id=user_id,token=salt_token,created_at=datetime.datetime.utcnow(),renewed_at=datetime.datetime.utcnow(),validity=1,
+                            device_type=login_from,app_type=app_type,device_id=device_id,push_device_id=push_id,voip_token=voip_token,
+                            device_ip=userIP,status=1)
+                db.add(add_token)
+                db.commit()
+                
+                return {"status" : 1,"acc_verify_status":0,"alt_token_id":add_token.id,"otp_ref_id":send_otp,"signup_type":int(signup_type),"msg" : "Verification Pending, Redirect to OTP Verify Page","first_time":0,"remaining_seconds":90,"email_id":email_id}
             
             check_email_id = 0
             check_phone = 0
-            if email_id != "" and email_id != None:
+            if email_id:
                 check_email_id=db.query(User).filter(User.email_id == email_id,User.status != 4).count()
-                
-            if mobile_no != '' and mobile_no != None:
+            
+            if mobile_no:
                 check_phone=db.query(User).filter(User.mobile_no == mobile_no,User.status != 4).count()
             
-            check_user=db.query(User).filter(or_(User.email_id == email_id,User.mobile_no == mobile_no),User.email_id != None,User.mobile_no != None,or_(User.is_mobile_no_verified == 0,User.is_email_id_verified == 0)).first()
-            if check_user:
-                
-                send_otp=SendOtp(db,check_user.id,signup_type)
-                
-                return {"status" : 2,"otp_ref_id":send_otp, "msg" : "Verification Pending, Redirect to OTP Verify Page","first_time":0}
             
             if check_email_id > 0:
                 
@@ -117,25 +157,27 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(defaul=1,d
                 return {"status" : 2, "msg" : "You are already registered with this phone number. Please login"}
             
             else:
-                userIP = get_ip()
-                # location="India" if not geo_location else geo_location
                 
+                userIP = get_ip()
+                location="India" if not geo_location else geo_location
+                # location=""
                 if geo_location == None or geo_location == "" or len(geo_location)< 4 :
                     location_details=FindLocationbyIP(userIP)
-                    
                     if location_details['status'] and location_details['status'] == 1:
                         location=location_details['country'] if location_details['country'] else "India"
                        
                         latitude=location_details['latitude']
                         longitude=location_details['longitude']
                 
-                if mobile_no != "" and mobile_no != None:
+                if mobile_no:
                     
                     mobile_check=CheckMobileNumber(db,mobile_no,location)
+                    
                     if not mobile_check:
                        
                         return {"status":0, "msg":"Unable to signup with mobile number"}
                     else:
+                        
                         if mobile_check['status'] and mobile_check['status'] == 1:
                             country_code=mobile_check['country_code']
                             country_id=mobile_check['country_id']
@@ -150,7 +192,7 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(defaul=1,d
                                 display_name=display_name,gender=gender,dob=dob,country_code=country_code,mobile_no=mobile_no,
                                 is_mobile_no_verified=0,country_id=country_id,user_code=None,signup_type=signup_type,
                                 signup_social_ref_id=signup_social_ref_id,geo_location=geo_location,latitude=latitude,
-                                longitude=longitude,created_at=datetime.utcnow(),status=0)
+                                longitude=longitude,created_at=datetime.datetime.utcnow(),status=0)
                 db.add(add_user)
                 db.commit()
                 db.refresh(add_user)
@@ -168,7 +210,7 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(defaul=1,d
                     db.refresh(user_settings_model)
                     
                     # Set Default Friend Group
-                    friends_group=FriendGroups(group_name='My Fans',group_icon='test',created_by=add_user.id,created_at=datetime.utcnow(),status=1,chat_enabled=0)
+                    friends_group=FriendGroups(group_name='My Fans',group_icon='test',created_by=add_user.id,created_at=datetime.datetime.utcnow(),status=1,chat_enabled=0)
                     db.add(friends_group)
                     db.commit()
                     db.refresh(friends_group)
@@ -187,14 +229,14 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(defaul=1,d
                                 update_referrer=db.query(User).filter(User.id == add_user.id).update({"referrer_id":referred_user.id,"invited_date":referrer_ref_id[1]})
                                 db.commit()
                                 
-                                ref_friend=MyFriends(sender_id=referred_user.id,receiver_id=add_user.id,request_date=datetime.utcnow(),request_status=1,status_date=None,status=1)
+                                ref_friend=MyFriends(sender_id=referred_user.id,receiver_id=add_user.id,request_date=datetime.datetime.utcnow(),request_status=1,status_date=None,status=1)
                                 db.add(ref_friend)
                                 db.commit()
                                 
                                 get_friend_group=db.query(FriendGroups).filter(FriendGroups.group_name == "My Fans",FriendGroups.created_by == referred_user.id ).first()
                                 
                                 if get_friend_group:
-                                    add_follow_user=FollowUser(follower_userid=add_user.id,following_userid=referred_user.id,created_date=datetime.utcnow())
+                                    add_follow_user=FollowUser(follower_userid=add_user.id,following_userid=referred_user.id,created_date=datetime.datetime.utcnow())
                                     db.add(add_follow_user)
                                     db.commit()
                                     
@@ -202,7 +244,7 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(defaul=1,d
                                     friend_group_member=db.query(FriendGroupMembers).filter(FriendGroupMembers.group_id == get_friend_group.id,FriendGroupMembers.user_id == referred_user.id).all()
                                     
                                     if not friend_group_member:
-                                        add_friend_group_member=FriendGroupMembers(group_id=get_friend_group.id,user_id=add_user.id,added_date=datetime.utcnow(),added_by=referred_user.id,is_admin=0,disable_notification=1,status=1)
+                                        add_friend_group_member=FriendGroupMembers(group_id=get_friend_group.id,user_id=add_user.id,added_date=datetime.datetime.utcnow(),added_by=referred_user.id,is_admin=0,disable_notification=1,status=1)
                                         db.add(add_friend_group_member)
                                         db.commit()
                                         
@@ -211,7 +253,7 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(defaul=1,d
                     rawcaster_support_id= GetRawcasterUserID(db,type)  
                     
                     if rawcaster_support_id > 0 and referred_id != rawcaster_support_id :
-                        add_my_friends=MyFriends(sender_id=rawcaster_support_id,receiver_id=add_user.id,request_date=datetime.utcnow(),request_status=1,status_date=None,status=1)
+                        add_my_friends=MyFriends(sender_id=rawcaster_support_id,receiver_id=add_user.id,request_date=datetime.datetime.utcnow(),request_status=1,status_date=None,status=1)
                         db.add(add_my_friends)
                         db.commit()
                     
@@ -223,7 +265,7 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(defaul=1,d
                         
                     # Send OTP for Email or MObile number Verification
                     
-                    send_otp=SendOtp(db,add_user.id,signup_type)
+                    send_otp=await SendOtp(db,add_user.id,signup_type)
                     
                     if send_otp:
                         otp_ref_id=send_otp
@@ -233,7 +275,7 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(defaul=1,d
                     
                     # reply=logins(db,email_id,password,device_type,device_id,push_id,login_from,voip_token,app_type)
                     
-                    return {"status":1, "msg": "Success", "email": email_id,"otp_ref_id":otp_ref_id,"user_id":add_user.id,"acc_verify_status": 0,"first_time":1,"remaining_seconds":90}  # First Time (1 - New to rawcaster, 0 - existing user)
+                    return {"status":1, "msg": "Success", "email": email_id,"otp_ref_id":otp_ref_id,"user_id":add_user.id,"acc_verify_status": 0,"first_time":1,"remaining_seconds":90,"signup_type":int(signup_type)}  # First Time (1 - New to rawcaster, 0 - existing user)
                     
                 else:
                     return {"status":0,"msg":"Failed to add User"}
@@ -242,7 +284,7 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(defaul=1,d
 
 # 2 - Signup Verification by OTP
 @router.post("/signupverify")
-async def signupverify(db:Session=Depends(deps.get_db),auth_code:str=Form(None,description="SALT + otp_ref_id"),otp_ref_id:str=Form(None,description="From service no. 1"),otp:str=Form(None),otp_flag:str=Form(None)):
+async def signupverify(db:Session=Depends(deps.get_db),auth_code:str=Form(None,description="SALT + otp_ref_id"),otp_ref_id:str=Form(None,description="From service no. 1"),otp:str=Form(None),otp_flag:str=Form(None),alt_token_id:str=Form(None)):
     if auth_code == None or auth_code.strip() == "":
         return {"status":0,"msg":"Auth Code is missing"}
     elif otp_ref_id == None or otp_ref_id.strip() == "":
@@ -293,8 +335,12 @@ async def signupverify(db:Session=Depends(deps.get_db),auth_code:str=Form(None,d
                             except:
                                 pass
                             # return {"status":1,"msg":"Verified Successfully."}
-                            
-                    return {"status" :1, "msg" :"Your account has been verified successfully."}
+                    # Get Token
+                    get_token=db.query(ApiTokens).filter(ApiTokens.id == alt_token_id).first()
+                    
+                    generate_access_token=await logins(db,get_user.email_id,get_user.password,get_token.device_type,get_token.device_id,get_token.push_device_id,get_token.device_type,get_token.voip_token,get_token.app_type,0)
+                    return generate_access_token
+                    # return {"status" :1, "msg" :"Your account has been verified successfully."}
                         
                 else:
                     return {"status" :0, "msg" :"Account verification failed. Please try again"}
@@ -331,7 +377,7 @@ async def resendotp(db:Session=Depends(deps.get_db),auth_code:str=Form(None,desc
                     for token in get_token_details:
                         login_user_id=token.user_id
                 
-                send_otp=SendOtp(db,login_user_id,signup_type=None)
+                send_otp=await SendOtp(db,login_user_id,signup_type=None)  # SMS
                 otp_ref_id=None
                 if send_otp:
                     otp_ref_id=send_otp
@@ -344,7 +390,7 @@ async def resendotp(db:Session=Depends(deps.get_db),auth_code:str=Form(None,desc
                 return {"status":0,"msg":"Invalid request!"}
             else:
                 
-                otp_time=datetime.utcnow()
+                otp_time=datetime.datetime.utcnow()
                 
                 get_otp_log.created_date=otp_time
                 get_otp_log.status=1
@@ -354,24 +400,32 @@ async def resendotp(db:Session=Depends(deps.get_db),auth_code:str=Form(None,desc
                 
                 if get_otp_log.otp_type == 1:  # if signup
                     mail_sub="Rawcaster - Account Verification"
-                    mail_msg="Your OTP for Rawcaster account verification is : "
+                    mail_msg="Your OTP for Rawcaster account verification is "
                     
-                elif  get_otp_log.otp_type == 3 : # if forgot password
+                elif get_otp_log.otp_type == 3 : # if forgot password
                     mail_sub="Rawcaster - Password Reset"
-                    mail_msg="Your OTP for Rawcaster account password reset is"
+                    mail_msg="Your OTP for Rawcaster account password reset is "
                 
                 if otp_flag == "sms":
                     to=f"{get_otp_log.user.country_code}{get_otp_log.user.mobile_no}"
                     sms=f"{otp} is your OTP for Rawcaster. PLEASE DO NOT SHARE THE OTP WITH ANYONE."
-                    send_sms=sendSMS(to,sms)
+                    if to:
+                        try:
+                            send_sms=sendSMS(to,sms)
+                        except:
+                            pass
                 else:
                     to=get_otp_log.user.email_id
+                    subject="Rawcaster - Password Reset"
+                    message=f"Your OTP for Rawcaster account password reset is {otp}"
+                    send_mail=await send_email(db,to,subject,message)
+                    
                     
                     print("MAIL")
                 
                 remaining_seconds=0
                 target_time= datetime.timestamp(otp_time) + 300
-                current_time=datetime.utcnow().timestamp()
+                current_time=datetime.datetime.utcnow().timestamp()
                 
                 if current_time < target_time:
                     remaining_seconds=int(target_time - current_time)
@@ -408,7 +462,7 @@ async def resendotp(db:Session=Depends(deps.get_db),auth_code:str=Form(None,desc
 #                         login_user_id=token.user_id
                 
 #                 otp=generateOTP()
-#                 otp_time=datetime.utcnow()
+#                 otp_time=datetime.datetime.utcnow()
 #                 otp_model=OtpLog(user_id=login_user_id,otp=otp,otp_type=1,created_at=otp_time,status=1)
 #                 db.add(otp_model)
 #                 db.commit()
@@ -422,7 +476,7 @@ async def resendotp(db:Session=Depends(deps.get_db),auth_code:str=Form(None,desc
 #                 return {"status":0,"msg":"Invalid request!"}
 #             else:
                 
-#                 otp_time=datetime.utcnow()
+#                 otp_time=datetime.datetime.utcnow()
 #                 otp_model.created_at=otp_time
 #                 db.commit()
                 
@@ -446,7 +500,7 @@ async def resendotp(db:Session=Depends(deps.get_db),auth_code:str=Form(None,desc
                 
 #                 remaining_seconds=0
 #                 target_time= int(round(otp_time.timestamp())) + 300
-#                 current_time=datetime.utcnow()
+#                 current_time=datetime.datetime.utcnow()
 #                 if current_time < target_time:
 #                     remaining_seconds=target_time - current_time
                 
@@ -494,13 +548,14 @@ async def login(db:Session=Depends(deps.get_db),auth_code:str=Form(None,descript
             get_user=db.query(User).filter(or_(User.email_id == username,User.email_id != None),or_(User.mobile_no == username,User.mobile_no != None)).first()
             if get_user:
                 if get_user.status == 1:
-                    generate_access_token=logins(db,username,password,device_type,device_id,push_id,login_from,voip_token,app_type)
+                    
+                    generate_access_token=await logins(db,username,password,device_type,device_id,push_id,login_from,voip_token,app_type)
                     return generate_access_token
                 elif get_user.status == 0:
+                    send_otp=await SendOtp(db,get_user.id,get_user.signup_type)
                     
-                    send_otp=SendOtp(db,get_user.id,get_user.signup_type)
+                    return {"status" : 1,"acc_verify_status":0,"otp_ref_id":send_otp,"signup_type":get_user.signup_type,"msg" : "Verification Pending, Redirect to OTP Verify Page","first_time":1,"remaining_seconds":90,"email_id":get_user.email_id if get_user.signup_type else get_user.mobile_no}
                     
-                    return {"status":2,"msg":"Verification Pending","otp_ref_id":send_otp}
             else:
                 return {"status":0,"msg":"Please enter a valid username and password"}
                 
@@ -526,8 +581,8 @@ async def logout(db:Session=Depends(deps.get_db),token:str=Form(None)):
                 if get_token_details.device_type == 2:
                     user_id=get_token_details.user_id
                     # Update Friend Chat
-                    update_friend_sender_chat=db.query(FriendsChat).filter(FriendsChat.sender_id == user_id).update({"sender_delete":1,"sender_deleted_datetime":datetime.utcnow()})
-                    update_friend_receiver_chat=db.query(FriendsChat).filter(FriendsChat.receiver_id == user_id).update({"receiver_delete":1,"receiver_deleted_datetime":datetime.utcnow()})
+                    update_friend_sender_chat=db.query(FriendsChat).filter(FriendsChat.sender_id == user_id).update({"sender_delete":1,"sender_deleted_datetime":datetime.datetime.utcnow()})
+                    update_friend_receiver_chat=db.query(FriendsChat).filter(FriendsChat.receiver_id == user_id).update({"receiver_delete":1,"receiver_deleted_datetime":datetime.datetime.utcnow()})
                     db.commit()
                 
                 # Delete Token
@@ -575,7 +630,7 @@ async def forgotpassword(db:Session=Depends(deps.get_db),username:str=Form(None,
             
             else: # account not verified or account active
                 otp=generateOTP()
-                otp_time=datetime.utcnow()
+                otp_time=datetime.datetime.utcnow()
                 otp_ref_id=''
                 remaining_seconds=0
                 
@@ -585,7 +640,7 @@ async def forgotpassword(db:Session=Depends(deps.get_db),username:str=Form(None,
                     db.commit()
                     otp_ref_id=get_otp.id
                 else:
-                    add_otp_log=OtpLog(user_id = get_user.id,otp=otp,otp_type=3,created_date=otp_time,status=1)
+                    add_otp_log=OtpLog(user_id = get_user.id,otp=otp,otp_type=3,created_at=otp_time,status=1)
                     db.add(add_otp_log)
                     db.commit()
                     
@@ -597,18 +652,33 @@ async def forgotpassword(db:Session=Depends(deps.get_db),username:str=Form(None,
                     remaining_seconds = target_time - otp_time.timestamp()
                 msg=""
                 if username.isnumeric():
-                    to=get_user.mobile_no
+                    to=f"{get_user.country_code}{get_user.mobile_no}" if get_user.mobile_no else None
                     sms=f"{otp} is your OTP for Rawcaster. PLEASE DO NOT SHARE THE OTP WITH ANYONE."
                     msg="A one time passcode (OTP) has been sent to the phone number you provided"
                     # Send SMS
-                    send_sms=sendSMS(to,sms)
+                    if to:
+                        try:
+                            send_sms=sendSMS(to,sms)
+                        except:
+                            pass
                 
                 elif check_mail(username) == True:
                     to=get_user.email_id
                     subject="Rawcaster - Reset Password"
+                    content=""
+                    content += "<table width='600' border='0' align='center' cellpadding='10' cellspacing='0' style='border: 1px solid #e8e8e8;'><tr><td> "
+                    content +=  'Hi, Greetings from Rawcaster<br /><br />'
+                    content += f'Your OTP for Rawcaster account password reset is : <b> {otp } </b><br /><br />'
+                    content += 'Regards,<br />Administration Team<br /><a href="https://rawcaster.com/">Rawcaster.com</a> LLC'
+                    content += "</td></tr></table>"
+                    
+                    body=mail_content(content)
+                    try:
+                        send_mail=await send_email(db,to,subject,body)
+                    except:
+                        pass
+                    
                     msg="A one time passcode (OTP) has been sent to the email address you provided"
-                    body=''
-                    send_mail=send_email(db,to,subject,body)
                     
                 return {"status":1,"msg":msg,"otp_ref_id":otp_ref_id,"remaining_seconds":remaining_seconds}
 
@@ -779,9 +849,11 @@ async def contactus(db:Session=Depends(deps.get_db),name:str=Form(None),email_id
         else:
             to_mail='support@rawcaster.com'
             subject=f'New enquiry received from {name}'
-            message=f'<table width="600" border="0" align="center" cellpadding="10" cellspacing="0" style="border: 1px solid #e8e8e8;"> <tr><th> Name : </th><td> {name} </td></tr> <tr><th> Email id : </th><td> {email_id} </td></tr> <tr><th> Subject : </th><td> {subject} </td></tr> <tr><th> Message : </th><td> {message} </td></tr> </table>'
+            content=f'<table width="600" border="0" align="center" cellpadding="10" cellspacing="0" style="border: 1px solid #e8e8e8;"> <tr><th> Name : </th><td> {name} </td></tr> <tr><th> Email id : </th><td> {email_id} </td></tr> <tr><th> Subject : </th><td> {subject} </td></tr> <tr><th> Message : </th><td> {message} </td></tr> </table>'
+            body=mail_content(content)
+            
             try:
-                send_mail=await send_email(to_mail,subject,message)
+                send_mail=await send_email(db,to_mail,subject,body)
             except:
                 return {"status" : 0, "msg" :"Something went wrong.Please Try Again later"}
                 
@@ -837,7 +909,7 @@ def user_profile(db,id):
                             "studied_at":get_user.studied_at if get_user.studied_at else "",
                             "influencer_category":get_user.influencer_category if get_user.influencer_category else ""
                         })
-        token_text=(str(get_user.user_ref_id) + str(datetime.utcnow().timestamp())).encode("ascii")
+        token_text=(str(get_user.user_ref_id) + str(datetime.datetime.utcnow().timestamp())).encode("ascii")
         invite_url=inviteBaseurl()
         join_link=f"{invite_url}signup?ref={token_text}"
         
@@ -982,8 +1054,8 @@ async def updatemyprofile(db:Session=Depends(deps.get_db),token:str=Form(None),n
                     get_user_profile.work_at =work_at
                     get_user_profile.studied_at=studied_at
                     get_user_profile.influencer_category = influencer_category.strip() if influencer_category else None
-                    get_user_profile.profile_img = defaultimage('profile_img')
-                    get_user_profile.cover_image = defaultimage('cover_img')
+                    # get_user_profile.profile_img = defaultimage('profile_img')
+                    # get_user_profile.cover_image = defaultimage('cover_img')
                     
                     db.commit()
                     
@@ -1001,7 +1073,7 @@ async def updatemyprofile(db:Session=Depends(deps.get_db),token:str=Form(None),n
                         
                         # Upload File to Server
                         uploaded_file_path=file_upload(profile_image,compress=None)
-                        s3_file_path=f"profileimage/Image_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}{file_ext}"
+                        s3_file_path=f"profileimage/Image_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                         
                         result=upload_to_s3(uploaded_file_path,s3_file_path)
                         if result['status'] == 1:
@@ -1024,7 +1096,7 @@ async def updatemyprofile(db:Session=Depends(deps.get_db),token:str=Form(None),n
                         # Upload File to Server
                         output_dir=file_upload(cover_image,compress=None)
 
-                        s3_file_path=f"coverimage/coverimage_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}"  
+                        s3_file_path=f"coverimage/coverimage_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}"  
                         
                         result=upload_to_s3(output_dir,s3_file_path)
                         
@@ -1189,7 +1261,7 @@ async def invitetorawcaster(db:Session=Depends(deps.get_db),token:str=Form(None)
                                 # Invites Sents Only for New User (Not a Rawcaster)
                                 get_user=db.query(User).filter(User.id == login_user_id).first()
                                 
-                                token_text = base64.b64encode(f"{get_user.user_ref_id}//{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}".encode()).decode()
+                                token_text = base64.b64encode(f"{get_user.user_ref_id}//{datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}".encode()).decode()
                                 invite_link=inviteBaseurl()
                                 join_link=f"{invite_link}signup?ref={token_text}&mail={mail}"
                 
@@ -1266,7 +1338,7 @@ async def sendfriendrequests(db:Session=Depends(deps.get_db),token:str=Form(None
                                 get_user=db.query(User).filter(User.id == user_id).first()
                                 
                                 if get_user:
-                                    add_my_friends=MyFriends(sender_id=login_user_id,receiver_id=user_id,request_date=datetime.utcnow(),request_status=0,status_date=None,status=1)
+                                    add_my_friends=MyFriends(sender_id=login_user_id,receiver_id=user_id,request_date=datetime.datetime.utcnow(),request_status=0,status_date=None,status=1)
                                     db.add(add_my_friends)
                                     db.commit()
                                     
@@ -1358,18 +1430,18 @@ async def respondtofriendrequests(db:Session=Depends(deps.get_db),token:str=Form
                 else:
                     status=1
                 
-                update_my_friends=db.query(MyFriends).filter(MyFriends.id == friend_request_id).update({"status":status,"request_status":response,"status_date":datetime.utcnow()})
+                update_my_friends=db.query(MyFriends).filter(MyFriends.id == friend_request_id).update({"status":status,"request_status":response,"status_date":datetime.datetime.utcnow()})
                 db.commit()
                 
                 if update_my_friends:
                     if notification_id:
                         # if status == 1:
-                        update_notification=db.query(Notification).filter(Notification.id == notification_id).update({"status":0,"is_read":1,"read_datetime":datetime.utcnow()})
+                        update_notification=db.query(Notification).filter(Notification.id == notification_id).update({"status":0,"is_read":1,"read_datetime":datetime.datetime.utcnow()})
                         db.commit()
                         # else:
-                        #     update_notification=db.query(Notification).filter(Notification.id == notification_id).update({"status":0,"is_read":1,"read_datetime":datetime.utcnow()})
+                        #     update_notification=db.query(Notification).filter(Notification.id == notification_id).update({"status":0,"is_read":1,"read_datetime":datetime.datetime.utcnow()})
                     else:
-                        update_notification=db.query(Notification).filter(Notification.notification_origin_id == my_friends.sender_id,Notification.user_id ==my_friends.receiver_id,Notification.notification_type == 11).update({"status":0,"is_read":1,"read_datetime":datetime.utcnow()})
+                        update_notification=db.query(Notification).filter(Notification.notification_origin_id == my_friends.sender_id,Notification.user_id ==my_friends.receiver_id,Notification.notification_type == 11).update({"status":0,"is_read":1,"read_datetime":datetime.datetime.utcnow()})
                         db.commit()
                     
                     if response == 1:
@@ -1529,7 +1601,7 @@ async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(Non
 @router.post("/listallfriends")
 async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),search_key:str=Form(None),group_ids:str=Form(None,description="Like ['12','13','14']"),
                          nongrouped:str=Form(None,description="Send 1"),friends_count:str=Form(None),allfriends:str=Form(None,description="send 1"),
-                         age:str=Form(None),gender:str=Form(None),location:str=Form(None),
+                         age:str=Form(None),gender:str=Form(None),location:str=Form(None),user_id:str=Form(None),
                          page_number:str=Form(default=1,description="send 1 for initial request")):
                          
     if token == None or token.strip() == "":
@@ -1538,10 +1610,14 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
         return {"status":0,"msg":"Invalid page Number"}
     elif nongrouped and not nongrouped.isnumeric():
         return {"status":0,"msg":"Invalid nongrouped flag"}
-    elif allfriends and not allfriends.isnumeric():
+    elif not allfriends:
         return {"status":0,"msg":"Invalid allfriends flag"}
+    # elif user_id:
+    #     return {"status":0,"msg":"Invalid user id"}
+        
         
     else:
+        user_id =int(user_id) if user_id else None
         allfriends=int(allfriends) if allfriends else None
         nongrouped=int(nongrouped) if nongrouped else None
         
@@ -1552,7 +1628,7 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
         else:
             login_from=1
             get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
-            login_user_id=get_token_details.user_id if get_token_details else None
+            login_user_id=(get_token_details.user_id if get_token_details else None) if not user_id else user_id
             
             login_from=get_token_details.device_type
             
@@ -1587,8 +1663,7 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
                 if not age.isnumeric():
                     return {"status":0,"msg":"Invalid Age"}
                 else:
-                    today = date.today()
-                    current_year = datetime.utcnow().year
+                    current_year = datetime.datetime.utcnow().year
                     get_user=db.query(User).filter(current_year - extract('year',User.dob) == age ).all()
                     user_ages={usr.id for usr in get_user}
                     
@@ -1726,7 +1801,7 @@ async def addfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),gr
                 else:
                     # Add Friend Group
                     
-                    add_friend_group=FriendGroups(group_name = group_name,group_icon=defaultimage('group_icon'),created_by=login_user_id,created_at=datetime.utcnow(),status =1)
+                    add_friend_group=FriendGroups(group_name = group_name,group_icon=defaultimage('group_icon'),created_by=login_user_id,created_at=datetime.datetime.utcnow(),status =1)
                     db.add(add_friend_group)
                     db.commit()
                     
@@ -1739,7 +1814,7 @@ async def addfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),gr
                                 
                                 if get_user:
                                     # add Friend Group member
-                                    add_member=FriendGroupMembers(group_id = add_friend_group.id,user_id=member,added_date=datetime.utcnow(),added_by=login_user_id,is_admin=0,disable_notification=0,status=1)
+                                    add_member=FriendGroupMembers(group_id = add_friend_group.id,user_id=member,added_date=datetime.datetime.utcnow(),added_by=login_user_id,is_admin=0,disable_notification=0,status=1)
                                     db.add(add_member)
                                     db.commit()
                                     
@@ -1755,7 +1830,7 @@ async def addfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),gr
                             if file_ext not in extensions:
                                 return {"status":0,"msg":"Profile Image format does not support"}                        
                             
-                            s3_file_path=f'groupicon/groupicon_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}{file_ext}'
+                            s3_file_path=f'groupicon/groupicon_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}'
                             if file_size > 400 :
                                 uploaded_file_path=file_upload(group_icon,compress=1)
 
@@ -1847,7 +1922,7 @@ async def editfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),g
                         if file_ext not in extensions:
                             return {"status":0,"msg":"Profile Image format does not support"}                        
                         
-                        s3_file_path=f'groupicon/groupicon_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}{file_ext}'
+                        s3_file_path=f'groupicon/groupicon_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}'
                         if file_size > 400 :
                             uploaded_file_path=file_upload(group_icon,compress=1)
 
@@ -1879,7 +1954,7 @@ async def editfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),g
                                 check_member=db.query(FriendGroupMembers).filter(FriendGroupMembers.status == 1,FriendGroupMembers.group_id == group_id,FriendGroupMembers.user_id == member).first()
                                 
                                 if not check_member:
-                                    add_frnd_group=FriendGroupMembers(group_id = group_id,user_id = member,added_date=datetime.utcnow(),added_by=login_user_id,is_admin=0,disable_notification=1,status=1)
+                                    add_frnd_group=FriendGroupMembers(group_id = group_id,user_id = member,added_date=datetime.datetime.utcnow(),added_by=login_user_id,is_admin=0,disable_notification=1,status=1)
                                     db.add(add_frnd_group)
                                     db.commit()
                     
@@ -1935,7 +2010,7 @@ async def addfriendstogroup(db:Session=Depends(deps.get_db),token:str=Form(None)
                             check_member=db.query(FriendGroupMembers).filter(FriendGroupMembers.status == 1,FriendGroupMembers.group_id == group_id,FriendGroupMembers.user_id == member).first()
                             
                             if not check_member:
-                                add_frnd_group_member=FriendGroupMembers(group_id = group_id,user_id = member,added_date=datetime.utcnow(),added_by=login_user_id,is_admin=0,disable_notification=1,status=1)
+                                add_frnd_group_member=FriendGroupMembers(group_id = group_id,user_id = member,added_date=datetime.datetime.utcnow(),added_by=login_user_id,is_admin=0,disable_notification=1,status=1)
                                 db.add(add_frnd_group_member)
                                 db.commit()
                                 
@@ -2124,7 +2199,7 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),conten
             if anyissue == 1:
                 return {"status": 0, "msg": "Sorry! Share with groups or friends list not correct."}
             else:
-                add_nuggets_master=NuggetsMaster(user_id=login_user_id,content=content,_metadata=metadata,poll_duration=poll_duration,created_date=datetime.utcnow(),status=0)
+                add_nuggets_master=NuggetsMaster(user_id=login_user_id,content=content,_metadata=metadata,poll_duration=poll_duration,created_date=datetime.datetime.utcnow(),status=0)
                 db.add(add_nuggets_master)
                 db.commit()
                 
@@ -2135,7 +2210,7 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),conten
                         
                         for option in poll_option:
                             add_NuggetPollOption=NuggetPollOption(nuggets_master_id=add_nuggets_master.id,option_name=option.strip(),
-                                                                    created_date=datetime.utcnow(),status=1)
+                                                                    created_date=datetime.datetime.utcnow(),status=1)
                     
                             db.add(add_NuggetPollOption)
                             db.commit()
@@ -2144,63 +2219,107 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),conten
                     
                     # Nuggets Media
                     if nuggets_media:
+                        
                         for nugget_media in nuggets_media:
+                            
                             file_name=nugget_media.filename
                             file_temp=nugget_media.content_type
-                            file_size=len(await nugget_media.read())
+                            
+                            read_file=await nugget_media.read()
+
+                            file_size=len(read_file)
+                            
                             file_ext = os.path.splitext(nugget_media.filename)[1]
                             type='image'
                             path="/uploads/nuggets"
+                            
                             if 'video' in file_temp:
                                 type='video'
                             elif 'audio' in file_temp:
                                 type='audio'
                             
-                            add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,
-                                                                    media_type=type,media_file_type=file_ext,file_size=file_size,
-                                                                    path=path,created_date=datetime.utcnow(),status =1)
-                            db.add(add_nugget_attachment)
-                            db.commit()
-                            db.refresh(add_nugget_attachment)
-                            if add_nugget_attachment:
-                                if file_size > 1000000 and type == 'image' and file_ext != '.gif':
-                                    uploaded_file_path=file_upload(nugget_media,compress=1)
-                                    s3_file_path=f'nuggets/Image_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}'
+                            if file_size > 1000000 and type == 'image' and file_ext != '.gif':
+                                uploaded_file_path=file_upload(nugget_media,compress=1)
+                                s3_file_path=f'nuggets/Image_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}'
+                                
+                                result=upload_to_s3(uploaded_file_path,s3_file_path)
+                                if result['status'] == 1:
+                                    add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,
+                                                                media_type=type,media_file_type=file_ext,file_size=file_size,path=result['url'],
+                                                                created_date=datetime.datetime.utcnow(),status =1)
+                                    db.add(add_nugget_attachment)
+                                    db.commit()
+                                    db.refresh(add_nugget_attachment)
                                     
-                                    result=upload_to_s3(uploaded_file_path,s3_file_path)
-                                    if result['status'] == 1:
-                                        add_nugget_attachment.path = result['url']
-                                        db.commit()
-                                    else:
-                                        return result
+                                else:
+                                    return result
+                            
+                            else:
+                                
+                                s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
+                                uploaded_file_path=None
+                                
+                                if type == 'video':
+                                    save_file_path=video_file_upload(read_file,compress=None)
+                                    
+                                    segment_duration = 5 * 60
+
+                                    video = VideoFileClip(save_file_path)   # Video Splil ( 5 Minutes)
+                                    duration = video.duration
+                                    splited_video_url=[]
+                                    total_duration = video.duration
+                                    if duration < 3000:
+                                        num_segments = math.ceil(total_duration / segment_duration)
+                                        for i in range(num_segments):
+                                        
+                                            start_time = i * segment_duration
+                                            end_time = min((i+1) * segment_duration, total_duration)
+                                            
+                                            segment = video.subclip(start_time, end_time)
+                                            
+                                            # Save the segment as a new file
+                                            segment_filename = f"video_clip_{random.randint(1111,9999)}{int(datetime.datetime.now().timestamp())}.mp4"
+                                            segment.write_videofile(segment_filename, codec="libx264")
+                                            
+                                            splited_video_url.append(segment_filename)
+                                    return splited_video_url
+                                    for url in splited_video_url:
+                                        # os.remove(save_file_path) # Remove Uploaded Video File
+                                        s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
+                                        result=upload_to_s3(url,s3_file_path)  # Upload to S3
+                                        
+                                        if result['status'] == 1:
+                                            add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,
+                                                                media_type=type,media_file_type=file_ext,file_size=file_size,path=result['url'],
+                                                                created_date=datetime.datetime.utcnow(),status =1)
+                                            db.add(add_nugget_attachment)
+                                            db.commit()
+                                            db.refresh(add_nugget_attachment)
+                                            
+                                        else:
+                                            return result
+                                                                      
+                                elif type == 'audio':
+                                    s3_file_path=f"nuggets/audio_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp3"
+                                    uploaded_file_path=audio_file_upload(read_file,compress=None)
                                 
                                 else:
-                                    s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}{file_ext}"
-                                    uploaded_file_path=None
-                                    
-                                    if type == 'video':
-                                        s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp4"
-                                        
-                                        uploaded_file_path=video_file_upload(nugget_media,compress=1)
-                                        return uploaded_file_path
-                                    
-                                    elif type == 'audio':
-                                        s3_file_path=f"nuggets/audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
-                                        uploaded_file_path=audio_file_upload(nugget_media,compress=1)
-                                    
-                                    else:
-                                        uploaded_file_path=file_upload(nugget_media,compress=0)
-                                    
-                                    
-                                    result=upload_to_s3(uploaded_file_path,s3_file_path)
-                                    if result['status'] == 1:
-                                        add_nugget_attachment.path = result['url']
-                                        db.commit()
-                                    else:
-                                        return result
+                                    uploaded_file_path=file_upload(nugget_media,compress=0)
+                                
+                                result=upload_to_s3(uploaded_file_path,s3_file_path)
+                                
+                                if result['status'] == 1:
+                                    add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,
+                                                                media_type=type,media_file_type=file_ext,file_size=file_size,path=result['url'],
+                                                                created_date=datetime.datetime.utcnow(),status =1)
+                                    db.add(add_nugget_attachment)
+                                    db.commit()
+                                    db.refresh(add_nugget_attachment)
+                                else:
+                                    return result
                                        
                     
-                    add_nuggets=Nuggets(nuggets_id=add_nuggets_master.id,user_id=login_user_id,type=1,share_type=share_type,created_date=datetime.utcnow())
+                    add_nuggets=Nuggets(nuggets_id=add_nuggets_master.id,user_id=login_user_id,type=1,share_type=share_type,created_date=datetime.datetime.utcnow())
                     db.add(add_nuggets)
                     db.commit()
                     db.refresh(add_nuggets)
@@ -2421,10 +2540,8 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
                     if online_group_list:
                         for group_list in online_group_list:
                             my_friends.append(group_list.groupid)
+                    get_nuggets=get_nuggets.filter(or_(and_(Nuggets.user_id == login_user_id),and_(Nuggets.user_id.in_(my_friends),Nuggets.share_type != 2)))
                     
-                    
-                    get_nuggets=get_nuggets.filter(or_(Nuggets.user_id == login_user_id),and_((Nuggets.user_id.in_(my_followers),Nuggets.share_type != 2)))
-                
                 elif user_public_nugget_display_setting == 4:  # All Groups
                     get_nuggets=get_nuggets.join(FriendGroupMembers,Nuggets.user_id == FriendGroupMembers.user_id,isouter=True).filter(Nuggets.user_id == FriendGroupMembers.user_id)
                     get_nuggets=get_nuggets.filter(FriendGroups,FriendGroupMembers.group_id == FriendGroups.id).filter(FriendGroups.status == 1)
@@ -2486,7 +2603,7 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
                     attachments=[]
                     poll_options=[]
                     is_downloadable=0
-                    tot_likes=db.query(NuggetsLikes).filter(NuggetsLikes.nugget_id == nuggets.id).count()
+                    tot_likes=db.query(NuggetsLikes).filter(NuggetsLikes.nugget_id == nuggets.id,NuggetsLikes.status == 1).count()
                     
                     total_comments=db.query(NuggetsComments).filter(NuggetsComments.nugget_id == nuggets.id).count()
                     total_views=db.query(NuggetView).filter(NuggetView.nugget_id == nuggets.id,NuggetView.user_id == login_user_id).count()
@@ -2642,7 +2759,7 @@ async def likeandunlikenugget(db:Session=Depends(deps.get_db),token:str=Form(Non
                 if like == 1:
                     checkpreviouslike=db.query(NuggetsLikes).filter(NuggetsLikes.nugget_id == nugget_id,NuggetsLikes.user_id == login_user_id).first()
                     if not checkpreviouslike:
-                        nuggetlike=NuggetsLikes(user_id=login_user_id,nugget_id=nugget_id,created_date=datetime.utcnow())
+                        nuggetlike=NuggetsLikes(user_id=login_user_id,nugget_id=nugget_id,created_date=datetime.datetime.utcnow(),status = 1)
                         db.add(nuggetlike)
                         db.commit()
                         
@@ -2762,6 +2879,7 @@ async def nuggetcommentlist(db:Session=Depends(deps.get_db),token:str=Form(None)
                     ).outerjoin(NuggetsCommentsLikes, (NuggetsCommentsLikes.comment_id == NuggetsComments.id) & (NuggetsCommentsLikes.user_id == login_user_id)).filter(NuggetsComments.nugget_id == check_nuggets.id)
                     .filter(NuggetsComments.parent_id == None)
                     .group_by(NuggetsComments.id).order_by(NuggetsComments.modified_date.asc()).all())
+                
                 result_list=[]
                 if commentlist:
                     count=0
@@ -2773,18 +2891,6 @@ async def nuggetcommentlist(db:Session=Depends(deps.get_db),token:str=Form(None)
                         if get_cmt_like:
                             total_like=get_cmt_likes.count()
                             
-                        
-                        result_list.append({
-                                            "comment_id":comment["NuggetsComments"].id,
-                                            "user_id":comment["NuggetsComments"].user_id,
-                                            "editable":True if comment["NuggetsComments"].user_id == login_user_id else False,
-                                            "name":comment["NuggetsComments"].user.display_name,
-                                            "profile_image":comment["NuggetsComments"].user.profile_img,
-                                            "comment":comment["NuggetsComments"].content,
-                                            "commented_date":comment["NuggetsComments"].created_date,
-                                            "liked":True if comment["liked"] and comment["liked"]> 0 else False,
-                                            "like_count":total_like
-                                        })
                         replyarray=[]
                         
                         get_cmt_like=db.query(NuggetsComments).filter(NuggetsComments.parent_id==comment["NuggetsComments"].id,NuggetsComments.status==1).all()
@@ -2809,8 +2915,18 @@ async def nuggetcommentlist(db:Session=Depends(deps.get_db),token:str=Form(None)
                                                     "liked":like,
                                                     "like_count":total_like
                                                 })
-                                
-                        result_list.append({"reply":replyarray})
+                        result_list.append({
+                                            "comment_id":comment["NuggetsComments"].id,
+                                            "user_id":comment["NuggetsComments"].user_id,
+                                            "editable":True if comment["NuggetsComments"].user_id == login_user_id else False,
+                                            "name":comment["NuggetsComments"].user.display_name,
+                                            "profile_image":comment["NuggetsComments"].user.profile_img,
+                                            "comment":comment["NuggetsComments"].content,
+                                            "commented_date":comment["NuggetsComments"].created_date,
+                                            "liked":True if comment["liked"] and comment["liked"]> 0 else False,
+                                            "like_count":total_like,
+                                            "reply":replyarray
+                                        })      
                     
                     return {"status":1,"msg":"Success","comments":result_list}
                 else:
@@ -2864,7 +2980,7 @@ async def addnuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(None),
 
             check_nuggets=db.query(Nuggets).filter_by(id = nugget_id).first()
             if check_nuggets:
-                nugget_comment=NuggetsComments(user_id=login_user_id,parent_id=comment_id,nugget_id=nugget_id,content=comment,created_date=datetime.utcnow(),modified_date=datetime.utcnow())
+                nugget_comment=NuggetsComments(user_id=login_user_id,parent_id=comment_id,nugget_id=nugget_id,content=comment,created_date=datetime.datetime.utcnow(),modified_date=datetime.datetime.utcnow())
                 db.add(nugget_comment)
                 db.commit()
                 
@@ -2876,10 +2992,10 @@ async def addnuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(None),
                                         "comment_id":nugget_comment.id,
                                         "user_id":login_user_id,
                                         "editable":True,
-                                        "name":nugget_comment.user.display_name,
-                                        "profile_image":nugget_comment.user.profile_image,
-                                        "comment":nugget_comment.content,
-                                        "commented_date":nugget_comment.created_date,
+                                        "name":(nugget_comment.user.display_name if nugget_comment.user.display_name else "") if nugget_comment.user_id else "",
+                                        "profile_image":(nugget_comment.user.profile_img if nugget_comment.user.profile_img else defaultimage('profile_img')) if nugget_comment.user_id else "",
+                                        "comment":nugget_comment.content if nugget_comment.content else "",
+                                        "commented_date":common_date(nugget_comment.created_date) if nugget_comment.created_date else "",
                                         "liked":False,
                                         "like_count":0
                                         })
@@ -2919,18 +3035,16 @@ async def editnuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(None)
             if IsAccountVerified(db,login_user_id) == False:
                 return {"status":0,"msg":"You need to complete your account validation before you can do this"}
 
-            if comment_id:
-                check_nugget_comment=db.query(NuggetsComments).filter_by(user_id=login_user_id,parent_id=comment_id).first()
+            check_nugget_comment=db.query(NuggetsComments).filter(NuggetsComments.user_id == login_user_id, NuggetsComments.id == comment_id).first()
+            if check_nugget_comment:
                 check_nugget_comment.content=comment
-                check_nugget_comment.modified_date=datetime.utcnow()
+                check_nugget_comment.modified_date=datetime.datetime.utcnow()
                 db.commit()
                 if check_nugget_comment:
                     status=1
                     msg="Success"
                 else:
                     msg='failed to add comment'
-            else:
-                msg = 'Comment_id is missing'
 
             return {"status":status,"msg":msg}
                
@@ -2950,28 +3064,39 @@ async def deletenuggetcomment(db:Session=Depends(deps.get_db),token:str=Form(Non
                 return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
             else:
                 comment_id=int(comment_id)
-                status=0
-                msg="Invalid nugget id"
+            
                 get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
                 login_user_id=get_token_details.user_id
 
                 if IsAccountVerified(db,login_user_id) == False:
                     return {"status":0,"msg":"You need to complete your account validation before you can do this"} 
                 else:
-                    if not comment_id:
-                        msg="Comment_id is missing"
-                    else:
-                        check_nugget_comment=db.query(NuggetsComments).filter_by(user_id=login_user_id,id=comment_id,status=1).first()
+                   
+                    check_nugget_comment=db.query(NuggetsComments).filter_by(user_id=login_user_id,id=comment_id).first()
 
-                        if not check_nugget_comment:
-                            msg="No Commment is founded"
+                    if check_nugget_comment:
+                        # Delete Comment Likes
+                        del_comment_like=db.query(NuggetsCommentsLikes).filter_by(comment_id = check_nugget_comment.id).delete()
+                        # Nugget Comments Reply
+                        get_nugget_comments=db.query(NuggetsComments).filter_by(parent_id = check_nugget_comment.id).all()
+                        comment_ids=[nugg_cmt.id for nugg_cmt in get_nugget_comments]
+                        # Delete Comment Likes
+                        del_comment_likes=db.query(NuggetsCommentsLikes).filter(NuggetsCommentsLikes.comment_id.in_(comment_ids)).delete()
+                        
+                        # Nugget Comments
+                        delete_comment=db.query(NuggetsComments).filter(NuggetsComments.parent_id == check_nugget_comment.id).delete()
+                        
+                        delete_all_comment=db.query(NuggetsComments).filter(NuggetsComments.id == check_nugget_comment.id).delete()
+                        db.commit()
+                        if delete_all_comment:
+                            return {"status":1,"msg":"Success"}
                         else:
-                            status=1
-                            msg="SUccess"
-                            check_nugget_comment.status=-1
-                            db.commit()
+                            return {"status":0,"msg":"Failed to delete comment"}
+                            
+                    else:
+                        return {"status":0,"msg":"Invalid comment id"}
+                       
 
-                    return {"status":status,"msg":msg}
                         
 
 # 33. Like and Unlike Nugget Comment
@@ -3012,7 +3137,7 @@ async def likeandunlikenuggetcomment(db:Session=Depends(deps.get_db),token:str=F
                         if like==1:
                             checkpreviouslike=db.query(NuggetsCommentsLikes).filter_by(comment_id=comment_id,user_id=login_user_id,status=1).first()
                             if not checkpreviouslike:
-                                nuggetcommentlike=NuggetsCommentsLikes(user_id=login_user_id,nugget_id=check_nuggets_comment.nugget_id,comment_id=comment_id,created_date=datetime.utcnow())
+                                nuggetcommentlike=NuggetsCommentsLikes(user_id=login_user_id,nugget_id=check_nuggets_comment.nugget_id,comment_id=comment_id,created_date=datetime.datetime.utcnow())
                                 db.add(nuggetcommentlike)
                                 db.commit()
                                 status=1
@@ -3180,7 +3305,7 @@ async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugg
                     if anyissue == 1:
                         return {"status": 0, "msg": "Sorry! Share with groups or friends list not correct."}
                     else:
-                        update_nuggets=db.query(Nuggets).filter_by(id = check_nuggets.id).update({"share_type":share_type,"modified_date":datetime.utcnow()})
+                        update_nuggets=db.query(Nuggets).filter_by(id = check_nuggets.id).update({"share_type":share_type,"modified_date":datetime.datetime.utcnow()})
                         db.commit()
                         if update_nuggets:
                             totalmembers=[]
@@ -3193,7 +3318,7 @@ async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugg
                                 
                                 totalmembers=totalmember['accepted']
                             
-                            update_nugget_master=db.query(NuggetsMaster).filter(NuggetsMaster.id == check_nuggets.nuggets_id).update({"content":content,"_metadata":metadata,"modified_date":datetime.utcnow()})
+                            update_nugget_master=db.query(NuggetsMaster).filter(NuggetsMaster.id == check_nuggets.nuggets_id).update({"content":content,"_metadata":metadata,"modified_date":datetime.datetime.utcnow()})
                             db.commit()
                             
                             if delete_media_id:
@@ -3216,14 +3341,14 @@ async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugg
                                     
                                     add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=check_nuggets.nuggets_id,
                                                                             media_type=type,media_file_type=file_ext,file_size=file_size,
-                                                                            created_date=datetime.utcnow(),status =1)
+                                                                            created_date=datetime.datetime.utcnow(),status =1)
                                     db.add(add_nugget_attachment)
                                     db.commit()
                                     db.refresh(add_nugget_attachment)
                                     if add_nugget_attachment:
                                         if file_size > 1000000 and type == 'image' and file_ext != '.gif':
                                             uploaded_file_path=file_upload(nugget_media,compress=1)
-                                            s3_file_path=f'nuggets/Image_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}'
+                                            s3_file_path=f'nuggets/Image_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}'
 
                                             result=upload_to_s3(uploaded_file_path,s3_file_path)
                                             if result['status'] == 1:
@@ -3233,15 +3358,15 @@ async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugg
                                                 return result
                                         
                                         else:
-                                            s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}{file_ext}"
+                                            s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                                             uploaded_file_path=None
                                             
                                             if type == 'video':
-                                                s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp4"
+                                                s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
                                                 uploaded_file_path=video_file_upload(nugget_media,compress=1)
                                             
                                             elif type == 'audio':
-                                                s3_file_path=f"nuggets/audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
+                                                s3_file_path=f"nuggets/audio_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp3"
                                                 uploaded_file_path=audio_file_upload(nugget_media,compress=1)
                                                 
                                             
@@ -3326,7 +3451,6 @@ async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugg
 async def sharenugget(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:str=Form(None),share_type:str=Form(None,description="1-public,2-only me,3-groups,4-individual,5-both group & individual ,6-all my friends"),
                      share_with:str=Form(None,description='{"friends":[1,2,3],"groups":[1,2,3]}')):
     
-    
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif nugget_id == None or not nugget_id.isnumeric():
@@ -3340,6 +3464,9 @@ async def sharenugget(db:Session=Depends(deps.get_db),token:str=Form(None),nugge
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
+            share_with=json.loads(share_with) if share_with else None
+            
+            share_type=int(share_type) if share_type else None
             if (share_type == 3 or share_type == 4 or share_type == 5) and not share_with:
                 return {"status":0,"msg":"Sorry! Share with can not be empty."}
             
@@ -3366,37 +3493,35 @@ async def sharenugget(db:Session=Depends(deps.get_db),token:str=Form(None),nugge
                     return {"status":0,"msg":"Unauthorized access"}
                 
                 anyissue=0
-                if share_type == 3 or share_type == 4 or share_type == 5:
-                    if  share_with:
+                if share_type == 3 or share_type == 4 or share_type == 5:                    
+                    if share_with:
                         for key,val in share_with.items():
+                            
                             if val:
-                                if key == 'groups' and share_type == 3 or share_type == 5:
-                                    query=db.query(FriendGroups).filter(FriendGroups.id == val,FriendGroups.status == 1 ,FriendGroups.created_by == login_user_id)
+                                if key == 'groups' and (share_type == 3 or share_type == 5):
+                                    query=db.query(FriendGroups).filter(FriendGroups.id.in_(val),FriendGroups.status == 1 ,FriendGroups.created_by == login_user_id)
                                     get_groups = {row.id: row.id for row in query.all()}
-
                                     if len(get_groups) != len(val):
                                         anyissue = 1
-                                elif key == 'friends' and share_type == 4 or share_type == 5:
+                                        
+                                elif key == 'friends' and (share_type == 4 or share_type == 5):
+                                    
                                     query=db.query(MyFriends).filter(MyFriends.status == 1 ,MyFriends.request_status == 1).filter(or_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == login_user_id))
                                     result_list = query.all()
-                                    get_friends = {}
+                                    get_friends = []
+                                    
                                     for elem in result_list:
-                                        # Assuming `id` and `receiver_id` are attributes of the `MyFriends` class
-                                        friend_id = elem.id
-                                        receiver_id = elem.receiver_id
-                                        get_friends[friend_id] = receiver_id
-                                    
-                                   
-                                   
-                                    
-
-                                    if len(set(val).difference(get_friends)) > 0:
                                         
+                                        # Assuming `id` and `receiver_id` are attributes of the `MyFriends` class
+                                        get_friends.append({"id":elem.id,"receiver_id":elem.receiver_id})
+                                    
+                                    get_frnd_ids = [x for x in val if x not in get_friends]
+                                    
+                                    if len(get_frnd_ids) > 0:
                                         anyissue = 1
+                                        
                 if anyissue == 1:
-                    
                     return {"status":0,"msg":"Sorry! Share with groups or friends list not correct."}
-                    
                 else:
                     status =0
                     nugget_detail=[]
@@ -3405,7 +3530,7 @@ async def sharenugget(db:Session=Depends(deps.get_db),token:str=Form(None),nugge
                     nugget_id = nugget_id if nugget_id else 0
                     check_nugget=db.query(Nuggets).filter_by(id = nugget_id,share_type=1,status=1).first()
                     if check_nugget:
-                        share_nugget=Nuggets(nuggets_id=check_nugget.nuggets_id,user_id=login_user_id,type=2,share_type=share_type,created_date=datetime.utcnow())
+                        share_nugget=Nuggets(nuggets_id=check_nugget.nuggets_id,user_id=login_user_id,type=2,share_type=share_type,created_date=datetime.datetime.utcnow())
                         db.add(share_nugget)
                         db.commit()
                         totalmembers=[]
@@ -3556,7 +3681,7 @@ async def geteventlayout(db:Session=Depends(deps.get_db),token:str=Form(None)):
 @router.post("/addevent")
 async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_title:str=Form(None),event_type:str=Form(None,description="1-Event,2-Talkshow,3-Live"),event_start_date:Any=Form(None),event_start_time:Any=Form(None),
                    event_message:str=Form(None),event_participants:str=Form(None),event_duration:Any=Form(None),event_layout:str=Form(None),
-                   event_host_audio:UploadFile=File(None),event_host_video:UploadFile=File(None),event_guest_audio:UploadFile=File(None),event_guest_video:UploadFile=File(None),event_melody:UploadFile=File(None),
+                   event_host_audio:str=Form(None),event_host_video:str=Form(None),event_guest_audio:str=Form(None),event_guest_video:str=Form(None),event_melody:UploadFile=File(None),
                    event_invite_mails:str=Form(None),event_invite_groups:str=Form(None),event_invite_friends:str=Form(None),event_melody_id:str=Form(None),
                    waiting_room:str=Form(None),join_before_host:str=Form(None),sound_notify:str=Form(None),user_screenshare:str=Form(None),event_banner:UploadFile=File(None)):
     
@@ -3572,14 +3697,12 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
         return {"status":0,"msg":"Event start date cant be blank."}
     elif event_start_time == None:
         return {"status":0,"msg":"Event start time cant be blank."}
-    elif event_participants == None:
+    elif event_participants == None or not event_participants.isnumeric():
         return {"status":0,"msg":"Event participants cant be blank."}
-    elif event_participants < 2:
-        return {"status":0,"msg":"Event participants count should be greater than 1"}
-    elif event_duration:
+    
+    elif not event_duration:
         return {"status":0,"msg":"Event duration cant be blank."}
-    elif event_duration > 10:
-        return {"status":0,"msg":"Event duration invalid"}
+   
     elif event_layout == None:
         return {"status":0,"msg":"Event layout cant be blank."}
     elif event_host_audio == None:
@@ -3590,7 +3713,7 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
         return {"status":0,"msg":"Event guest audio settings cant be blank."}
     elif event_guest_video == None:
         return {"status":0,"msg":"Event guest video settings cant be blank."}
-    elif event_melody == None:
+    elif not event_melody and not event_melody_id:
         return {"status":0,"msg":"Event melody cant be blank."}
     elif event_start_date and is_date(event_start_date) == False:
         return {"status":0,"msg":"Invalid Date"}
@@ -3607,19 +3730,28 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
    
     else:
         
+        event_duration = datetime.datetime.strptime(event_duration, "%H:%M").time()
+        min_duration = datetime.datetime.strptime("10:00", "%H:%M").time()
+        if event_duration > min_duration:
+            return {"status":0,"msg":"Event duration invalid"}
+        
+        event_participants=int(event_participants)
+        if event_participants < 2:
+            return {"status":0,"msg":"Event participants count should be greater than 1"}
+        
         access_token=checkToken(db,token)
         
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
-            get_token_details=db.query(ApiTokens).filter_by(token == access_token).first()
+            get_token_details=db.query(ApiTokens).filter_by(token = access_token).first()
             
-            login_user_id=get_token_details.user_id 
+            login_user_id=get_token_details.user_id if get_token_details else None
             
             if IsAccountVerified(db,login_user_id) == False:
                 return {"status":0,"msg":"You need to complete your account validation before you can do this"}
                 
-            user=db.query(User).filter_by(id == login_user_id).first()
+            user=db.query(User).filter_by(id = login_user_id).first()
             
             if user:
                 userstatus=db.query(UserStatusMaster).filter_by(id = user.user_status_id).first()
@@ -3651,15 +3783,18 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                     server_id=server.server_id
                     
                 hostname=user.display_name
-                reference_id=f"RC{random.randint(1,499)}{datetime.utcnow().timestamp()}"
+                reference_id=f"RC{random.randint(1,499)}{datetime.datetime.utcnow().timestamp()}"
                 
-                
-                dt = datetime.strptime(str(event_start_date) + ' ' + str(event_start_time), '%Y-%m-%d %H:%M:%S')
-                datetime_str = dt.strftime('%Y-%m-%d %H:%M:%S')
-                
+                # Parse the strings into datetime objects
+                date_obj = datetime.datetime.strptime(event_start_date, "%Y-%m-%d")
+                time_obj = datetime.datetime.strptime(event_start_time, "%H:%M").time()
+
+                # Combine the datetime objects
+                datetime_str = datetime.datetime.combine(date_obj, time_obj)
+             
                 new_event=Events(title=event_title,ref_id=reference_id,server_id=server_id if server_id != None else None,event_type_id=event_type,
                                  event_layout_id=event_layout,no_of_participants=event_participants,duration=event_duration,start_date_time=datetime_str,
-                                 created_at=datetime.utcnow(),created_by=login_user_id,cover_img=cover_img,waiting_room=waiting_room,join_before_host=join_before_host,
+                                 created_at=datetime.datetime.utcnow(),created_by=login_user_id,cover_img=cover_img,waiting_room=waiting_room,join_before_host=join_before_host,
                                  sound_notify=sound_notify,user_screenshare=user_screenshare)
                 db.add(new_event)
                 db.commit()
@@ -3696,7 +3831,7 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                             
                         if file_size > 1024 and type == 'image' and file_ext != '.gif':
                             
-                            s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.utcnow().timestamp())}{file_ext}"
+                            s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                             uploaded_file_path=file_upload(event_banner,compress=1)
                             
                             result=upload_to_s3(uploaded_file_path,s3_path)
@@ -3707,7 +3842,7 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                             else:
                                 return result
                         else:
-                            s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.utcnow().timestamp())}{file_ext}"
+                            s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                             uploaded_file_path=file_upload(event_banner,compress=None)
                             
                             result=upload_to_s3(uploaded_file_path,s3_path)
@@ -3737,13 +3872,13 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                             media_type = 2
                         
                         if file_size > 1000000 and type == 'image' and file_ext != '.gif':
-                            s3_file_path=f"eventsmelody/eventsmelody{random.randint(11111,99999)}{new_event.id}{int(datetime.utcnow().timestamp())}"
+                            s3_file_path=f"eventsmelody/eventsmelody{random.randint(11111,99999)}{new_event.id}{int(datetime.datetime.utcnow().timestamp())}"
                             upload_file_path=file_upload(event_melody,compress=1)
                             
                             result=upload_to_s3(upload_file_path,s3_file_path)
                             
                             if result and result['status'] == 1:
-                                new_melody=EventMelody(event_id=new_event.id,path=result['url'],type=media_type,created_at=datetime.utcnow(),created_by=login_user_id)
+                                new_melody=EventMelody(event_id=new_event.id,path=result['url'],type=media_type,created_at=datetime.datetime.utcnow(),created_by=login_user_id)
                                 db.add(new_melody)
                                 db.commit()
                                 db.refresh(new_melody)
@@ -3755,18 +3890,18 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                                 return {"status":0,"msg":"Not able to upload"}
                                         
                         else:
-                            s3_file_path=f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{new_event.id}{int(datetime.utcnow().timestamp())}{file_ext}"
+                            s3_file_path=f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{new_event.id}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                             upload_file_path=file_upload(event_melody)
                             
                             if type == 'video' and file_ext != '.mp4':
-                                s3_file_path=f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{new_event.id}{int(datetime.utcnow().timestamp())}.mp4"
+                                s3_file_path=f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{new_event.id}{int(datetime.datetime.utcnow().timestamp())}.mp4"
                                 upload_file_path=video_file_upload(event_melody,compress=1)
                                                         
                             result=upload_to_s3(upload_file_path,s3_file_path)
                            
                             if result and result['status'] == 1:
                                 add_new_melody=EventMelody(event_id=new_event.id,path=result['url'],type=media_type,
-                                                        created_at=datetime.utcnow(),created_by=login_user_id)
+                                                        created_at=datetime.datetime.utcnow(),created_by=login_user_id)
                                 
                                 if add_new_melody:
                                     new_event.event_melody_id = new_melody.id
@@ -3777,7 +3912,7 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                         
                                     
                     else:
-                        temp=event_melody_id if event_melody_id else 1
+                        temp=int(event_melody_id) if event_melody_id else 1
                         update_event_melody_id = db.query(Events).filter_by(id = new_event.id).update({"event_melody_id":temp if temp > 0 else 1})
                         db.commit()
                     
@@ -3788,7 +3923,7 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                                                 event_id=new_event.id,
                                                 user_id=value,
                                                 invite_sent=0,
-                                                created_at=datetime.utcnow(),
+                                                created_at=datetime.datetime.utcnow(),
                                                 created_by=login_user_id
                                             )
                             db.add(invite_friends)
@@ -3804,7 +3939,7 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                                                 event_id=new_event.id,
                                                 user_id=value,
                                                 invite_sent=0,
-                                                created_at=datetime.utcnow(),
+                                                created_at=datetime.datetime.utcnow(),
                                                 created_by=login_user_id
                                             )
                             db.add(invite_groups)
@@ -3835,7 +3970,7 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                                                 event_id=new_event.id,
                                                 user_id=value,
                                                 invite_sent=0,
-                                                created_at=datetime.utcnow(),
+                                                created_at=datetime.datetime.utcnow(),
                                                 created_by=login_user_id
                                             )
                                 db.add(invite_custom)
@@ -3843,7 +3978,10 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                                 
                                 if invite_custom:
                                     to=value
-                                    send_mail=await send_email(db,to,subject,body)
+                                    try:
+                                        send_mail=await send_email(db,to,subject,body)
+                                    except:
+                                        pass
                                     
                     event=get_event_detail(db,new_event.id,login_user_id)      # Pending           
                             
@@ -4067,13 +4205,13 @@ async def listevents(db:Session=Depends(deps.get_db),token:str=Form(None),user_i
                     event_list=event_list.filter(Events.created_by == login_user_id)
             
             if event_type == 4:
-                event_list=event_list.filter(Events.start_date_time < datetime.utcnow())
+                event_list=event_list.filter(Events.start_date_time < datetime.datetime.utcnow())
             
             elif event_type == 5:
                 event_list=event_list
             
             else:
-                event_list=event_list.filter(text("DATE_ADD(events.start_date_time, INTERVAL SUBSTRING(events.duration, 1, CHAR_LENGTH(events.duration) - 3) HOUR_MINUTE) > :current_datetime")).params(current_datetime=datetime.utcnow())           
+                event_list=event_list.filter(text("DATE_ADD(events.start_date_time, INTERVAL SUBSTRING(events.duration, 1, CHAR_LENGTH(events.duration) - 3) HOUR_MINUTE) > :current_datetime")).params(current_datetime=datetime.datetime.utcnow())           
                 
             event_list=event_list.filter(Events.status == 1)
             
@@ -4130,7 +4268,7 @@ async def listevents(db:Session=Depends(deps.get_db),token:str=Form(None),user_i
                             default_guest_audio.append(def_av.default_guest_audio)
                             default_guest_video.append(def_av.default_guest_video)
                         
-                        banner_image= (settings.meeting_header_image if settings.meeting_header_image else event.cover_img) if event.type == 1 else (settings.talkshow_event_banner if settings.talkshow_event_banner else event.cover_img) if event.type == 2 else (settings.live_event_banner if settings.live_event_banner else event.cover_img) if event.type == 3 else event.cover_img
+                        banner_image= (settings.meeting_header_image if not event.cover_img else event.cover_img) if event.type == 1 else (settings.talkshow_event_banner if not event.cover_img else event.cover_img) if event.type == 2 else (settings.live_event_banner if not event.cover_img else event.cover_img) if event.type == 3 else event.cover_img
                         
                         result_list.append({
                                             "event_id":event.id,
@@ -4405,7 +4543,7 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                             
                         if file_size > 1024 and type == 'image' and file_ext != '.gif':
                             
-                            s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.utcnow().timestamp())}{file_ext}"
+                            s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                             uploaded_file_path=file_upload(event_banner,compress=1)
                             
                             result=upload_to_s3(uploaded_file_path,s3_path)
@@ -4416,7 +4554,7 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                             else:
                                 return result
                         else:
-                            s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.utcnow().timestamp())}{file_ext}"
+                            s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                             uploaded_file_path=file_upload(event_banner,compress=None)
                             
                             result=upload_to_s3(uploaded_file_path,s3_path)
@@ -4450,13 +4588,13 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                             media_type = 2
                         
                         if file_size > 1000000 and type == 'image' and file_ext != '.gif':
-                            s3_file_path=f"eventsmelody/eventsmelody{random.randint(11111,99999)}{edit_event.id}{int(datetime.utcnow().timestamp())}"
+                            s3_file_path=f"eventsmelody/eventsmelody{random.randint(11111,99999)}{edit_event.id}{int(datetime.datetime.utcnow().timestamp())}"
                             upload_file_path=file_upload(event_melody,compress=1)
                             
                             result=upload_to_s3(upload_file_path,s3_file_path)
                             
                             if result and result['status'] == 1:
-                                new_melody=EventMelody(event_id=edit_event.id,path=result['url'],type=media_type,created_at=datetime.utcnow(),created_by=login_user_id)
+                                new_melody=EventMelody(event_id=edit_event.id,path=result['url'],type=media_type,created_at=datetime.datetime.utcnow(),created_by=login_user_id)
                                 db.add(new_melody)
                                 db.commit()
                                 db.refresh(new_melody)
@@ -4468,18 +4606,18 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                                 return {"status":0,"msg":"Not able to upload"}
                                         
                         else:
-                            s3_file_path=f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{edit_event.id}{int(datetime.utcnow().timestamp())}{file_ext}"
+                            s3_file_path=f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{edit_event.id}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                             upload_file_path=file_upload(event_melody)
                             
                             if type == 'video' and file_ext != '.mp4':
-                                s3_file_path=f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{edit_event.id}{int(datetime.utcnow().timestamp())}.mp4"
+                                s3_file_path=f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{edit_event.id}{int(datetime.datetime.utcnow().timestamp())}.mp4"
                                 upload_file_path=video_file_upload(event_melody,compress=1)
                                                         
                             result=upload_to_s3(upload_file_path,s3_file_path)
                            
                             if result and result['status'] == 1:
                                 add_new_melody=EventMelody(event_id=edit_event.id,path=result['url'],type=media_type,
-                                                        created_at=datetime.utcnow(),created_by=login_user_id)
+                                                        created_at=datetime.datetime.utcnow(),created_by=login_user_id)
                                 
                                 if add_new_melody:
                                     edit_event.event_melody_id = new_melody.id
@@ -4500,7 +4638,7 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                     
                     if event_invite_friends:
                         for invite_frnds in event_invite_friends:
-                            invite_friends=EventInvitations(type=1,event_id=event_id,user_id=invite_frnds,invite_sent=0,created_at=datetime.utcnow(),created_by=login_user_id)
+                            invite_friends=EventInvitations(type=1,event_id=event_id,user_id=invite_frnds,invite_sent=0,created_at=datetime.datetime.utcnow(),created_by=login_user_id)
                             db.add(invite_friends)
                             db.commit()
                             db.refresh(invite_friends)
@@ -4510,7 +4648,7 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                     
                     if event_invite_groups:
                         for invite_frnds in event_invite_friends:
-                            invite_friends=EventInvitations(type=2,event_id=event_id,user_id=invite_frnds,invite_sent=0,created_at=datetime.utcnow(),created_by=login_user_id)
+                            invite_friends=EventInvitations(type=2,event_id=event_id,user_id=invite_frnds,invite_sent=0,created_at=datetime.datetime.utcnow(),created_by=login_user_id)
                             db.add(invite_friends)
                             db.commit()
                             db.refresh(invite_friends)
@@ -4524,21 +4662,28 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                     invite_url=inviteBaseurl()
                     link=f"{invite_url}join/event/{edit_event.ref_id}"
                     subject='Rawcaster - Event Invitation'
-                    content=''
-                    body=''
+                    content= ""
+                    content += "Hi,greetings from Rawcaster.com.<br /><br/>"
+                    content += f"You have been invited by {hostname} to an event titled {event_title}.<br/><br/>"
+                    content += f"Use the following link to join the Rawcaster event.<br/> {link} <br/><br/>"
+                    content += f"Regards,<br />Administration Team<br /><a href='https://rawcaster.com/'>Rawcaster.com</a> LLC"
+                    
+                    body=event_mail_template(content)
                     if event_invite_mails:
                         for invite_mail in event_invite_mails:
                             invite_friends=EventInvitations(type =3,event_id=event_id,invite_mail=invite_mail,
-                                                            invite_sent=0,created_at=datetime.utcnow(),created_by=login_user_id)
+                                                            invite_sent=0,created_at=datetime.datetime.utcnow(),created_by=login_user_id)
                             db.add(invite_friends)
                             db.commit()
                             db.refresh(invite_friends)
                             
                             if invite_friends:
                                 to=invite_mail
+                                try:
+                                    send_mail=await send_email(db,to,subject,body)
+                                except:
+                                    pass
                                 
-                                send_mail=send_email(db,to,subject,body)
-                    
                     event=get_event_detail(db,event_id,login_user_id)
                     if totalfriends:
                         for users in totalfriends:
@@ -4676,7 +4821,7 @@ async def uploadchatattachment(db:Session=Depends(deps.get_db),token:str=Form(No
                 else:
                     uploaded_file_path=file_upload(chatattachment)
                     
-                    s3_file_path=f"'chat/attachment_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}"
+                    s3_file_path=f"'chat/attachment_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}"
                     
                     result=upload_to_s3(uploaded_file_path,s3_file_path)
                     if result['status'] == 1:    
@@ -4772,7 +4917,7 @@ async def deletenotification(db:Session=Depends(deps.get_db),token:str=Form(None
                 return {"status":0,"msg":"Invalid Notification ID"}
             else:
                 if get_notification.user_id == login_user_id:
-                    delete_notification=db.query(Notification).filter_by(id = notification_id).update({"status":0,"deleted_datetime":datetime.utcnow()})
+                    delete_notification=db.query(Notification).filter_by(id = notification_id).update({"status":0,"deleted_datetime":datetime.datetime.utcnow()})
                     db.commit()
                     
                     if delete_notification:
@@ -4803,10 +4948,10 @@ async def readnotification(db:Session=Depends(deps.get_db),token:str=Form(None),
             login_user_id=get_token_details.user_id 
 
             if notification_id:
-                read_notify=db.query(Notification).filter_by(user_id = login_user_id,id = notification_id).update({"is_read":1,"read_datetime":datetime.utcnow()})
+                read_notify=db.query(Notification).filter_by(user_id = login_user_id,id = notification_id).update({"is_read":1,"read_datetime":datetime.datetime.utcnow()})
             
             elif mark_all_as_read == 1:
-                read_notify=db.query(Notification).filter_by(user_id = login_user_id).update({"is_read":1,"read_datetime":datetime.utcnow()})
+                read_notify=db.query(Notification).filter_by(user_id = login_user_id).update({"is_read":1,"read_datetime":datetime.datetime.utcnow()})
             
             db.commit()
             return {"status":1,"msg":"Success"}
@@ -4888,6 +5033,7 @@ async def getothersprofile(db:Session=Depends(deps.get_db),token:str=Form(None),
                 get_all_blocked_users=get_friend_requests(db,login_user_id,requested_by,request_status,response_type)
                 
                 blocked_users=get_all_blocked_users['blocked']
+                
                 if (user_id in blocked_users) and blocked_users :
                     return {"status": 0, "msg": "No result found!"}
             
@@ -4922,8 +5068,8 @@ async def getothersprofile(db:Session=Depends(deps.get_db),token:str=Form(None),
                                         "geo_location":get_user['User'].geo_location if get_user['User'].geo_location else "",
                                         "bio_data":ProfilePreference(db,login_user_id,get_user['User'].id,field,get_user["User"].bio_data),
                                         
-                                        "profile_image":get_user['User'].profile_img if get_user['User'].profile_img else "",
-                                        "cover_image":get_user['User'].cover_image if get_user['User'].cover_image else "",
+                                        "profile_image":get_user['User'].profile_img if get_user['User'].profile_img else defaultimage('profile_img'),
+                                        "cover_image":get_user['User'].cover_image if get_user['User'].cover_image else defaultimage('cover_img'),
                                         "website":get_user['User'].website if get_user['User'].website else "",
                                         "first_name":get_user['User'].first_name if get_user['User'].first_name else "",
                                         "last_name":get_user['User'].last_name if get_user['User'].last_name else "",
@@ -5046,8 +5192,6 @@ async def blockunblockuser(db:Session=Depends(deps.get_db),token:str=Form(None),
         return {"status":0,"msg":"User ID missing"}
     elif action == None:
         return {"status":0,"msg":"Action is missing"}
-    elif action != 1 and action != 2:
-        return {"status":0,"msg":"Action Invalid"}
         
     else:
         
@@ -5064,7 +5208,7 @@ async def blockunblockuser(db:Session=Depends(deps.get_db),token:str=Form(None),
                 update_my_frnds=db.query(MyFriends).filter(or_(MyFriends.sender_id == login_user_id,MyFriends.sender_id == user_id),or_(MyFriends.receiver_id == login_user_id,MyFriends.receiver_id == user_id)).update({"status":0})
                 db.commit()
                 # request_status 3 means Block
-                add_frnd=MyFriends(sender_id=login_user_id,receiver_id=user_id,request_date=datetime.utcnow(),request_status=3,status_date=datetime.utcnow(),status=1)
+                add_frnd=MyFriends(sender_id=login_user_id,receiver_id=user_id,request_date=datetime.datetime.utcnow(),request_status=3,status_date=datetime.datetime.utcnow(),status=1)
                 db.add(add_frnd)
                 db.commit()
                 if not add_frnd:
@@ -5116,7 +5260,7 @@ async def getusersettings(db:Session=Depends(deps.get_db),token:str=Form(None)):
             result_list={}
             
             
-            user_status_list=s=db.query(UserStatusMaster).filter_by(id = get_user_settings.user.user_status_id).first()
+            user_status_list=s=db.query(UserStatusMaster).filter_by(id = get_user_settings.id).first()
             if user_status_list:
                 result_list.update({
                             "referral_needed":user_status_list.referral_needed,
@@ -5336,7 +5480,7 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                             compress=1
                             uploaded_file_path=file_upload(default_melody,compress)
                             
-                            s3_file_path=f"eventsmelody/eventsmelody_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}{file_ext}"
+                            s3_file_path=f"eventsmelody/eventsmelody_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                             
                             result=upload_to_s3(uploaded_file_path,s3_file_path)
                             if result['status'] == 1:
@@ -5350,7 +5494,7 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                                     default_melody_list.update({"title":edit_melody.title})
                                 else:
                                     new_melody=EventMelody(title='Your default',is_default=1,path=url,type=media_type,
-                                                        created_at=datetime.utcnow(),created_by=login_user_id)
+                                                        created_at=datetime.datetime.utcnow(),created_by=login_user_id)
                                     db.add(new_melody)
                                     db.commit()
                                     default_melody_list.update({"title":new_melody.title})
@@ -5362,9 +5506,9 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                             compress=None
                             uploaded_file_path=file_upload(default_melody,compress)
                             
-                            s3_file_path=f"eventsmelody/eventsmelody_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}{file_ext}"
+                            s3_file_path=f"eventsmelody/eventsmelody_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                             if type == 'video' and file_ext != '.mp4':
-                                s3_file_path=f"eventsmelody/eventsmelody_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp4"
+                                s3_file_path=f"eventsmelody/eventsmelody_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
                                 uploaded_file_path=video_file_upload(default_melody,compress=1)
                                 
                             result=upload_to_s3(uploaded_file_path,s3_file_path)
@@ -5380,7 +5524,7 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                                     default_melody_list.update({"title":edit_melody.title})
                                 else:
                                     new_melody=EventMelody(title='Your default',is_default=1,path=result['url'],type=media_type,
-                                                        created_at=datetime.utcnow(),created_by=login_user_id)
+                                                        created_at=datetime.datetime.utcnow(),created_by=login_user_id)
                                     db.add(new_melody)
                                     db.commit()
                                     default_melody_list.update({"title":new_melody.title})
@@ -5396,7 +5540,7 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                         file_ext = os.path.splitext(meeting_header_image.filename)[1]
                         local_file_upload=''
                         extensions=[".jpeg", ".jpg", ".png"]
-                        print(file_size)
+                        
                         if not file_ext in extensions:
                             return {"status":0,"msg":"Image format does not support"}
                         
@@ -5412,7 +5556,7 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                                 header_image=local_file_upload
                         
                         if header_image:
-                            s3_file_pth=f"meetingheaderimage/MeetingHeaderImage_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}{file_ext}"
+                            s3_file_pth=f"meetingheaderimage/MeetingHeaderImage_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                             
                             result=upload_to_s3(local_file_upload,s3_file_pth)
                             if result['status'] == 1:
@@ -5444,7 +5588,7 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                                 live_banner=local_file_upload
                         
                         if live_banner:
-                            s3_file_pth=f"meetingheaderimage/MeetingHeaderImage_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}{file_ext}"
+                            s3_file_pth=f"meetingheaderimage/MeetingHeaderImage_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                             
                             result=upload_to_s3(local_file_upload,s3_file_pth)
                             if result['status'] == 1:
@@ -5476,7 +5620,7 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                                 talkshow_banner=local_file_upload
                         
                         if talkshow_banner:
-                            s3_file_pth=f"meetingheaderimage/MeetingHeaderImage_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}{file_ext}"
+                            s3_file_pth=f"meetingheaderimage/MeetingHeaderImage_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                             
                             result=upload_to_s3(local_file_upload,s3_file_pth)
                             if result['status'] == 1:
@@ -5613,8 +5757,9 @@ async def blockmultipleuser(db:Session=Depends(deps.get_db),token:str=Form(None)
             login_user_id=0
             get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
             login_user_id=get_token_details.user_id
+            # return user_id
+            userlist = ast.literal_eval(user_id) if user_id else None
 
-            userlist = [int(i) for i in user_id.split(',')]
             if userlist:
 
             # userlist = json.loads(user_id)
@@ -5624,10 +5769,10 @@ async def blockmultipleuser(db:Session=Depends(deps.get_db),token:str=Form(None)
                     db.query(MyFriends).filter(or_(
                         and_(MyFriends.sender_id == login_user_id, MyFriends.receiver_id == user_id),
                         and_(MyFriends.sender_id == user_id, MyFriends.receiver_id == login_user_id)
-                    )).update({'request_status': 3, 'status_date': datetime.utcnow(), 'status': 0})
+                    )).update({'request_status': 3, 'status_date': datetime.datetime.utcnow(), 'status': 0})
                     
                     # Create new friend request with status blocked
-                    model = MyFriends(sender_id=login_user_id, receiver_id=user_id, request_date=datetime.utcnow(), request_status=3, status_date=datetime.utcnow(), status=1)
+                    model = MyFriends(sender_id=login_user_id, receiver_id=user_id, request_date=datetime.datetime.utcnow(), request_status=3, status_date=datetime.datetime.utcnow(), status=1)
                     db.add(model)
                     db.commit()
                     if model.id:
@@ -5683,7 +5828,7 @@ async def globalsearchevents(db:Session=Depends(deps.get_db),token:str=Form(None
                         User.first_name.like('%'+search_key+'%'),
                         User.last_name.like('%'+search_key+'%'),
                         func.concat(User.first_name, ' ', User.last_name).like('%'+search_key+'%'))) \
-            .filter(Events.start_date_time > datetime.utcnow()) \
+            .filter(Events.start_date_time > datetime.datetime.utcnow()) \
             .filter(and_(Events.status == 1, Events.event_status == 1))
 
             get_row_count=criteria.count()
@@ -5923,7 +6068,7 @@ async def nuggetabusereport(db:Session=Depends(deps.get_db),token:str=Form(None)
                 nuggetreport = NuggetReport(user_id=login_user_id,
                                 nugget_id=nugget.id,
                                 message=message,
-                                reported_date=datetime.utcnow())
+                                reported_date=datetime.datetime.utcnow())
                 db.add(nuggetreport)
                 db.commit()
                 
@@ -5956,7 +6101,7 @@ async def messageread(db:Session=Depends(deps.get_db),token:str=Form(None),sende
         get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
         login_user_id=get_token_details.user_id
 
-        report = db.query(FriendsChat).filter(FriendsChat.sender_id == senderid,FriendsChat.receiver_id == receiverid,FriendsChat.is_read == 0).update({"is_read":1,"read_datetime":datetime.utcnow()})
+        report = db.query(FriendsChat).filter(FriendsChat.sender_id == senderid,FriendsChat.receiver_id == receiverid,FriendsChat.is_read == 0).update({"is_read":1,"read_datetime":datetime.datetime.utcnow()})
         db.commit()
         
         if report:
@@ -6151,7 +6296,7 @@ async def gettimezone(db:Session=Depends(deps.get_db)):
         if tz in timezones_dont_want_to_display or tz == 'Canada/East-Saskatchewan':
             continue
         timezone = pytz.timezone(tz)
-        offset = datetime.now(timezone).strftime('%z')
+        offset = datetime.datetime.now(timezone).strftime('%z')
         options[tz] = f"{tz} ({offset})"
     sorted_options = sorted(options.items(), key=lambda x: x[1])
     optionArr = []
@@ -6210,7 +6355,7 @@ async def grouplistupdate(db:Session=Depends(deps.get_db),token:str=Form(None),p
             listtype=type
             success=0
             for gid in groupid:
-                new_profile=UserProfileDisplayGroup(user_id=login_user_id,profile_id=parameter_id,groupid=gid,created_date=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+                new_profile=UserProfileDisplayGroup(user_id=login_user_id,profile_id=parameter_id,groupid=gid,created_date=datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
                
                 db.add(new_profile)
                 success+=1
@@ -6376,7 +6521,7 @@ async def followandunfollow(db:Session=Depends(deps.get_db),token:str=Form(None)
                 friend_groups=db.query(FriendGroups).filter(FriendGroups.group_name == "My Fans",FriendGroups.created_by == follow_userid).first()
                 
                 if type == 1 and get_user_detail and not follow_user and login_user_id != follow_userid :
-                    add_follow_user=FollowUser(follower_userid = login_user_id,following_userid = follow_userid,created_date = datetime.utcnow())
+                    add_follow_user=FollowUser(follower_userid = login_user_id,following_userid = follow_userid,created_date = datetime.datetime.utcnow())
                     db.add(add_follow_user)
                     db.commit()
                     
@@ -6384,7 +6529,7 @@ async def followandunfollow(db:Session=Depends(deps.get_db),token:str=Form(None)
                         friend_group_member=db.query(FriendGroupMembers).filter(FriendGroupMembers.group_id == friend_groups.id,FriendGroupMembers.user_id == follow_userid).all()
                         
                         if not friend_group_member:
-                            add_frnd_group=FriendGroupMembers(group_id=friend_groups.id,user_id=login_user_id,added_date=datetime.utcnow(),added_by=follow_userid, is_admin=0,disable_notification=1,status=1)
+                            add_frnd_group=FriendGroupMembers(group_id=friend_groups.id,user_id=login_user_id,added_date=datetime.datetime.utcnow(),added_by=follow_userid, is_admin=0,disable_notification=1,status=1)
                             db.add(add_frnd_group)
                             db.commit()
                     
@@ -6418,7 +6563,7 @@ async def followandunfollow(db:Session=Depends(deps.get_db),token:str=Form(None)
 #-----------------last 3 parameters check-------------------------#
 # 71 Get follower and following list
 @router.post("/getfollowlist")
-async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),user_id:str=Form(None),type:str=Form(None,description="1->follower,2->following"),search_key:str=Form(None),page_number:str=Form(default=1)):
+async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),user_id:str=Form(None),type:str=Form(None,description="1->follower,2->following"),search_key:str=Form(None),location:str=Form(None),gender:str=Form(None),age:str=Form(None),page_number:str=Form(default=1)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif type == None or not type.isnumeric():
@@ -6440,7 +6585,7 @@ async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),use
             get_follow_user =db.query(FollowUser)
         
             if type == 1:   # Followers
-                get_follow_user=get_follow_user.join(User,FollowUser.following_userid == User.id,isouter=True)
+                get_follow_user=get_follow_user
                 if not user_id:
                     get_follow_user = get_follow_user.filter(FollowUser.follower_userid == login_user_id)
                 
@@ -6448,7 +6593,7 @@ async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),use
                     get_follow_user = get_follow_user.filter(FollowUser.follower_userid == user_id)
                     
             else:  # Following
-                get_follow_user=get_follow_user.join(User,FollowUser.follower_userid == User.id,isouter=True)
+                get_follow_user=get_follow_user
                 
                 if not user_id:
                     get_follow_user=get_follow_user.filter(FollowUser.following_userid==login_user_id,FollowUser.status==1)
@@ -6461,11 +6606,30 @@ async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),use
                                             User.first_name.like('%'+search_key+'%'),
                                             User.last_name.like('%'+search_key+'%'),
                                             func.concat(User.first_name, ' ', User.last_name).like('%'+search_key+'%')))
-                
+            if location:
+                get_follow_user=get_follow_user.filter(User.geo_location.like("%"+location+"%"))
+            if gender:
+                get_follow_user=get_follow_user.filter(User.gender == gender)
+            if age:
+                if not age.isnumeric():
+                    return {"status":0,"msg":"Invalid Age"}
+                else:
+                    # today = date.today()
+                    current_year = datetime.datetime.utcnow().year
+                    # get_user=db.query(User).filter(current_year - extract('year',User.dob) == age ).all()
+                    # user_ages={usr.id for usr in get_user}
+                    
+                    get_follow_user=get_follow_user.filter(current_year - extract('year',User.dob) == age )
+                    
+                    # get_follow_user=get_follow_user.filter(or_(FollowUser.follower_userid.in_(user_ages),FollowUser.following_userid.in_(user_ages)))
+                    
+            
+                get_follow_user=get_follow_user.filter(User.gender == gender)
+
             get_row_count = get_follow_user.count()
             
             if get_row_count < 1:
-                return {"status": 0, "msg": "No Result found"}
+                return {"status": 0, "msg": "Unable to get Profile"}
             else:
                 default_page_size = 50
                 limit,offset,total_pages = get_pagination(get_row_count, current_page_no, default_page_size)
@@ -6543,7 +6707,7 @@ async def addnuggetview(db:Session=Depends(deps.get_db),token:str=Form(None),nug
             if not access_check:
                 return {"status":0,"msg":"Unauthorized access"}
             
-            model = NuggetView(user_id=login_user_id,nugget_id = nugget_id,created_date = datetime.utcnow())
+            model = NuggetView(user_id=login_user_id,nugget_id = nugget_id,created_date = datetime.datetime.utcnow())
             db.add(model)
             db.commit()
             nuggets=db.query(Nuggets).filter(Nuggets.id==nugget_id).first()
@@ -6702,12 +6866,12 @@ async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),even
                 userstatus=db.query(UserStatusMaster).filter(UserStatusMaster.id == user.user_status_id).first()
 
                 duration=userstatus.max_event_duration * 3600
-                duration = (datetime.min + timedelta(seconds=duration)).strftime('%H:%M:%S')
+                duration = (datetime.datetime.min + timedelta(seconds=duration)).strftime('%H:%M:%S')
 
-                reference_id = f"RC{str(random.randint(1, 499))}{str(int(datetime.utcnow().timestamp()))}"
+                reference_id = f"RC{str(random.randint(1, 499))}{str(int(datetime.datetime.utcnow().timestamp()))}"
                 
                 new_event = Events(title=event_title,type = 2,ref_id = reference_id,server_id = server_id if server_id else None,
-                                   event_type_id = event_type,event_layout_id = 1,duration = duration,created_at = datetime.utcnow(),
+                                   event_type_id = event_type,event_layout_id = 1,duration = duration,created_at = datetime.datetime.utcnow(),
                                    created_by = login_user_id,cover_img = cover_img,start_date_time = str(event_start_date) + " " + str(event_start_time))
 
                 db.add(new_event)
@@ -6731,7 +6895,7 @@ async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),even
                             
                         if file_size > 1024 and type == 'image' and file_ext != '.gif':
                             
-                            s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.utcnow().timestamp())}{file_ext}"
+                            s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                             uploaded_file_path=file_upload(event_banner,compress=1)
                             
                             result=upload_to_s3(uploaded_file_path,s3_path)
@@ -6742,7 +6906,7 @@ async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),even
                             else:
                                 return result
                         else:
-                            s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.utcnow().timestamp())}{file_ext}"
+                            s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                             uploaded_file_path=file_upload(event_banner,compress=None)
                             
                             result=upload_to_s3(uploaded_file_path,s3_path)
@@ -6757,7 +6921,7 @@ async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),even
                     if event_invite_friends:
                         for value in event_invite_friends:
                             invite_friends = EventInvitations(type = 1,event_id = new_event.id,user_id = value,invite_sent = 0,
-                                                            created_at = datetime.utcnow(),created_by = login_user_id)
+                                                            created_at = datetime.datetime.utcnow(),created_by = login_user_id)
                             db.add(invite_friends)
                             db.commit()
                             if value not in totalfriend:
@@ -6766,7 +6930,7 @@ async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),even
                     if event_invite_groups:
                         for value in event_invite_groups:
                             invite_groups = EventInvitations(type = 2,event_id = new_event.id,group_id = value,
-                                                            invite_sent = 0,created_at = datetime.utcnow(),created_by = login_user_id)
+                                                            invite_sent = 0,created_at = datetime.datetime.utcnow(),created_by = login_user_id)
                             
                             db.add(invite_groups)
                             db.commit()
@@ -6789,10 +6953,11 @@ async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),even
                     if event_invite_custom and event_invite_custom != '':
                         for value in event_invite_custom:  # check if e-mail address is well-formed    
                             if check_mail(value) == True:
-                                invite_custom = EventInvitations(type=3, event_id=new_event.id, invite_mail=value, invite_sent=0, created_at=datetime.utcnow(), created_by=login_user_id)
+                                invite_custom = EventInvitations(type=3, event_id=new_event.id, invite_mail=value, invite_sent=0, created_at=datetime.datetime.utcnow(), created_by=login_user_id)
                                 db.add(invite_custom)
                                 db.commit()
                                 to=value
+                                
                                 if invite_custom:
                                     try:
                                         send_mail=await send_email(db,to,subject,body)
@@ -6938,7 +7103,7 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
                         compress=1
                         uploaded_file_path=file_upload(event_banner,compress)
                     
-                        s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.utcnow().timestamp())}{file_ext}"
+                        s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                         # Upload to S3
                         result=upload_to_s3(uploaded_file_path,s3_path)
                         if result['status'] == 1:
@@ -6951,7 +7116,7 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
                         compress=None
                         uploaded_file_path=file_upload(event_banner,compress)
                         
-                        s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.utcnow().timestamp())}{file_ext}"
+                        s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                         result=upload_to_s3(uploaded_file_path,s3_path)
                         if result['status'] == 1:
                             edit_event.cover_img = result['url']
@@ -6965,7 +7130,7 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
                 if event_invite_friends and len(event_invite_friends)>0 :
                     for value in event_invite_friends:
                         invite_friends = EventInvitations(type = 1,event_id = event_id,user_id = int(value),invite_sent = 0,
-                                                        created_at = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),created_by = login_user_id)
+                                                        created_at = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),created_by = login_user_id)
                         db.add(invite_friends)
                         db.commit()
                         if value not in totalfriend:
@@ -6974,7 +7139,7 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
                 if len(event_invite_groups)>0 :
                     for value in event_invite_groups:
                         invite_friends = EventInvitations(type = 2,event_id = event_id,user_id = int(value),invite_sent = 0,
-                                                            created_at = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),created_by = login_user_id)
+                                                            created_at = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),created_by = login_user_id)
                         db.add(invite_friends)
                         db.commit()
 
@@ -6992,13 +7157,14 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
                     Use the following link to join the Rawcaster talkshow.<br/>{link}<br/><br/>
                     Regards,<br />Administration Team<br /><a href="https://rawcaster.com/">Rawcaster.com</a> LLC
                 '''
-                body=""  
+                body=event_mail_template(content) 
+                
                 if event_invite_custom and len(event_invite_custom) > 0 :
                     for value in event_invite_custom:
                         
                         if value.strip()!="":
                             invite_friends=EventInvitations(type = 3,event_id = event_id,invite_mail = value,invite_sent = 0,
-                                                            created_at = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),created_by = login_user_id)
+                                                            created_at = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),created_by = login_user_id)
                             db.add(invite_friends)
                             db.commit()
                             to=value
@@ -7073,11 +7239,11 @@ async def addgoliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),ev
                     duration_str = f"{hours}:{minutes}:{seconds}"
                     
                     
-                    reference_id=f"RC{random.randint(1,499)}{int(datetime.utcnow().timestamp())}"
+                    reference_id=f"RC{random.randint(1,499)}{int(datetime.datetime.utcnow().timestamp())}"
 
                     new_event=Events(title=event_title,type=3,ref_id=reference_id,server_id = server_id,
-                                     event_type_id=event_type,event_layout_id=1,duration=duration,start_date_time=datetime.utcnow(),
-                                     created_at=datetime.utcnow(),created_by=login_user_id,cover_img=cover_img,status=0)
+                                     event_type_id=event_type,event_layout_id=1,duration=duration,start_date_time=datetime.datetime.utcnow(),
+                                     created_at=datetime.datetime.utcnow(),created_by=login_user_id,cover_img=cover_img,status=0)
                     db.add(new_event)
                     db.commit()
                     if new_event:
@@ -7212,7 +7378,7 @@ async def socialmedialogin(db:Session=Depends(deps.get_db),signin_type:str=Form(
 
         password=password.strip() if password else None
         last_name=last_name.strip() if last_name else None
-        display_name=f"{first_name.strip()} {last_name.strip() if last_name else None}"
+        display_name=f"{first_name.strip()} {last_name.strip()}" if last_name else first_name.strip()
         profile_img=defaultimage('profile_img')
         geo_location=geo_location.strip() if geo_location and geo_location.strip() != '' else None
         latitude=latitude.strip() if latitude and latitude.strip() != '' else None
@@ -7235,6 +7401,7 @@ async def socialmedialogin(db:Session=Depends(deps.get_db),signin_type:str=Form(
         if checkAuthCode(auth_code,auth_text) == False:
             return {"sttaus":0,"msg":"Authentication failed!"}
         else:
+            
             check_email_or_mobile=EmailorMobileNoValidation(email_id)
             if check_email_or_mobile['status'] and check_email_or_mobile['status'] == 1:
                 
@@ -7248,43 +7415,57 @@ async def socialmedialogin(db:Session=Depends(deps.get_db),signin_type:str=Form(
                 else:
                     return {"status":0 ,"msg":"Unable to signup"}
             else:
-                    return {"status":0 ,"msg":"Unable to signup"}
-                
+                return {"status":0 ,"msg":"Unable to signup"}
+            
             check_email_id=0
             check_phone=0
-            if email_id !='':
+            
+            if email_id:
                 check_email_id = db.query(User).filter(and_(User.email_id == email_id, User.status.in_([0, 1, 2, 3]))).count()
-            if mobile_no!='':
+                
+            if mobile_no:
                 check_phone=db.query(User).filter(and_(User.mobile_no == mobile_no, User.status.in_([0, 1, 2, 3]))).count()
-            if check_email_id>0:
-                reply=login(email_id,password,device_type,device_id,push_id,login_from,voip_token,app_type,1)
-            elif check_phone >0:
-                reply=login(email_id,password,device_type,device_id,push_id,login_from,voip_token,app_type,1)
+            
+            if check_email_id:           
+                reply=await logins(db,email_id,password,device_type,device_id,push_id,login_from,voip_token,app_type,1)
+                return reply
+            
+            if check_phone :
+                reply=await logins(db,email_id,password,device_type,device_id,push_id,login_from,voip_token,app_type,1)
+                return reply
+            
             else:
+                
                 userIP=get_ip()
                 
-                if geo_location == None or geo_location ==  '' or len(geo_location)< 4:
-                    Location_details=FindLocationbyIP(db,userIP)
-                    if Location_details["status"] and Location_details["status"]==1:
-                        geo_location=Location_details['location']
+                
+                if geo_location == None or geo_location ==  '' or len(geo_location) < 4:
+                    Location_details=FindLocationbyIP(userIP)
+                    
+                    if Location_details["status"] and Location_details["status"] == 1:
+                        geo_location=Location_details['country']
                         latitude=Location_details['latitude']
                         longitude=Location_details['longitude']
-                if mobile_no!='':
+                
+                country_id=None
+                if mobile_no :
                     mobile_check=CheckMobileNumber(db,mobile_no,geo_location)
                     if not mobile_check:
                         return {"status":0,"msg":"Unable to signup with mobile number"}
                     else:
+                       
                         if mobile_check['status'] and mobile_check['status']==1:
                             country_code=mobile_check['country_code']
                             country_id=mobile_check['country_id']
                             mobile_no=mobile_check['mobile_no']
                         else:
                             return mobile_check
+                        
                 password=''
                 model=User(email_id=email_id,is_email_id_verified=1,first_name=first_name,last_name=last_name,display_name=display_name,gender=gender,
                               dob=dob,country_code=country_code,mobile_no=mobile_no,is_mobile_no_verified=0,country_id=country_id,user_code=None,
                               signup_type=1,signup_social_ref_id=signup_social_ref_id,profile_img=profile_img,geo_location=geo_location,latitude=latitude,
-                              longitude=longitude,created_at=datetime.utcnow(),status=1)
+                              longitude=longitude,created_at=datetime.datetime.utcnow(),status=1)
                 db.add(model)
                 db.commit()
                 db.refresh(model)
@@ -7292,61 +7473,63 @@ async def socialmedialogin(db:Session=Depends(deps.get_db),signin_type:str=Form(
                     user_ref_id =GenerateUserRegID(model.id)
                     password=user_ref_id
                 
-                    db.query(User).filter_by(id=model.id).update({'user_ref_id': user_ref_id, 'password': hashlib.sha1(user_ref_id.encode()).hexdigest()})
+                    update_user=db.query(User).filter_by(id=model.id).update({'user_ref_id': user_ref_id, 'password': hashlib.sha1(user_ref_id.encode()).hexdigest()})
                     db.commit()
 
                     #Set Default user settings 
-                    user_settings_model=UserSettings(user_id=model.id,online_status=1,friend_request='000',nuggets='000',events='000',status=1,chat_enabled=0)
+                    user_settings_model=UserSettings(user_id=model.id,online_status=1,friend_request='000',nuggets='000',events='000',status=1)
                     db.add(user_settings_model)
                     db.commit()
 
                     #Set Default user settings
-                    friends_group=FriendGroups(group_name="My Fans",group_icon=defaultimage('group_icon'),created_by=model.id,created_at=datetime.utcnow(),status=1,chat_enabled=0)
+                    friends_group=FriendGroups(group_name="My Fans",group_icon=defaultimage('group_icon'),created_by=model.id,created_at=datetime.datetime.utcnow(),status=1,chat_enabled=0)
                     db.add(friends_group)
                     db.commit()
 
                     referred_id=0
-                    if friend_ref_code !=None:
+                    if friend_ref_code:
                         friend_ref_code = base64.b64decode(friend_ref_code)
+                        
                         referrer_ref_id = friend_ref_code.split('//')
                         if len(referrer_ref_id) == 2:
                             referred_user=db.query(User).filter(User.user_ref_id==referrer_ref_id[0],User.status==1).first()
                             if referred_user:
                                 referred_id=referred_user.id
-                                update_data = {'referrer_id': referred_user.id, 'invited_date': datetime.strptime(referrer_ref_id[1], '%Y-%m-%d %H:%M:%S')}
-                                db.query(User).filter_by(id=model.id).update(update_data)
+                                
+                                db.query(User).filter_by(id=model.id).update({'referrer_id': referred_user.id, 'invited_date': datetime.strptime(referrer_ref_id[1], '%Y-%m-%d %H:%M:%S')})
 
                                 db.commit()
-                                ref_friend=MyFriends(sender_id=referred_user.id,receiver_id=model.id,request_date=datetime.utcnow(),request_status=1,status_date=None,status=1)
+                                ref_friend=MyFriends(sender_id=referred_user.id,receiver_id=model.id,request_date=datetime.datetime.utcnow(),request_status=1,status_date=None,status=1)
                                 db.add(ref_friend)
                                 db.commit()
                                 query = db.query(FriendGroups).filter(FriendGroups.group_name == 'My Fans', FriendGroups.created_by == referred_user.id)
                                 group = query.first()
 
                                 if group:
-                                    Followmodel=FollowUser(follower_userid=model.id,following_userid=referred_user.id,created_date=datetime.utcnow())
+                                    Followmodel=FollowUser(follower_userid=model.id,following_userid=referred_user.id,created_date=datetime.datetime.utcnow())
                                     db.add(Followmodel)
                                     db.commit()
                                     friend_group_member=db.query(FriendGroupMembers).filter(FriendGroupMembers.group_id==group.id,FriendGroupMembers.user_id==referred_user.id).all()
                                     if not friend_group_member:
-                                        friend_model=FriendGroupMembers(group_id=group.id,user_id=model.id,added_date=datetime.utcnow(),added_by=referred_user.id,is_admin=0,disable_notification=1,status=1)
+                                        friend_model=FriendGroupMembers(group_id=group.id,user_id=model.id,added_date=datetime.datetime.utcnow(),added_by=referred_user.id,is_admin=0,disable_notification=1,status=1)
                                         db.add(friend_model)
                                         db.commit()
                                         
                     #Referral Auto Add Friend Ends
                     rawcaster_support_id=GetRawcasterUserID(db,2)  # Type = 2
                     if rawcaster_support_id and referred_id != rawcaster_support_id:
-                        myfriend=MyFriends(sender_id=rawcaster_support_id,receiver_id=model.id,request_date=datetime.utcnow(),request_status=1,status_date=None,status=1)
+                        myfriend=MyFriends(sender_id=rawcaster_support_id,receiver_id=model.id,request_date=datetime.datetime.utcnow(),request_status=1,status_date=None,status=1)
                         db.add(myfriend)
                         db.commit()
                     
                     password = hashlib.sha1(password.encode()).hexdigest()
                     if email_id=='':
                         email_id=mobile_no
-                    reply=login(email_id,password,device_type,device_id,push_id,login_from,voip_token,app_type)
+                    reply=await logins(db,email_id,password,device_type,device_id,push_id,login_from,voip_token,app_type)
+                    return reply
                 else:
-                    reply={"status":0,"msg":"Something went wrong when creating a User"}
-    return reply
+                    return {"status":0,"msg":"Something went wrong when creating a User"}
+    
 
 
 
@@ -7494,7 +7677,7 @@ async def influencerfollow(db:Session=Depends(deps.get_db),token:str=Form(None),
                             friend_group=db.query(FriendGroups).filter(FriendGroups.group_name == 'My Fans',FriendGroups.created_by == follow_userid ).first()
                             
                             if user and not follow_user and login_user_id != follow_userid:
-                                add_follow_user=FollowUser(follower_userid=login_user_id,following_userid=follow_userid,created_date=datetime.utcnow(),status = 1)
+                                add_follow_user=FollowUser(follower_userid=login_user_id,following_userid=follow_userid,created_date=datetime.datetime.utcnow(),status = 1)
                                 db.add(add_follow_user)
                                 db.commit()
                                 
@@ -7503,7 +7686,7 @@ async def influencerfollow(db:Session=Depends(deps.get_db),token:str=Form(None),
                                         friend_group_member=db.query(FriendGroupMembers).filter(FriendGroupMembers.group_id == friend_group.id,FriendGroupMembers.user_id == login_user_id).all()
                                         
                                         if not friend_group_member:
-                                            add_group_member=FriendGroupMembers(group_id=friend_group.id,user_id=login_user_id,added_date=datetime.utcnow(),added_by=follow_userid,is_admin=0,disable_notification=1,status=1)
+                                            add_group_member=FriendGroupMembers(group_id=friend_group.id,user_id=login_user_id,added_date=datetime.datetime.utcnow(),added_by=follow_userid,is_admin=0,disable_notification=1,status=1)
                                             db.add(add_group_member)
                                             db.commit()
                                             
@@ -7577,7 +7760,7 @@ async def pollvote(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_i
                     add_nugget_vote=NuggetPollVoted(nugget_master_id=check_nuggets.nuggets_id,
                                                     nugget_id=nugget_id,user_id=login_user_id,
                                                     poll_option_id=poll_option_id,
-                                                    created_date=datetime.utcnow()
+                                                    created_date=datetime.datetime.utcnow()
                                                     )
                     db.add(add_nugget_vote)
                     db.commit()
@@ -7658,7 +7841,7 @@ async def tagslist(db:Session=Depends(deps.get_db),token:str=Form(None),search_t
                             Nuggets.nugget_status == 1,
                             NuggetsMaster.status == 1,
                             NuggetHashTags.hash_tag.like(nug.hash_tag),
-                            Nuggets.created_date.between(datetime.utcnow() - timedelta(days=1), datetime.utcnow())
+                            Nuggets.created_date.between(datetime.datetime.utcnow() - timedelta(days=1), datetime.datetime.utcnow())
                         ).group_by(
                             func.hour(Nuggets.created_date)
                         ).all()
@@ -7724,7 +7907,7 @@ async def saveandunsavenugget(db:Session=Depends(deps.get_db),token:str=Form(Non
                     if save == 1:  # Save
                         checkprevioussave=db.query(NuggetsSave).filter(NuggetsSave.nugget_id == nugget_id,NuggetsSave.user_id == login_user_id).first()
                         if not checkprevioussave:
-                            nuggetsave=NuggetsSave(user_id=login_user_id,nugget_id=nugget_id,created_date=datetime.utcnow())
+                            nuggetsave=NuggetsSave(user_id=login_user_id,nugget_id=nugget_id,created_date=datetime.datetime.utcnow())
                             db.add(nuggetsave)
                             db.commit()
                             
