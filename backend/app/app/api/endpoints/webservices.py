@@ -102,7 +102,7 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(defaul=1,d
             check_user=db.query(User).filter(or_(
                                         and_(User.email_id == email_id, User.email_id != None),
                                         and_(User.mobile_no == mobile_no, User.mobile_no != None)
-                                                            ),User.status == 0).first()            
+                                                            ),User.status != 4).first()            
             if check_user:
                 
                 send_otp=await SendOtp(db,check_user.id,signup_type)
@@ -271,11 +271,41 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(defaul=1,d
                         otp_ref_id=send_otp
                     else:
                         return {"status":0,"msg":"Failed to send OTP"}
+                    
+                    # Generate token
+                    user_id=add_user.id
+                    
+                    characters=''.join(random.choices(string.ascii_letters+string.digits, k=8))
+                    token_text=""
+                    dt = str(int(datetime.datetime.utcnow().timestamp()))
+            
+                    salt_token=token_text + str(user_id)+str(characters)+str(dt)
+                    
+                    salt=st.SALT_KEY
+                    hash_code=str(token_text)+str(salt)
+                    
+                    new_auth_code=hashlib.sha1(hash_code.encode()).hexdigest()
+                    
+                    exptime=int(dt)+int(dt)
+                    
+                    paylod={ 'iat': dt,
+                            'iss' : 'localhost',
+                            'exp' : exptime,
+                            'token' : token_text}
+                
+                    token = jwt.encode(paylod, st.SECRET_KEY) 
+                    userIP = get_ip()
+                    
+                    add_token=ApiTokens(user_id=user_id,token=salt_token,created_at=datetime.datetime.utcnow(),renewed_at=datetime.datetime.utcnow(),validity=1,
+                                device_type=login_from,app_type=app_type,device_id=device_id,push_device_id=push_id,voip_token=voip_token,
+                                device_ip=userIP,status=1)
+                    db.add(add_token)
+                    db.commit()
                         
                     
                     # reply=logins(db,email_id,password,device_type,device_id,push_id,login_from,voip_token,app_type)
                     
-                    return {"status":1, "msg": "Success", "email": email_id,"otp_ref_id":otp_ref_id,"user_id":add_user.id,"acc_verify_status": 0,"first_time":1,"remaining_seconds":90,"signup_type":int(signup_type)}  # First Time (1 - New to rawcaster, 0 - existing user)
+                    return {"status":1, "msg": "Success", "email": email_id,"alt_token_id":add_token.id,"otp_ref_id":otp_ref_id,"user_id":add_user.id,"acc_verify_status": 0,"first_time":1,"remaining_seconds":90,"signup_type":int(signup_type)}  # First Time (1 - New to rawcaster, 0 - existing user)
                     
                 else:
                     return {"status":0,"msg":"Failed to add User"}
@@ -329,18 +359,23 @@ async def signupverify(db:Session=Depends(deps.get_db),auth_code:str=Form(None,d
                         if get_user.is_email_id_verified == 1:
                             to_mail=get_user.email_id
                             subject="Welcome to Rawcaster"
-                            body=f"Done"
+                            content =welcome_mail()
+                            body=mail_content(content)
+                            
                             try:
                                 mail_send=await send_email(db,to_mail,subject,body)
                             except:
                                 pass
-                            # return {"status":1,"msg":"Verified Successfully."}
-                    # Get Token
-                    get_token=db.query(ApiTokens).filter(ApiTokens.id == alt_token_id).first()
-                    
-                    generate_access_token=await logins(db,get_user.email_id,get_user.password,get_token.device_type,get_token.device_id,get_token.push_device_id,get_token.device_type,get_token.voip_token,get_token.app_type,0)
-                    return generate_access_token
-                    # return {"status" :1, "msg" :"Your account has been verified successfully."}
+                            
+                        if alt_token_id:
+                            # Get Token
+                            get_token=db.query(ApiTokens).filter(ApiTokens.id == alt_token_id).first()
+                            if get_token:
+                                first_time=1
+                                generate_access_token=await logins(db,get_user.email_id,get_user.password,get_token.device_type,get_token.device_id,get_token.push_device_id,get_token.device_type,get_token.voip_token,get_token.app_type,0,first_time)
+                                return generate_access_token
+
+                    return {"status" :1, "msg" :"Your account has been verified successfully."}
                         
                 else:
                     return {"status" :0, "msg" :"Account verification failed. Please try again"}
@@ -362,7 +397,9 @@ async def resendotp(db:Session=Depends(deps.get_db),auth_code:str=Form(None,desc
         return {"status":0,"msg": "Authentication failed!"}
     
     else:
-        if otp_ref_id == None:
+        otp_ref_id= otp_ref_id if otp_ref_id else None
+        
+        if not otp_ref_id:
             if not token and token.strip() == "":
                 return {"status":0,"msg":"Sorry! your login session expired. please login again."}
             
@@ -373,65 +410,87 @@ async def resendotp(db:Session=Depends(deps.get_db),auth_code:str=Form(None,desc
                 if access_token == False:
                     return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
                 else:
-                    get_token_details=db.query(ApiTokens).filter(ApiTokens.token ==access_token).all()
-                    for token in get_token_details:
-                        login_user_id=token.user_id
+                    get_token_details=db.query(ApiTokens).filter(ApiTokens.token ==access_token).first()
+                    login_user_id=get_token_details.user_id
                 
-                send_otp=await SendOtp(db,login_user_id,signup_type=None)  # SMS
-                otp_ref_id=None
-                if send_otp:
-                    otp_ref_id=send_otp
-                
-                return {"status":1,"otp_ref_id":otp_ref_id,"msg":"Success"}
-        else:  
-            get_otp_log=db.query(OtpLog).filter(OtpLog.id == otp_ref_id,OtpLog.status == 0).first()
-            
-            if not get_otp_log:
-                return {"status":0,"msg":"Invalid request!"}
-            else:
-                
+                otp=generateOTP()
                 otp_time=datetime.datetime.utcnow()
                 
-                get_otp_log.created_date=otp_time
-                get_otp_log.status=1
+                add_model=OtpLog(user_id=login_user_id,otp=otp,otp_type=1,created_at=otp_time,status=1)
+                db.add(add_model)
                 db.commit()
+                if add_model:
+                    otp_ref_id=add_model.id
                 
-                otp=get_otp_log.otp
+                # return {"status":1,"otp_ref_id":otp_ref_id,"msg":"Success"}
+        
+        get_otp_log=db.query(OtpLog).filter(OtpLog.id == otp_ref_id,OtpLog.status == 1).first()
+        
+        if not get_otp_log:
+            return {"status":0,"msg":"Invalid request!"}
+        else:
+            
+            otp_time=datetime.datetime.utcnow()
+            
+            get_otp_log.created_date=otp_time
+            get_otp_log.status=1
+            db.commit()
+            
+            otp=get_otp_log.otp
+            mail_sub=""
+            mail_msg=""
+            if get_otp_log.otp_type == 1:  # if signup
+                mail_sub="Rawcaster - Account Verification"
+                mail_msg="Your OTP for Rawcaster account verification is "
                 
-                if get_otp_log.otp_type == 1:  # if signup
-                    mail_sub="Rawcaster - Account Verification"
-                    mail_msg="Your OTP for Rawcaster account verification is "
-                    
-                elif get_otp_log.otp_type == 3 : # if forgot password
-                    mail_sub="Rawcaster - Password Reset"
-                    mail_msg="Your OTP for Rawcaster account password reset is "
+            elif get_otp_log.otp_type == 3 : # if forgot password
+                mail_sub="Rawcaster - Password Reset"
+                mail_msg="Your OTP for Rawcaster account password reset is "
+            
+            if otp_flag == "sms":
+                to=f"{get_otp_log.user.country_code}{get_otp_log.user.mobile_no}"
+                sms=f"{otp} is your OTP for Rawcaster. PLEASE DO NOT SHARE THE OTP WITH ANYONE."
+                if to:
+                    try:
+                        send_sms=sendSMS(to,sms)
+                    except:
+                        pass
+            else:
+                base_url=inviteBaseurl()
+                code=EncryptandDecrypt(str(otp))
+                link=f"{base_url}rawadmin/site/accountverify?hash={code}"
+                # Email
                 
-                if otp_flag == "sms":
-                    to=f"{get_otp_log.user.country_code}{get_otp_log.user.mobile_no}"
-                    sms=f"{otp} is your OTP for Rawcaster. PLEASE DO NOT SHARE THE OTP WITH ANYONE."
-                    if to:
-                        try:
-                            send_sms=sendSMS(to,sms)
-                        except:
-                            pass
+                to=get_otp_log.user.email_id
+                subject=mail_sub
+                content=''
+                content += f'<table width="600" border="0" align="center" cellpadding="10" cellspacing="0" style="border: 1px solid #e8e8e8;"><tr><td>'
+                content += f'Hi, Greetings from Rawcaster<br /><br />'
+                content += f'{mail_msg} <b> {otp} </b><br />'
+                
+                if get_otp_log.otp_type == 1:
+                    content += f'Click this link to validate your account {link} <br /><br />'
                 else:
-                    to=get_otp_log.user.email_id
-                    subject="Rawcaster - Password Reset"
-                    message=f"Your OTP for Rawcaster account password reset is {otp}"
-                    send_mail=await send_email(db,to,subject,message)
+                    content += '<br />'
                     
-                    
-                    print("MAIL")
+                content += 'Regards,<br />Administration Team<br /><a href="https://rawcaster.com/">Rawcaster.com</a> LLC'
+                content += '</td></tr></table>'
                 
-                remaining_seconds=0
-                target_time= datetime.timestamp(otp_time) + 300
-                current_time=datetime.datetime.utcnow().timestamp()
-                
-                if current_time < target_time:
-                    remaining_seconds=int(target_time - current_time)
+                body=mail_content(content)
+                try:
+                    send_mail=await send_email(db,to,subject,body)
+                except:
+                    pass
 
-                reply_msg=f'Please enter the One Time Password (OTP) sent to {to}'
-                return {"status":1,"msg":reply_msg,"email":to,"otp_ref_id":otp_ref_id,"remaining_seconds":remaining_seconds}
+            remaining_seconds=0
+            target_time= datetime.datetime.timestamp(otp_time) + 300
+            current_time=datetime.datetime.utcnow().timestamp()
+            
+            if current_time < target_time:
+                remaining_seconds=int(target_time - current_time)
+
+            reply_msg=f'Please enter the One Time Password (OTP) sent to {to}'
+            return {"status":1,"msg":reply_msg,"email":to,"otp_ref_id":int(otp_ref_id),"remaining_seconds":remaining_seconds}
                  
           
 
@@ -548,8 +607,8 @@ async def login(db:Session=Depends(deps.get_db),auth_code:str=Form(None,descript
             get_user=db.query(User).filter(or_(User.email_id == username,User.email_id != None),or_(User.mobile_no == username,User.mobile_no != None)).first()
             if get_user:
                 if get_user.status == 1:
-                    
-                    generate_access_token=await logins(db,username,password,device_type,device_id,push_id,login_from,voip_token,app_type)
+                    first_time=0
+                    generate_access_token=await logins(db,username,password,device_type,device_id,push_id,login_from,voip_token,app_type,0,first_time)
                     return generate_access_token
                 elif get_user.status == 0:
                     send_otp=await SendOtp(db,get_user.id,get_user.signup_type)
@@ -680,7 +739,7 @@ async def forgotpassword(db:Session=Depends(deps.get_db),username:str=Form(None,
                     
                     msg="A one time passcode (OTP) has been sent to the email address you provided"
                     
-                return {"status":1,"msg":msg,"otp_ref_id":otp_ref_id,"remaining_seconds":remaining_seconds}
+                return {"status":1,"msg":msg,"otp_ref_id":otp_ref_id,"remaining_seconds":90} # remaining_seconds
 
 
 
@@ -1606,8 +1665,8 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
                          
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    elif not str(page_number).isnumeric():
-        return {"status":0,"msg":"Invalid page Number"}
+    # elif not str(page_number).isnumeric():
+    #     return {"status":0,"msg":"Invalid page Number"}
     elif nongrouped and not nongrouped.isnumeric():
         return {"status":0,"msg":"Invalid nongrouped flag"}
     elif not allfriends:
@@ -1632,7 +1691,7 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
             
             login_from=get_token_details.device_type
             
-            current_page_no=int(page_number)
+            # current_page_no=int(page_number)
             my_friends_ids=[]
             
             # Step 1) Get all active friends of logged in user (if requested for all friends list)
@@ -1681,9 +1740,11 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
                 if not gender.isnumeric():
                     return {"status":0,"msg":"Invalid Gender type"}
                 else:
-                    get_my_friends=get_my_friends.filter(User.gender == gender)
-                
-            
+                    get_user_gender=db.query(User).filter(User.gender == gender).all()
+                    get_user_ids=[usr.id for usr in get_user_gender]
+                    
+                    get_my_friends=get_my_friends.filter(or_(MyFriends.sender_id.in_(get_user_ids),MyFriends.receiver_id.in_(get_user_ids)))
+                    
             get_my_friends_count=get_my_friends.count()
             
             if get_my_friends_count < 1 :
@@ -1695,9 +1756,10 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
                 friend_login_from=0
                 default_page_size=1000
                 
-                limit,offset,total_pages=get_pagination(get_my_friends_count,current_page_no,default_page_size)
+                # limit,offset,total_pages=get_pagination(get_my_friends_count,current_page_no,default_page_size)
                 
-                get_my_friends=get_my_friends.limit(limit).offset(offset).all()
+                # get_my_friends=get_my_friends.limit(limit).offset(offset).all()
+                get_my_friends=get_my_friends.all()
                 
                 friendid=0
                 request_frnds=[]
@@ -1769,7 +1831,7 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
                             
                         if chat > 0:
                             request_frnds.append({"unreadmsg":chat})
-                return {"status":1,"msg":"Success","friends_count":get_my_friends_count,"total_pages":total_pages,"current_page_no":current_page_no,"friends_list":request_frnds}
+                return {"status":1,"msg":"Success","friends_count":get_my_friends_count,"total_pages":0,"current_page_no":0,"friends_list":request_frnds}
                                
                                          
 # 20 Add Friend Group
@@ -2282,7 +2344,7 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),conten
                                             segment.write_videofile(segment_filename, codec="libx264")
                                             
                                             splited_video_url.append(segment_filename)
-                                    return splited_video_url
+                                    
                                     for url in splited_video_url:
                                         # os.remove(save_file_path) # Remove Uploaded Video File
                                         s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
@@ -2424,7 +2486,7 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
     elif not str(page_number).isnumeric():
         return {"status":0,"msg":"Invalid page Number"}
     else:
-       
+        nugget_type = int(nugget_type) if nugget_type else None
         access_token = checkToken(db,token) if token != 'RAWCAST' else True
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
@@ -2475,12 +2537,10 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
                 get_nuggets=get_nuggets.filter(Nuggets.share_type == 1)
                 
                 if nugget_type == 1:  # Video Nugget
-                    get_nuggets=get_nuggets.join(NuggetsAttachment,NuggetsMaster.id == NuggetsAttachment.nugget_id)
-                    get_nuggets=get_nuggets.filter(NuggetsAttachment.media_type == 'video')
+                    get_nuggets=get_nuggets.join(NuggetsAttachment,Nuggets.nuggets_id == NuggetsAttachment.nugget_id,isouter=True).filter(NuggetsAttachment.media_type == 'video')
             
                 elif nugget_type == 2:  # Other type 
-                    get_nuggets=get_nuggets.join(NuggetsAttachment,Nuggets.nuggets_id == NuggetsAttachment.nugget_id,isouter=True)
-                    get_nuggets=get_nuggets.filter(or_(NuggetsAttachment.media_type == None,NuggetsAttachment.media_type == 'image',NuggetsAttachment.media_type == 'audio'))
+                    get_nuggets=get_nuggets.join(NuggetsAttachment,Nuggets.nuggets_id == NuggetsAttachment.nugget_id,isouter=True).filter(or_(NuggetsAttachment.media_type == None,NuggetsAttachment.media_type == 'image',NuggetsAttachment.media_type == 'audio'))
 
             elif my_nuggets == 1: 
                 get_nuggets=get_nuggets.filter(Nuggets.user_id == login_user_id)
@@ -2496,12 +2556,10 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
             
             else:
                 if nugget_type == 1:  # Video
-                    get_nuggets=get_nuggets.join(NuggetsAttachment,Nuggets.nuggets_id == NuggetsAttachment.nugget_id,isouter=True)
-                    get_nuggets=get_nuggets.filter(NuggetsAttachment.media_type == 'video')
+                    get_nuggets=get_nuggets.join(NuggetsAttachment,Nuggets.nuggets_id == NuggetsAttachment.nugget_id,isouter=True).filter(NuggetsAttachment.media_type == 'video')
                     
                 elif nugget_type == 2:  # Audio and Image
-                    get_nuggets=get_nuggets.join(NuggetsAttachment,Nuggets.nuggets_id == NuggetsAttachment.nugget_id)
-                    get_nuggets=get_nuggets.filter(or_(NuggetsAttachment.media_type == None,NuggetsAttachment.media_type == 'image',NuggetsAttachment.media_type == 'audio'))
+                    get_nuggets=get_nuggets.join(NuggetsAttachment,Nuggets.nuggets_id == NuggetsAttachment.nugget_id).filter(or_(NuggetsAttachment.media_type == None,NuggetsAttachment.media_type == 'image',NuggetsAttachment.media_type == 'audio'))
                     
                 if filter_type == 1:
                     my_followers=[]  # my_followers
@@ -2678,22 +2736,21 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
                                 is_downloadable=1
                     else:
                         is_downloadable=1
-                    
-                    
+                   
                     nuggets_list.append({
                                         "nugget_id":nuggets.id,
                                         "content":nuggets.nuggets_master.content,
                                         "metadata":nuggets.nuggets_master._metadata,
                                         "created_date":common_date(nuggets.created_date) if nuggets.created_date else '',
                                         "user_id":nuggets.user_id,
-                                        "user_ref_id":nuggets.user.user_ref_id,
+                                        "user_ref_id":nuggets.user.user_ref_id if nuggets.user_id else "" ,
                                         "type":nuggets.type,
-                                        "original_user_id":nuggets.nuggets_master.user.id,
-                                        "original_user_name":nuggets.nuggets_master.user.display_name,
-                                        "original_user_image":nuggets.nuggets_master.user.profile_img,
-                                        "user_name":nuggets.user.display_name,
-                                        "user_image":nuggets.user.profile_img,
-                                        "user_status_id":nuggets.user.user_status_id,
+                                        "original_user_id":nuggets.nuggets_master.user.id if nuggets.user_id  else "",
+                                        "original_user_name":nuggets.nuggets_master.user.display_name if nuggets.user_id  else "",
+                                        "original_user_image":nuggets.nuggets_master.user.profile_img if nuggets.user_id  else "",
+                                        "user_name":nuggets.user.display_name if nuggets.user_id  else "",
+                                        "user_image":nuggets.user.profile_img if nuggets.user_id  else "",
+                                        "user_status_id":nuggets.user.user_status_id if nuggets.user_id  else "",
                                         "liked":nugget_like,
                                         "viewed":0,
                                         "following":True if following > 0 else False,
@@ -3793,7 +3850,7 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                 datetime_str = datetime.datetime.combine(date_obj, time_obj)
              
                 new_event=Events(title=event_title,ref_id=reference_id,server_id=server_id if server_id != None else None,event_type_id=event_type,
-                                 event_layout_id=event_layout,no_of_participants=event_participants,duration=event_duration,start_date_time=datetime_str,
+                                 description=event_message,event_layout_id=event_layout,no_of_participants=event_participants,duration=event_duration,start_date_time=datetime_str,
                                  created_at=datetime.datetime.utcnow(),created_by=login_user_id,cover_img=cover_img,waiting_room=waiting_room,join_before_host=join_before_host,
                                  sound_notify=sound_notify,user_screenshare=user_screenshare)
                 db.add(new_event)
@@ -4423,8 +4480,7 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
         return {"status":0,"msg":"Event start time cant be blank."}
     elif event_participants == None:
         return {"status":0,"msg":"Event participants cant be blank."}
-    elif event_participants < 2:
-        return {"status":0,"msg":"Event participants count should be greater than 1"}
+    
     elif event_duration:
         return {"status":0,"msg":"Event duration cant be blank."}
     elif event_duration > 10:
@@ -4457,6 +4513,10 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
         else:
             get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
             login_user_id=get_token_details.user_id
+            
+            event_participants=int(event_participants)
+            if event_participants < 2:
+                return {"status":0,"msg":"Event participants count should be greater than 1"}
             
             if not IsAccountVerified(db,login_user_id):
                 return {"status":0, "msg":"You need to complete your account validation before you can do this"}
@@ -4502,6 +4562,7 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                 old_start_datetime=edit_event.start_date_time if edit_event else None
                 
                 edit_event.title=event_title
+                edit_event.description=event_message
                 edit_event.event_type_id=event_type
                 edit_event.event_layout_id=event_layout
                 edit_event.no_of_participants=event_participants
@@ -5855,41 +5916,40 @@ async def globalsearchevents(db:Session=Depends(deps.get_db),token:str=Form(None
                         user_screenshare = settings.screen_share_status
                     count=0
                     for event in event_list:
-                        result_list[count]['event_id'] = event.id
-                        result_list[count]['event_name'] = event.title
-                        result_list[count]['reference_id'] = event.ref_id
-                        result_list[count]['event_type_id'] = event.event_type_id
-                        result_list[count]['event_layout_id'] = event.event_layout_id
-                        result_list[count]['message'] = event.description
-                        result_list[count]['start_date_time'] = event.start_date_time
-                        result_list[count]['start_date'] = datetime.datetime.strptime(event.start_date_time, '%Y-%m-%d %H:%M:%S').strftime('%b %d')
-                        result_list[count]['start_time'] = datetime.datetime.strptime(event.start_date_time, '%Y-%m-%d %H:%M:%S').strftime('%I:%M %p')
-                        result_list[count]['duration'] = event.duration
-                        result_list[count]['no_of_participants'] = event.no_of_participants
-                        result_list[count]['banner_image'] =event.cover_img
-                        result_list[count]['is_host'] = login_user_id == event.created_by
-                        result_list[count]['created_at'] = datetime.datetime.strptime(event.created_at, '%Y-%m-%d %H:%M:%S').strftime('%Y-%m-%d %I:%M %p')
-                        result_list[count]['original_user_name'] = event.createdBy.display_name
-                        result_list[count]['original_user_id'] = event.createdBy.id
-                        result_list[count]['original_user_image'] = event.createdBy.profile_img
-                        result_list[count]['waiting_room'] = event.waiting_room if event.waiting_room in [0, 1] else waiting_room
-                        result_list[count]['join_before_host'] = event.join_before_host if event.join_before_host in [0, 1] else join_before_host
-                        result_list[count]['sound_notify'] = event.sound_notify if event.sound_notify in [0, 1] else sound_notify
-                        result_list[count]['user_screenshare'] = event.user_screenshare if event.user_screenshare in [0, 1] else user_screenshare
-                        result_list[count]['event_melody_id'] = event.event_melody_id
                         default_melody = db.query(EventMelody).filter_by(id=event.event_melody_id).first()
-                        if default_melody is not None and default_melody != []:
-                            result_list[count]['melodies']['path'] = default_melody.path
-                            result_list[count]['melodies']['type'] = default_melody.type
-                            result_list[count]['melodies']['is_default'] = default_melody.event_id is None
-                        if event.eventDefaultAvs and len(event.eventDefaultAvs) > 0:
-                            for defaultav in event.eventDefaultAvs:
-                                result_list[count]['default_host_audio'] = defaultav.default_host_audio
-                                result_list[count]['default_host_video'] = defaultav.default_host_video
-                                result_list[count]['default_guest_audio'] = defaultav.default_guest_audio
-                                result_list[count]['default_guest_video'] = defaultav.default_guest_video
-
-                        count += 1
+                        default_av=db.query(EventDefaultAv).filter(EventDefaultAv.event_id == event.id).order_by(EventDefaultAv.id.desc()).first()
+                        
+                        result_list.append({
+                                            "event_id":event.id,
+                                            "event_name": event.title,
+                                            "reference_id":event.ref_id,
+                                            "event_type_id":event.event_type_id,
+                                            "event_layout_id":event.event_layout_id,
+                                            "message":event.description,
+                                            "start_date_time":event.start_date_time,
+                                            "start_date":event.start_date_time.strftime('%b %d') if event.start_date_time else "",
+                                            "start_time":event.start_date_time.strftime('%I:%M %p') if event.start_date_time else "",
+                                            "duration":event.duration,
+                                            "no_of_participants": event.no_of_participants,
+                                            "banner_image":event.cover_img,
+                                            "is_host":1 if login_user_id == event.created_by else 0,
+                                            "created_at":event.created_at.strftime('%Y-%m-%d %I:%M %p') if event.created_at else "",
+                                            "original_user_name":event.user.display_name if event.created_by else "",
+                                            "original_user_id":event.created_by if event.created_by else "",
+                                            "original_user_image":event.user.profile_img if event.created_by else "",
+                                            "waiting_room":event.waiting_room if event.waiting_room in [0, 1] else waiting_room,
+                                            "join_before_host":event.join_before_host if event.join_before_host in [0, 1] else join_before_host,
+                                            "sound_notify": event.sound_notify if event.sound_notify in [0, 1] else sound_notify,
+                                            "user_screenshare":event.user_screenshare if (event.user_screenshare == 1 or event.user_screenshare == 0)  else user_screenshare,
+                                            "event_melody_id":event.event_melody_id,
+                                            "melodies":{"path":default_melody.path if default_melody else "",
+                                                        "type":default_melody.type if default_melody else "",
+                                                        "is_default":None}, # default_melody.event_id is None
+                                            "default_host_audio":default_av.default_host_audio if default_av else "",
+                                            "default_host_video":default_av.default_host_video if default_av else "",
+                                            "default_guest_audio":default_av.default_guest_audio if default_av else "",
+                                            "default_guest_video":default_av.default_guest_video if default_av else ""
+                                           })
 
                 return {"status": 1, "msg": "success", "events_count": int(get_row_count), "total_pages": total_pages, "current_page_no": current_page_no, "events_list": result_list}
 
@@ -5920,12 +5980,9 @@ async def globalsearchnuggets(db:Session=Depends(deps.get_db),token:str=Form(Non
 
             current_page_no=int(page_number)
         
-            group_ids=getGroupids(login_user_id)
-            my_friends=get_friend_requests(login_user_id,requested_by=None,request_status=1,response_type=1,search_key=None)
-            my_friends=my_friends.accepted
-
-            
-
+            group_ids=getGroupids(db,login_user_id)
+            my_friends=get_friend_requests(db,login_user_id,requested_by=None,request_status=1,response_type=1,search_key=None)
+            my_friends=my_friends['accepted']
 
             criteria =db.query(Nuggets).join(Nuggets.user).join(Nuggets.master) \
             .outerjoin(Nuggets.likes.filter_by(status=1)) \
@@ -6607,19 +6664,28 @@ async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),use
                                             User.last_name.like('%'+search_key+'%'),
                                             func.concat(User.first_name, ' ', User.last_name).like('%'+search_key+'%')))
             if location:
-                get_follow_user=get_follow_user.filter(User.geo_location.like("%"+location+"%"))
+                get_user=db.query(User).filter(User.geo_location.like("%"+location+"%")).all()
+                user_location_ids={usr.id for usr in get_user}
+                
+                get_follow_user=get_follow_user.filter(or_(FollowUser.following_userid.in_(user_location_ids),FollowUser.follower_userid.in_(user_location_ids)))
             if gender:
-                get_follow_user=get_follow_user.filter(User.gender == gender)
+                get_user_gender=db.query(User).filter(User.gender == gender).all()
+                get_user_ids=[usr.id for usr in get_user_gender]
+                
+                get_follow_user=get_follow_user.filter(or_(FollowUser.following_userid.in_(get_user_ids),FollowUser.follower_userid.in_(get_user_ids)))
+                    
             if age:
                 if not age.isnumeric():
                     return {"status":0,"msg":"Invalid Age"}
                 else:
-                    # today = date.today()
-                    current_year = datetime.datetime.utcnow().year
-                    # get_user=db.query(User).filter(current_year - extract('year',User.dob) == age ).all()
-                    # user_ages={usr.id for usr in get_user}
+                    if not age.isnumeric():
+                        return {"status":0,"msg":"Invalid Age"}
+                    else:
+                        current_year = datetime.datetime.utcnow().year
+                        get_user=db.query(User).filter(current_year - extract('year',User.dob) == age ).all()
+                        user_ages={usr.id for usr in get_user}
                     
-                    get_follow_user=get_follow_user.filter(current_year - extract('year',User.dob) == age )
+                        get_follow_user=get_follow_user.filter(or_(FollowUser.following_userid.in_(user_ages),FollowUser.follower_userid.in_(user_ages)))
                     
                     # get_follow_user=get_follow_user.filter(or_(FollowUser.follower_userid.in_(user_ages),FollowUser.following_userid.in_(user_ages)))
                     
@@ -7426,12 +7492,14 @@ async def socialmedialogin(db:Session=Depends(deps.get_db),signin_type:str=Form(
             if mobile_no:
                 check_phone=db.query(User).filter(and_(User.mobile_no == mobile_no, User.status.in_([0, 1, 2, 3]))).count()
             
-            if check_email_id:           
-                reply=await logins(db,email_id,password,device_type,device_id,push_id,login_from,voip_token,app_type,1)
+            if check_email_id:  
+                first_time=0         
+                reply=await logins(db,email_id,password,device_type,device_id,push_id,login_from,voip_token,app_type,1,first_time)
                 return reply
             
             if check_phone :
-                reply=await logins(db,email_id,password,device_type,device_id,push_id,login_from,voip_token,app_type,1)
+                first_time=0         
+                reply=await logins(db,email_id,password,device_type,device_id,push_id,login_from,voip_token,app_type,1,first_time)
                 return reply
             
             else:
@@ -7525,7 +7593,9 @@ async def socialmedialogin(db:Session=Depends(deps.get_db),signin_type:str=Form(
                     password = hashlib.sha1(password.encode()).hexdigest()
                     if email_id=='':
                         email_id=mobile_no
-                    reply=await logins(db,email_id,password,device_type,device_id,push_id,login_from,voip_token,app_type)
+                        
+                    first_time=1
+                    reply=await logins(db,email_id,password,device_type,device_id,push_id,login_from,voip_token,app_type,0,first_time)
                     return reply
                 else:
                     return {"status":0,"msg":"Something went wrong when creating a User"}

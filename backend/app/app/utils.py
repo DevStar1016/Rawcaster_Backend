@@ -24,6 +24,7 @@ import time
 from dateutil.parser import parse
 import subprocess
 from mail_templates.mail_template import *
+from cryptography.fernet import Fernet
 
 def is_date(string, fuzzy=False):
 
@@ -42,6 +43,19 @@ def isTimeFormat(input):
     except ValueError:
         return False
 
+
+def EncryptandDecrypt(otp,flag=1):
+    key = Fernet.generate_key()
+    message = otp.encode()
+    f = Fernet(key)
+   
+    if flag == 1:
+        encrypted = f.encrypt(message)
+        return encrypted
+    else:
+        decrypted = f.decrypt(message)
+        return decrypted
+        
 
 def file_upload(file_name,compress):
     uploads_file_name=file_name.filename
@@ -73,6 +87,8 @@ def file_upload(file_name,compress):
     return save_full_path
 
 
+
+    
 
 def video_file_upload(upload_file,compress):    
     base_dir = f"{st.BASE_DIR}/rawcaster"
@@ -1178,7 +1194,7 @@ def compressImage(source,path):
 
 def get_event_detail(db,event_id,login_user_id):
     event={}
-    event_details=db.query(Events).filter_by(id = event_id).first()
+    event_details=db.query(Events).filter(Events.id == event_id).first()
     if event_details:
         default_melody=db.query(EventMelody).filter_by(id = event_details.event_melody_id).first()
         event.update({
@@ -1326,7 +1342,7 @@ async def SendOtp(db,user_id,signup_type):
     otp=generateOTP()
     otp_time=datetime.datetime.utcnow()
     
-    check_user_otp_log=db.query(OtpLog).filter(OtpLog.user_id == user_id).first()
+    check_user_otp_log=db.query(OtpLog).filter(OtpLog.user_id == user_id).order_by(OtpLog.id.desc()).first()
     
     if check_user_otp_log:
         
@@ -1346,6 +1362,7 @@ async def SendOtp(db,user_id,signup_type):
                                 )
         db.add(add_otp_to_log)
         db.commit()
+        db.refresh(add_otp_to_log)
         
         otp_ref_id=add_otp_to_log.id
         
@@ -1471,12 +1488,12 @@ def GetRawcasterUserID(db,type):
     
     
     
-async def logins(db,username, password, device_type, device_id, push_id,login_from,voip_token,app_type,socual=0):
+async def logins(db,username, password, device_type, device_id, push_id,login_from,voip_token,app_type,socual,first_time):
     username=username.strip() if username else None
    
     get_user=db.query(User).filter(or_(
                             and_(User.email_id == username, User.email_id != None),
-                            and_(User.mobile_no.like(username), User.mobile_no != None)
+                            and_(User.mobile_no == username, User.mobile_no != None)
                                                 )).first()
     
     if get_user == None or not get_user:
@@ -1491,8 +1508,36 @@ async def logins(db,username, password, device_type, device_id, push_id,login_fr
     elif get_user.status == 0:
         signup_type=1 if get_user.email_id else 2
         send_otp=await SendOtp(db,get_user.id,signup_type)
-                
-        return {"status" : 1,"acc_verify_status":0,"otp_ref_id":send_otp, "msg" : "Verification Pending, Redirect to OTP Verify Page","first_time":0}
+        
+        user_id=get_user.id
+        characters=''.join(random.choices(string.ascii_letters+string.digits, k=8))
+        token_text=""
+        dt = str(int(datetime.datetime.utcnow().timestamp()))
+
+        salt_token=token_text + str(user_id)+str(characters)+str(dt)
+        
+        salt=st.SALT_KEY
+        hash_code=str(token_text)+str(salt)
+        
+        new_auth_code=hashlib.sha1(hash_code.encode()).hexdigest()
+        
+        exptime=int(dt)+int(dt)
+        
+        paylod={ 'iat': dt,
+                'iss' : 'localhost',
+                'exp' : exptime,
+                'token' : token_text}
+    
+        token = jwt.encode(paylod, st.SECRET_KEY) 
+        userIP = get_ip()
+        
+        add_token=ApiTokens(user_id=user_id,token=salt_token,created_at=datetime.datetime.utcnow(),renewed_at=datetime.datetime.utcnow(),validity=1,
+                    device_type=login_from,app_type=app_type,device_id=device_id,push_device_id=push_id,voip_token=voip_token,
+                    device_ip=userIP,status=1)
+        db.add(add_token)
+        db.commit()
+        db.refresh(add_token)    
+        return {"status" : 1,"acc_verify_status":0,"alt_token_id":add_token.id,"otp_ref_id":send_otp, "msg" : "Verification Pending, Redirect to OTP Verify Page","first_time":first_time if first_time else 0,"email_id":username,"signup_type":get_user.signup_type,"remaining_seconds":90}
                         
     elif get_user.password != password and socual != 1: #  Invalid password!
         
@@ -1596,7 +1641,7 @@ async def logins(db,username, password, device_type, device_id, push_id,login_fr
                 if dt >= get_user.referral_expiry_date:
                     update_user=db.query(User).filter(User.id == get_user.id).update({'user_status_id':1,'referral_expiry_date':None})
                     db.commit()
-            return {"status":1,"msg":"Success","salt_token":salt_token,"token":token_text,"email":username,"expirytime":common_date(exptime),"profile_image":profile_image,"name":name,"user_id":user_id,"authcode":new_auth_code,"acc_verify_status":get_user.is_email_id_verified}
+            return {"status":1,"msg":"Success","salt_token":salt_token,"token":token_text,"email":username,"expirytime":common_date(exptime),"profile_image":profile_image,"name":name,"user_id":user_id,"authcode":new_auth_code,"acc_verify_status":get_user.is_email_id_verified,"first_time":0}
         else:
             return {"status":0,"msg" : "Failed to Generate Access Token. try again"}
             

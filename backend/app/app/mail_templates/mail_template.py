@@ -294,3 +294,56 @@ def event_mail_template(content):
 
 
 
+def welcome_mail():
+    
+    html_message='''<div style=" width:100%;">
+            <div style="width:100%; background:#fff; padding:0; max-width:700px; margin:auto; ">
+
+
+
+                <table width="100%" class="deviceWidth" border="0" cellpadding="0" cellspacing="0" align="center"
+                    bgcolor="#fff">
+                    <tr>
+                        <td align="center">
+                            <div class="banner" style="padding:0px 5px 0; ">
+                                <a id="link" style="color:#000; text-decoration:none;" href="#">
+                                    <img width="100%" class="deviceWidth"
+                                        src="<?php echo Url::to(Yii::getAlias('@web').'/web/images/welcomeImg.png',true); ?>"
+                                        alt="logo" border="0" /></a>
+                            </div>
+
+                            <div style="text-align:left; font-family:Verdana, Geneva, Tahoma, sans-serif; margin:20px 1%;">
+                                <div style="margin-top:7px; margin-bottom:0px; color:#000; font-size:18px; line-height:27px;">
+
+                                    <div
+                                        style="font-size:16px; color:#000; margin:10px 0px; font-family:Verdana, Geneva, Tahoma, sans-serif; text-align:left; line-height:25px;">
+
+                                        <p style="margin:10px 0px;">
+                                            Use this <a href="<?php echo Utility::inviteBaseurl().'firststep'; ?>">
+                                                link</a>
+                                            to read first steps to customize your profile :
+                                        </p>
+                                        <p style="margin:10px 0px;"><a
+                                                        href="<?php echo Utility::inviteBaseurl().'firststep'; ?>"><?php echo Utility::inviteBaseurl().'firststep'; ?></a>
+                                                </p>
+
+                                        <p style="margin:10px 0px;"> You can also watch this <a
+                                                href="https://www.youtube.com/watch?v=g-bWRRpCihk">video</a> for a
+                                            demo on how to setup your Rawcaster page :</p>
+                                        <p style="margin:10px 0px;"><a
+                                                        href="https://www.youtube.com/watch?v=g-bWRRpCihk">https://www.youtube.com/watch?v=g-bWRRpCihk</a>
+                                                </p>
+
+                                    </div>
+                                </div>
+
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+
+
+
+            </div>
+        </div> '''
+    return html_message
