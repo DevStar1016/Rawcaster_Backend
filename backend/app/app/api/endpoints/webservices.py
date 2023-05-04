@@ -104,63 +104,49 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(defaul=1,d
                                         and_(User.mobile_no == mobile_no, User.mobile_no != None)
                                                             ),User.status != 4).first()            
             if check_user:
-                
-                send_otp=await SendOtp(db,check_user.id,signup_type)
-                
-                # Generate token
-                user_id=check_user.id
-                characters=''.join(random.choices(string.ascii_letters+string.digits, k=8))
-                token_text=""
-                dt = str(int(datetime.datetime.utcnow().timestamp()))
-        
-                salt_token=token_text + str(user_id)+str(characters)+str(dt)
-                
-                salt=st.SALT_KEY
-                hash_code=str(token_text)+str(salt)
-                
-                new_auth_code=hashlib.sha1(hash_code.encode()).hexdigest()
-                
-                user_id=check_user.id
-                exptime=int(dt)+int(dt)
-                
-                paylod={ 'iat': dt,
-                        'iss' : 'localhost',
-                        'exp' : exptime,
-                        'token' : token_text}
+                if check_user.status == 0:
+                    send_otp=await SendOtp(db,check_user.id,signup_type)
+                    
+                    # Generate token
+                    user_id=check_user.id
+                    characters=''.join(random.choices(string.ascii_letters+string.digits, k=8))
+                    token_text=""
+                    dt = str(int(datetime.datetime.utcnow().timestamp()))
             
-                token = jwt.encode(paylod, st.SECRET_KEY) 
-                userIP = get_ip()
+                    salt_token=token_text + str(user_id)+str(characters)+str(dt)
+                    
+                    salt=st.SALT_KEY
+                    hash_code=str(token_text)+str(salt)
+                                        
+                    user_id=check_user.id
+                    exptime=int(dt)+int(dt)
+                    
+                    paylod={ 'iat': dt,
+                            'iss' : 'localhost',
+                            'exp' : exptime,
+                            'token' : token_text}
                 
-                add_token=ApiTokens(user_id=user_id,token=salt_token,created_at=datetime.datetime.utcnow(),renewed_at=datetime.datetime.utcnow(),validity=1,
-                            device_type=login_from,app_type=app_type,device_id=device_id,push_device_id=push_id,voip_token=voip_token,
-                            device_ip=userIP,status=1)
-                db.add(add_token)
-                db.commit()
-                
-                return {"status" : 1,"acc_verify_status":0,"alt_token_id":add_token.id,"otp_ref_id":send_otp,"signup_type":int(signup_type),"msg" : "Verification Pending, Redirect to OTP Verify Page","first_time":0,"remaining_seconds":90,"email_id":email_id}
+                    # token = jwt.encode(paylod, st.SECRET_KEY) 
+                    userIP = get_ip()
+                    
+                    add_token=ApiTokens(user_id=user_id,token=salt_token,created_at=datetime.datetime.utcnow(),renewed_at=datetime.datetime.utcnow(),validity=1,
+                                device_type=login_from,app_type=app_type,device_id=device_id,push_device_id=push_id,voip_token=voip_token,
+                                device_ip=userIP,status=1)
+                    db.add(add_token)
+                    db.commit()
+                    
+                    return {"status" : 1,"acc_verify_status":0,"alt_token_id":add_token.id,"otp_ref_id":send_otp,"signup_type":int(signup_type),"msg" : "Verification Pending, Redirect to OTP Verify Page","first_time":0,"remaining_seconds":90,"email_id":email_id if signup_type == 1 else mobile_no}
             
-            check_email_id = 0
-            check_phone = 0
-            if email_id:
-                check_email_id=db.query(User).filter(User.email_id == email_id,User.status != 4).count()
+                elif signup_type == 1:
+                    return {"status" : 2, "msg" : "You are already registered with this email address. Please login"}
             
-            if mobile_no:
-                check_phone=db.query(User).filter(User.mobile_no == mobile_no,User.status != 4).count()
-            
-            
-            if check_email_id > 0:
-                
-                return {"status" : 2, "msg" : "You are already registered with this email address. Please login"}
-            
-            if check_phone > 0:
-               
-                return {"status" : 2, "msg" : "You are already registered with this phone number. Please login"}
-            
+                elif signup_type == 2:
+                    return {"status" : 2, "msg" : "You are already registered with this phone number. Please login"}
+                    
             else:
-                
+                # New User Register
                 userIP = get_ip()
-                location="India" if not geo_location else geo_location
-                # location=""
+                location=geo_location
                 if geo_location == None or geo_location == "" or len(geo_location)< 4 :
                     location_details=FindLocationbyIP(userIP)
                     if location_details['status'] and location_details['status'] == 1:
@@ -263,7 +249,7 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(defaul=1,d
                     if email_id == "" or email_id == None:
                         email_id=mobile_no
                         
-                    # Send OTP for Email or MObile number Verification
+                    # Send OTP for Email or Mobile number Verification
                     
                     send_otp=await SendOtp(db,add_user.id,signup_type)
                     
@@ -280,20 +266,9 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(defaul=1,d
                     dt = str(int(datetime.datetime.utcnow().timestamp()))
             
                     salt_token=token_text + str(user_id)+str(characters)+str(dt)
-                    
-                    salt=st.SALT_KEY
-                    hash_code=str(token_text)+str(salt)
-                    
-                    new_auth_code=hashlib.sha1(hash_code.encode()).hexdigest()
-                    
+                    salt=st.SALT_KEY                  
                     exptime=int(dt)+int(dt)
-                    
-                    paylod={ 'iat': dt,
-                            'iss' : 'localhost',
-                            'exp' : exptime,
-                            'token' : token_text}
                 
-                    token = jwt.encode(paylod, st.SECRET_KEY) 
                     userIP = get_ip()
                     
                     add_token=ApiTokens(user_id=user_id,token=salt_token,created_at=datetime.datetime.utcnow(),renewed_at=datetime.datetime.utcnow(),validity=1,
@@ -301,11 +276,9 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(defaul=1,d
                                 device_ip=userIP,status=1)
                     db.add(add_token)
                     db.commit()
-                        
-                    
-                    # reply=logins(db,email_id,password,device_type,device_id,push_id,login_from,voip_token,app_type)
-                    
-                    return {"status":1, "msg": "Success", "email": email_id,"alt_token_id":add_token.id,"otp_ref_id":otp_ref_id,"user_id":add_user.id,"acc_verify_status": 0,"first_time":1,"remaining_seconds":90,"signup_type":int(signup_type)}  # First Time (1 - New to rawcaster, 0 - existing user)
+                    db.refresh(add_token)    
+                                       
+                    return {"status":1, "msg": "Success", "email_id": email_id,"alt_token_id":add_token.id,"otp_ref_id":otp_ref_id,"user_id":add_user.id,"acc_verify_status": 0,"first_time":1,"remaining_seconds":90,"signup_type":int(signup_type)}  # First Time (1 - New to rawcaster, 0 - existing user)
                     
                 else:
                     return {"status":0,"msg":"Failed to add User"}
@@ -324,7 +297,7 @@ async def signupverify(db:Session=Depends(deps.get_db),auth_code:str=Form(None,d
         
     else:
         otp_ref_id=otp_ref_id.strip()
-        otp_flag='email'
+        otp_flag='email' if not otp_flag else otp_flag
         otp=otp
         auth_code=auth_code.strip()
         
@@ -340,6 +313,7 @@ async def signupverify(db:Session=Depends(deps.get_db),auth_code:str=Form(None,d
             else:
                 get_otp_log.status = 0
                 db.commit()
+                
                 user_update=0
                 if otp_flag =="sms":
                     update_user=db.query(User).filter(User.id == get_otp_log.user_id).update({"is_mobile_no_verified":1,"status":1})
@@ -352,6 +326,7 @@ async def signupverify(db:Session=Depends(deps.get_db),auth_code:str=Form(None,d
                     user_update=get_otp_log.user_id
                 if update_user:
                     get_user=db.query(User).filter(User.id == get_otp_log.user_id).first()
+                    
                     if get_user:
                         if get_user.referrer_id != None or get_user.referrer_id != "":
                             change_referral_date=ChangeReferralExpiryDate(db,get_user.referrer_id)
@@ -372,7 +347,9 @@ async def signupverify(db:Session=Depends(deps.get_db),auth_code:str=Form(None,d
                             get_token=db.query(ApiTokens).filter(ApiTokens.id == alt_token_id).first()
                             if get_token:
                                 first_time=1
-                                generate_access_token=await logins(db,get_user.email_id,get_user.password,get_token.device_type,get_token.device_id,get_token.push_device_id,get_token.device_type,get_token.voip_token,get_token.app_type,0,first_time)
+                                username=str(get_user.mobile_no) if get_user.mobile_no else None if otp_flag == "sms" else get_user.email_id
+                                
+                                generate_access_token=await logins(db,username,get_user.password,get_token.device_type,get_token.device_id,get_token.push_device_id,get_token.device_type,get_token.voip_token,get_token.app_type,0,first_time)
                                 return generate_access_token
 
                     return {"status" :1, "msg" :"Your account has been verified successfully."}
@@ -490,7 +467,7 @@ async def resendotp(db:Session=Depends(deps.get_db),auth_code:str=Form(None,desc
                 remaining_seconds=int(target_time - current_time)
 
             reply_msg=f'Please enter the One Time Password (OTP) sent to {to}'
-            return {"status":1,"msg":reply_msg,"email":to,"otp_ref_id":int(otp_ref_id),"remaining_seconds":remaining_seconds}
+            return {"status":1,"msg":reply_msg,"email_id":to,"otp_ref_id":int(otp_ref_id),"remaining_seconds":remaining_seconds}
                  
           
 
@@ -606,15 +583,14 @@ async def login(db:Session=Depends(deps.get_db),auth_code:str=Form(None,descript
             # check Verified or not
             get_user=db.query(User).filter(or_(User.email_id == username,User.email_id != None),or_(User.mobile_no == username,User.mobile_no != None)).first()
             if get_user:
-                if get_user.status == 1:
+                # check password
+                if get_user.password == password:
                     first_time=0
                     generate_access_token=await logins(db,username,password,device_type,device_id,push_id,login_from,voip_token,app_type,0,first_time)
                     return generate_access_token
-                elif get_user.status == 0:
-                    send_otp=await SendOtp(db,get_user.id,get_user.signup_type)
-                    
-                    return {"status" : 1,"acc_verify_status":0,"otp_ref_id":send_otp,"signup_type":get_user.signup_type,"msg" : "Verification Pending, Redirect to OTP Verify Page","first_time":1,"remaining_seconds":90,"email_id":get_user.email_id if get_user.signup_type else get_user.mobile_no}
-                    
+                else:
+                    return {"status":0,"msg":"Invalid username or password"}
+               
             else:
                 return {"status":0,"msg":"Please enter a valid username and password"}
                 
@@ -1880,6 +1856,9 @@ async def addfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),gr
                                     db.add(add_member)
                                     db.commit()
                                     
+                                    # add Notification
+                                    add_group_noty=Insertnotification(db,login_user_id,member,14,add_member.id)
+                                    
                         # Profile Image
                         if group_icon:
                             file_name=group_icon.filename
@@ -2487,6 +2466,8 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
         return {"status":0,"msg":"Invalid page Number"}
     else:
         nugget_type = int(nugget_type) if nugget_type else None
+        filter_type = int(filter_type) if filter_type else None
+        
         access_token = checkToken(db,token) if token != 'RAWCAST' else True
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
@@ -2556,10 +2537,10 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
             
             else:
                 if nugget_type == 1:  # Video
-                    get_nuggets=get_nuggets.join(NuggetsAttachment,Nuggets.nuggets_id == NuggetsAttachment.nugget_id,isouter=True).filter(NuggetsAttachment.media_type == 'video')
+                    get_nuggets=get_nuggets.filter(Nuggets.nuggets_id ==NuggetsAttachment.nugget_id,NuggetsAttachment.media_type == 'video')
                     
                 elif nugget_type == 2:  # Audio and Image
-                    get_nuggets=get_nuggets.join(NuggetsAttachment,Nuggets.nuggets_id == NuggetsAttachment.nugget_id).filter(or_(NuggetsAttachment.media_type == None,NuggetsAttachment.media_type == 'image',NuggetsAttachment.media_type == 'audio'))
+                    get_nuggets=get_nuggets.filter(Nuggets.nuggets_id ==NuggetsAttachment.nugget_id,NuggetsAttachment.media_type != 'video')
                     
                 if filter_type == 1:
                     my_followers=[]  # my_followers
@@ -2690,7 +2671,9 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
                             for friend_group in friend_groups:
                                 shared_detail.append({'name':friend_group.display_name,"img":friend_group.profile_img})
                     
-                    get_nugget_attachment=db.query(NuggetsAttachment).filter(NuggetsAttachment.nugget_id == nuggets.nuggets_id,NuggetsAttachment.status == 1).all()
+                    get_nugget_attachment=db.query(NuggetsAttachment).filter(NuggetsAttachment.nugget_id == nuggets.nuggets_id,NuggetsAttachment.status == 1)
+                    if nugget_type == 1:
+                        get_nugget_attachment=get_nugget_attachment.filter(NuggetsAttachment.media_type == 'video')
                     
                     for attach in get_nugget_attachment:
                         if attach.status == 1:  
@@ -3855,6 +3838,7 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                                  sound_notify=sound_notify,user_screenshare=user_screenshare)
                 db.add(new_event)
                 db.commit()
+                db.refresh(new_event)
                 
                 if new_event:
                     totalfriends=[]
@@ -4895,12 +4879,18 @@ async def uploadchatattachment(db:Session=Depends(deps.get_db),token:str=Form(No
 
 # 47. List Notifications
 @router.post("/listnotifications")
-async def listnotifications(db:Session=Depends(deps.get_db),token:str=Form(None),page_number:str=Form(default=1)):
+async def listnotifications(db:Session=Depends(deps.get_db),token:str=Form(None),page_number:str=Form(default=1),notification_type:str=Form(None,description="1-Nugget,2-Event,3-Friend Request,4-Group,5-Fans")):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    
     elif not str(page_number).isnumeric():
         return {"status":0,"msg":"Invalid page Number"}
+    
+    elif notification_type and not notification_type.isnumeric():
+        return {"status":0,"msg":"Invalid Notification Type"}
+        
     else:
+        notification_type = int(notification_type) if notification_type else None
         
         access_token=checkToken(db,token)
         
@@ -4914,6 +4904,25 @@ async def listnotifications(db:Session=Depends(deps.get_db),token:str=Form(None)
             current_page_no=int(page_number)
             
             get_notification=db.query(Notification).filter(Notification.status == 1,Notification.user_id == login_user_id)
+            
+            if notification_type == 1: # Nugget
+                filters=[3,4,5,6,7,8]
+                get_notification=get_notification.filter(Notification.notification_type.in_(filters))
+                
+            if notification_type == 2:  # Event
+                filters=[9,10,13]
+                get_notification=get_notification.filter(Notification.notification_type.in_(filters))
+            
+            if  notification_type == 3: # Friend Request Accept/Reject
+                filters=[11,12]
+                get_notification=get_notification.filter(Notification.notification_type.in_(filters))
+            
+            if notification_type == 4: # Group
+                get_notification=get_notification.filter(Notification.notification_type == 14)
+
+            if notification_type == 5: # Fans
+                get_notification=get_notification.filter(Notification.notification_type == 15)
+                
             get_row_count=get_notification.count()
             if get_row_count < 1:
                 return {"status":2,"msg":"No Result found"}
@@ -4932,12 +4941,38 @@ async def listnotifications(db:Session=Depends(deps.get_db),token:str=Form(None)
                         if myfriends:
                             friend_request_id=myfriends.id
                             friend_request_status=myfriends.request_status
-                    
-                    result_list.append({
+
+                    if notification_type == 1:
+                        get_nugget=db.query(Nuggets).filter(Nuggets.id == res.ref_id).first()
+                        result_list.append({
                                         "notification_id":res.id,
                                         "user_id":res.notification_origin_id,
-                                        "userName":res.user2.display_name,
-                                        "userImage":res.user2.profile_img,
+                                        "userName":res.user2.display_name if res.notification_origin_id else "",
+                                        "userImage":res.user2.profile_img if res.notification_origin_id else "",
+                                        "type":res.notification_type,
+                                        "content":get_nugget.nuggets_master.content if get_nugget else "",
+                                        "created_datetime":common_date(res.created_datetime) if res.created_datetime else None
+                                        })
+                    elif notification_type == 2: # Event
+                        get_event=db.query(Events).filter(Events.id == res.ref_id).first()
+                        
+                        result_list.append({
+                                        "notification_id":res.id,
+                                        "user_id":res.notification_origin_id,
+                                        "userName":res.user2.display_name if res.notification_origin_id else "",
+                                        "userImage":res.user2.profile_img if res.notification_origin_id else "",
+                                        "type":res.notification_type,
+                                        "content":get_event.title if get_event else "",
+                                        "created_datetime":common_date(res.created_datetime) if res.created_datetime else None
+                                        })
+                        
+                    elif notification_type == 3: # Friend request
+                        # my_friends=db.query(User).filter(User.id == res.notification_origin_id).frist()
+                        result_list.append({
+                                        "notification_id":res.id,
+                                        "user_id":res.notification_origin_id,
+                                        "userName":res.user2.display_name if res.notification_origin_id else "",
+                                        "userImage":res.user2.profile_img if res.notification_origin_id else "",
                                         "type":res.notification_type,
                                         "friend_request_id":friend_request_id,
                                         "friend_request_status":friend_request_status,
@@ -4946,6 +4981,47 @@ async def listnotifications(db:Session=Depends(deps.get_db),token:str=Form(None)
                                         "read_datetime":common_date(res.read_datetime) if res.read_datetime else None,
                                         "created_datetime":common_date(res.created_datetime) if res.created_datetime else None
                                         })
+                        
+                    elif notification_type == 4: # Group
+                        get_group_details=db.query(FriendGroupMembers).filter(FriendGroupMembers.id == res.ref_id).first()
+                        result_list.append({
+                                        "notification_id":res.id,
+                                        "user_id":res.notification_origin_id,
+                                        "userName":res.user2.display_name if res.notification_origin_id else "",
+                                        "userImage":res.user2.profile_img if res.notification_origin_id else "",
+                                        "type":res.notification_type,
+                                        "content":get_group_details.friend_groups.group_name if get_group_details else "",
+                                        "friend_request_id":friend_request_id,
+                                        "friend_request_status":friend_request_status,
+                                        "ref_id":res.ref_id if res.ref_id else None,
+                                        "is_read":res.is_read if res.is_read else None,
+                                        "read_datetime":common_date(res.read_datetime) if res.read_datetime else None,
+                                        "created_datetime":common_date(res.created_datetime) if res.created_datetime else None
+                                        })
+                    elif notification_type == 5: # Fans                        
+                        result_list.append({
+                                        "notification_id":res.id,
+                                        "user_id":res.notification_origin_id,
+                                        "userName":res.user2.display_name if res.notification_origin_id else "",
+                                        "userImage":res.user2.profile_img if res.notification_origin_id else "",
+                                        "type":res.notification_type,
+                                        "content":'Following',
+                                        "created_datetime":common_date(res.created_datetime) if res.created_datetime else None
+                                        })
+                    else:
+                        result_list.append({
+                                            "notification_id":res.id,
+                                            "user_id":res.notification_origin_id,
+                                            "userName":res.user2.display_name if res.notification_origin_id else "",
+                                            "userImage":res.user2.profile_img if res.notification_origin_id else "",
+                                            "type":res.notification_type,
+                                            "friend_request_id":friend_request_id,
+                                            "friend_request_status":friend_request_status,
+                                            "ref_id":res.ref_id if res.ref_id else None,
+                                            "is_read":res.is_read if res.is_read else None,
+                                            "read_datetime":common_date(res.read_datetime) if res.read_datetime else None,
+                                            "created_datetime":common_date(res.created_datetime) if res.created_datetime else None
+                                            })
                     
                 total_unread_count=db.query(Notification).filter_by(status=1,is_read=0,user_id=login_user_id).count()
                 
@@ -6563,6 +6639,7 @@ async def followandunfollow(db:Session=Depends(deps.get_db),token:str=Form(None)
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
+            type = int(type) if type else None
             get_token_details=db.query(ApiTokens).filter_by(token = access_token).first()
             
             login_user_id=get_token_details.user_id 
@@ -6589,9 +6666,15 @@ async def followandunfollow(db:Session=Depends(deps.get_db),token:str=Form(None)
                             add_frnd_group=FriendGroupMembers(group_id=friend_groups.id,user_id=login_user_id,added_date=datetime.datetime.utcnow(),added_by=follow_userid, is_admin=0,disable_notification=1,status=1)
                             db.add(add_frnd_group)
                             db.commit()
+                            
+                            notification_type=15
+                            add_notification=Insertnotification(db,follow_userid,login_user_id,notification_type,add_frnd_group.id)
+                    
                     
                     get_influence_count=croninfluencemember(db,get_user.id)
                     
+                    # insert notification
+                   
                     return {"status":1,"msg":f"Now you are fan of {add_follow_user.user2.display_name}"}
                         
                             
@@ -6602,7 +6685,9 @@ async def followandunfollow(db:Session=Depends(deps.get_db),token:str=Form(None)
                     
                     msg=f"{follow_user.user2.display_name if follow_user else ''} not influencing you"
                     get_influence_count=croninfluencemember(db,get_user.id)
-                    
+                    # notification_type=15
+                    # add_notification=Insertnotification(db,follow_userid,login_user_id,notification_type,add_frnd_group.id)
+                                        
                     del_follow_user=db.query(FollowUser).filter(FollowUser.follower_userid == login_user_id,FollowUser.following_userid == follow_userid).delete()
                     db.commit()
                     
@@ -6612,7 +6697,7 @@ async def followandunfollow(db:Session=Depends(deps.get_db),token:str=Form(None)
                     return {"status":0,"msg":"Already requested"}
                     
             else:
-                return {"status":0,"msg":"params is missing"}
+                return {"status":0,"msg":"Invalid Follower"}
                        
                             
             
@@ -6642,7 +6727,7 @@ async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),use
             get_follow_user =db.query(FollowUser)
         
             if type == 1:   # Followers
-                get_follow_user=get_follow_user
+                get_follow_user=get_follow_user.join(User,FollowUser.following_userid == User.id,isouter=True)
                 if not user_id:
                     get_follow_user = get_follow_user.filter(FollowUser.follower_userid == login_user_id)
                 
@@ -6650,10 +6735,9 @@ async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),use
                     get_follow_user = get_follow_user.filter(FollowUser.follower_userid == user_id)
                     
             else:  # Following
-                get_follow_user=get_follow_user
-                
+                get_follow_user=get_follow_user.join(User,FollowUser.follower_userid == User.id,isouter=True)
                 if not user_id:
-                    get_follow_user=get_follow_user.filter(FollowUser.following_userid==login_user_id,FollowUser.status==1)
+                    get_follow_user=get_follow_user.filter(FollowUser.following_userid==login_user_id)
                 else:
                     get_follow_user = get_follow_user.filter(FollowUser.following_userid == user_id)
 
@@ -6664,33 +6748,27 @@ async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),use
                                             User.last_name.like('%'+search_key+'%'),
                                             func.concat(User.first_name, ' ', User.last_name).like('%'+search_key+'%')))
             if location:
-                get_user=db.query(User).filter(User.geo_location.like("%"+location+"%")).all()
+                get_user=db.query(User).filter(User.geo_location.like("%"+location)).all()
                 user_location_ids={usr.id for usr in get_user}
                 
-                get_follow_user=get_follow_user.filter(or_(FollowUser.following_userid.in_(user_location_ids),FollowUser.follower_userid.in_(user_location_ids)))
+                get_follow_user=get_follow_user.filter(or_(or_(FollowUser.following_userid.in_(user_location_ids),FollowUser.follower_userid.in_(user_location_ids)),FollowUser.following_userid.in_(user_location_ids),FollowUser.follower_userid.in_(user_location_ids)))
+            
             if gender:
                 get_user_gender=db.query(User).filter(User.gender == gender).all()
                 get_user_ids=[usr.id for usr in get_user_gender]
                 
-                get_follow_user=get_follow_user.filter(or_(FollowUser.following_userid.in_(get_user_ids),FollowUser.follower_userid.in_(get_user_ids)))
-                    
+                get_follow_user=get_follow_user.filter(or_(or_(FollowUser.following_userid.in_(get_user_ids),FollowUser.follower_userid.in_(get_user_ids)),FollowUser.following_userid.in_(get_user_ids),FollowUser.follower_userid.in_(get_user_ids)))
+               
             if age:
                 if not age.isnumeric():
                     return {"status":0,"msg":"Invalid Age"}
                 else:
-                    if not age.isnumeric():
-                        return {"status":0,"msg":"Invalid Age"}
-                    else:
-                        current_year = datetime.datetime.utcnow().year
-                        get_user=db.query(User).filter(current_year - extract('year',User.dob) == age ).all()
-                        user_ages={usr.id for usr in get_user}
-                    
-                        get_follow_user=get_follow_user.filter(or_(FollowUser.following_userid.in_(user_ages),FollowUser.follower_userid.in_(user_ages)))
-                    
-                    # get_follow_user=get_follow_user.filter(or_(FollowUser.follower_userid.in_(user_ages),FollowUser.following_userid.in_(user_ages)))
-                    
-            
-                get_follow_user=get_follow_user.filter(User.gender == gender)
+                   
+                    current_year = datetime.datetime.utcnow().year
+                    get_user=db.query(User).filter(current_year - extract('year',User.dob) == age ).all()
+                    user_ages={usr.id for usr in get_user}
+                
+                    get_follow_user=get_follow_user.filter(or_(or_(FollowUser.following_userid.in_(user_ages),FollowUser.follower_userid.in_(user_ages)),FollowUser.following_userid.in_(user_ages),FollowUser.follower_userid.in_(user_ages)))               
 
             get_row_count = get_follow_user.count()
             
@@ -6703,12 +6781,11 @@ async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),use
                 get_result = get_follow_user.limit(limit).offset(offset).all()
                 
                 result_list = []
-                i=0
                 
                 for follow in get_result:
                     
                     if type == 1:
-                        followback=db.query(FollowUser).filter(and_(FollowUser.follower_userid==follow.following_userid , FollowUser.following_userid==follow.follower_userid),FollowUser.status==1).first()
+                        followback=db.query(FollowUser).filter(and_(FollowUser.follower_userid == follow.following_userid , FollowUser.following_userid == follow.follower_userid),FollowUser.status==1).first()
                         
                         friend_details = {
                             'user_id': follow.user2.id if follow.user2.id != '' else '',
@@ -6739,7 +6816,7 @@ async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),use
                             'last_seen': ((common_date(follow.user1.last_seen) if follow.user1.last_seen else "") if follow.user1.last_seen else "") if follow.user1.last_seen != '' else '',
                             'follow': True if followback else False
                         }
-                        i=i+1
+                        
                     result_list.append(friend_details)
 
                 return {'status': 1, 'msg': 'Success', 'follow_count': get_row_count, 'total_pages': total_pages, 'current_page_no': current_page_no, 'follow_list': result_list}

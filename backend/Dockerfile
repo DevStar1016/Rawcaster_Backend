@@ -25,13 +25,21 @@ RUN bash -c "pip3 install python-jose[cryptography]"
 
 RUN bash -c "pip install pymysql"
 RUN bash -c "pip install fastapi-pagination==0.8.3"
-RUN bash -c "pip install phpserialize"
-RUN bash -c "pip install pandas"
 RUN bash -c "pip3 install fastapi-mail"
-RUN bash -c "pip3 install aiofiles"
 RUN bash -c "pip3 install pyfcm"
 RUN bash -c "pip3 install twilio"
 RUN bash -c "pip3 install crc16"
+RUN bash -c "pip3 install moviepy"
+RUN bash -c "pip3 install AST"
+RUN bash -c "pip3 install boto3"
+RUN bash -c "pip3 install pytz"
+RUN bash -c "pip3 install pybase64"
+RUN bash -c "pip3 install regex"
+RUN bash -c "pip3 install urlparse4"
+
+
+
+
 
 
 RUN apt-get -y update && apt-get -y install wkhtmltopdf

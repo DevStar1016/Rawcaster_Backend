@@ -242,7 +242,7 @@ def checkAuthCode(authcode, auth_text):
     
     
 def EmailorMobileNoValidation(email_id):
-    email_id=email_id.strip()
+    email_id=email_id
     
     if check_mail(email_id) == True:
         return  {'status':1, 'type':1, 'email':email_id, 'mobile':None}
@@ -274,6 +274,7 @@ def pushNotify(db,user_ids,details,login_user_id):
         title=get_user.display_name
     
     get_api_token=db.query(ApiTokens.user_id,ApiTokens.device_type,ApiTokens.push_device_id,UserSettings.nuggets,UserSettings.events,UserSettings.friend_request)
+    
     get_api_token=get_api_token.filter(UserSettings.user_id == ApiTokens.user_id,ApiTokens.status == 1,and_(or_(ApiTokens.push_device_id != None,ApiTokens.push_device_id != ""))).group_by(ApiTokens.push_device_id)
     
     if user_ids:
@@ -1536,11 +1537,11 @@ async def logins(db,username, password, device_type, device_id, push_id,login_fr
                     device_ip=userIP,status=1)
         db.add(add_token)
         db.commit()
-        db.refresh(add_token)    
+        db.refresh(add_token)   
+         
         return {"status" : 1,"acc_verify_status":0,"alt_token_id":add_token.id,"otp_ref_id":send_otp, "msg" : "Verification Pending, Redirect to OTP Verify Page","first_time":first_time if first_time else 0,"email_id":username,"signup_type":get_user.signup_type,"remaining_seconds":90}
                         
     elif get_user.password != password and socual != 1: #  Invalid password!
-        
         if get_user.status == 2:
             return {"status":0,"msg" : "Your account is currently blocked!"}
         else:

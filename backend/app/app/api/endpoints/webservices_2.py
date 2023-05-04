@@ -172,3 +172,43 @@ async def listunclaimaccount(db:Session=Depends(deps.get_db),token:str=Form(None
             
             return {"status":1,"msg":"Success","unclaim_accounts":unclaimed_accounts}
         
+
+
+# 87  Influencer Chat
+@router.post("/influencerchat")
+async def influencer_chat(db:Session=Depends(deps.get_db),token:str=Form(None),user_id:str=Form(None),message:str=Form(None)):
+    if token == None or token.strip() == "":
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    elif user_id == None:
+        return {"status":0,"msg":"User id is missing"}
+    
+    elif not user_id.isnumeric():
+        return {"status":0,"msg":"Invaid User Id"}
+    
+    elif message == None or message.strip() == '':
+        return {"status":0,"msg":"Message cant empty"}
+    
+    else:
+        access_token=checkToken(db,token)
+        
+        if access_token == False:
+            return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+        else:
+            user_id=int(user_id)
+            check_influencer=db.query(User).filter(User.id == user_id,User.status != 4).first()
+            if check_influencer:
+            
+                get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+                login_user_id = get_token_details.user_id if get_token_details else None
+                
+                # Add Chat:
+                new_chat=InfluencerChat(sender_id=login_user_id,receiver_id=user_id,message=message,created_at=datetime.utcnow(),status =1)
+                db.add(new_chat)
+                db.commit()
+                db.refresh(new_chat)
+                
+                return {"status":1,"msg":"Success"}
+            
+            else:   
+                return {"status":0,"msg":"Invalid Influencer"}
+            

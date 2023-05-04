@@ -9,7 +9,7 @@ class FollowUser(Base):
     follower_userid=Column(Integer,ForeignKey("user.id"))
     following_userid=Column(Integer,ForeignKey("user.id"))
     created_date=Column(DateTime)
-    status=Column(TINYINT(1),comment=" -1-deleted,0-inactive,1-active ")
+    status=Column(TINYINT(1),default=1,comment=" -1-deleted,0-inactive,1-active ")
     
     user1=relationship("User",foreign_keys=[follower_userid])
     user2=relationship("User",foreign_keys=[following_userid])
