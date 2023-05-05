@@ -152,7 +152,7 @@ def upload_to_s3(local_file_pth,s3_bucket_path):
         
         with open(local_file_pth, 'rb') as data:  # Upload File To S3
             upload=client_s3.upload_fileobj(data, bucket_name, s3_bucket_path,ExtraArgs={'ACL': 'public-read'})
-
+        print(local_file_pth)
         os.remove(local_file_pth)
         
         url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
@@ -1539,7 +1539,7 @@ async def logins(db,username, password, device_type, device_id, push_id,login_fr
         db.commit()
         db.refresh(add_token)   
          
-        return {"status" : 1,"acc_verify_status":0,"alt_token_id":add_token.id,"otp_ref_id":send_otp, "msg" : "Verification Pending, Redirect to OTP Verify Page","first_time":first_time if first_time else 0,"email_id":username,"signup_type":get_user.signup_type,"remaining_seconds":90}
+        return {"status" : 1,"acc_verify_status":0,"alt_token_id":add_token.id,"otp_ref_id":send_otp, "msg" : "Verification Pending, Redirect to OTP Verify Page","first_time":0,"email_id":username,"signup_type":get_user.signup_type,"remaining_seconds":90}
                         
     elif get_user.password != password and socual != 1: #  Invalid password!
         if get_user.status == 2:

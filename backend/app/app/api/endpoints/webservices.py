@@ -135,7 +135,7 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(defaul=1,d
                     db.add(add_token)
                     db.commit()
                     
-                    return {"status" : 1,"acc_verify_status":0,"alt_token_id":add_token.id,"otp_ref_id":send_otp,"signup_type":int(signup_type),"msg" : "Verification Pending, Redirect to OTP Verify Page","first_time":0,"remaining_seconds":90,"email_id":email_id if signup_type == 1 else mobile_no}
+                    return {"status" : 1,"acc_verify_status":0,"alt_token_id":add_token.id,"otp_ref_id":send_otp,"signup_type":int(signup_type),"msg" : "Verification Pending, Redirect to OTP Verify Page","first_time":1,"remaining_seconds":90,"email_id":email_id if signup_type == 1 else mobile_no}
             
                 elif signup_type == 1:
                     return {"status" : 2, "msg" : "You are already registered with this email address. Please login"}
@@ -147,7 +147,7 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(defaul=1,d
                 # New User Register
                 userIP = get_ip()
                 location=geo_location
-                if geo_location == None or geo_location == "" or len(geo_location)< 4 :
+                if geo_location == None or geo_location == "" or len(geo_location) < 4 :
                     location_details=FindLocationbyIP(userIP)
                     if location_details['status'] and location_details['status'] == 1:
                         location=location_details['country'] if location_details['country'] else "India"
@@ -196,7 +196,7 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(defaul=1,d
                     db.refresh(user_settings_model)
                     
                     # Set Default Friend Group
-                    friends_group=FriendGroups(group_name='My Fans',group_icon='test',created_by=add_user.id,created_at=datetime.datetime.utcnow(),status=1,chat_enabled=0)
+                    friends_group=FriendGroups(group_name='My Fans',group_icon=defaultimage('group_icon'),created_by=add_user.id,created_at=datetime.datetime.utcnow(),status=1,chat_enabled=0)
                     db.add(friends_group)
                     db.commit()
                     db.refresh(friends_group)
@@ -584,12 +584,12 @@ async def login(db:Session=Depends(deps.get_db),auth_code:str=Form(None,descript
             get_user=db.query(User).filter(or_(User.email_id == username,User.email_id != None),or_(User.mobile_no == username,User.mobile_no != None)).first()
             if get_user:
                 # check password
-                if get_user.password == password:
-                    first_time=0
-                    generate_access_token=await logins(db,username,password,device_type,device_id,push_id,login_from,voip_token,app_type,0,first_time)
-                    return generate_access_token
-                else:
-                    return {"status":0,"msg":"Invalid username or password"}
+                
+                first_time=1
+                generate_access_token=await logins(db,username,password,device_type,device_id,push_id,login_from,voip_token,app_type,0,first_time)
+                return generate_access_token
+                # else:
+                #     return {"status":0,"msg":"Invalid username or password"}
                
             else:
                 return {"status":0,"msg":"Please enter a valid username and password"}
@@ -1615,7 +1615,7 @@ async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(Non
                     result_list.append({
                                         "group_id":res.id,
                                         "group_name":groupname,
-                                        "group_icon":res.group_icon if res.group_icon else "",
+                                        "group_icon":res.group_icon if res.group_icon else defaultimage('group_icon'),
                                         "group_member_count":gte_frnd_group_count + 1 if gte_frnd_group_count else 0,
                                         "group_owner":res.created_by if res.created_by else 0,
                                         "typing":0,
@@ -1706,7 +1706,7 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
                     
             
             if location:
-                get_user=db.query(User).filter(User.geo_location.like("%"+location+"%")).all()
+                get_user=db.query(User).filter(User.geo_location.like(location+"%")).all()
                 user_location_ids={usr.id for usr in get_user}
                 
                 get_my_friends=get_my_friends.filter(or_(MyFriends.sender_id.in_(user_location_ids),MyFriends.receiver_id.in_(user_location_ids)))
@@ -2256,8 +2256,6 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),conten
                             db.add(add_NuggetPollOption)
                             db.commit()
                     
-                    attachment_count=0  
-                    
                     # Nuggets Media
                     if nuggets_media:
                         
@@ -2319,26 +2317,56 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),conten
                                             segment = video.subclip(start_time, end_time)
                                             
                                             # Save the segment as a new file
+                                            
                                             segment_filename = f"video_clip_{random.randint(1111,9999)}{int(datetime.datetime.now().timestamp())}.mp4"
                                             segment.write_videofile(segment_filename, codec="libx264")
                                             
                                             splited_video_url.append(segment_filename)
-                                    
-                                    for url in splited_video_url:
-                                        # os.remove(save_file_path) # Remove Uploaded Video File
-                                        s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
-                                        result=upload_to_s3(url,s3_file_path)  # Upload to S3
-                                        
-                                        if result['status'] == 1:
-                                            add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,
-                                                                media_type=type,media_file_type=file_ext,file_size=file_size,path=result['url'],
-                                                                created_date=datetime.datetime.utcnow(),status =1)
-                                            db.add(add_nugget_attachment)
-                                            db.commit()
-                                            db.refresh(add_nugget_attachment)
                                             
-                                        else:
-                                            return result
+                                            bucket_name='rawcaster'
+    
+                                            access_key="AKIAYFYE6EFYGNPCA32D"
+                                            access_secret="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"
+                                            # try:
+                                            client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
+                                            s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
+                                            
+                                            with open(segment_filename, 'rb') as data:  # Upload File To S3
+                                                upload=client_s3.upload_fileobj(data, bucket_name, s3_file_path,ExtraArgs={'ACL': 'public-read'})
+                                            
+                                            os.remove(segment_filename)
+                                            
+                                            url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
+                                            url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{s3_file_path}'
+                                            if url:
+                                                add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,
+                                                                    media_type=type,media_file_type=file_ext,file_size=file_size,path=url,
+                                                                    created_date=datetime.datetime.utcnow(),status =1)
+                                                db.add(add_nugget_attachment)
+                                                db.commit()
+                                                db.refresh(add_nugget_attachment)
+                                                
+                                                # return {"status":1,"url":url}
+                                            else:
+                                                return "Fail"
+                                    else:
+                                        print("2")
+                                        
+                                    # for url in splited_video_url:
+                                    #     # os.remove(save_file_path) # Remove Uploaded Video File
+                                    #     result=upload_to_s3(url,s3_file_path)  # Upload to S3
+                                    #     s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
+                                        
+                                    #     if result['status'] == 1:
+                                    #         add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,
+                                    #                             media_type=type,media_file_type=file_ext,file_size=file_size,path=result['url'],
+                                    #                             created_date=datetime.datetime.utcnow(),status =1)
+                                    #         db.add(add_nugget_attachment)
+                                    #         db.commit()
+                                    #         db.refresh(add_nugget_attachment)
+                                            
+                                    #     else:
+                                    #         return result
                                                                       
                                 elif type == 'audio':
                                     s3_file_path=f"nuggets/audio_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp3"
@@ -2359,7 +2387,7 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),conten
                                 else:
                                     return result
                                        
-                    
+                    # Add New Nuggets
                     add_nuggets=Nuggets(nuggets_id=add_nuggets_master.id,user_id=login_user_id,type=1,share_type=share_type,created_date=datetime.datetime.utcnow())
                     db.add(add_nuggets)
                     db.commit()
@@ -2638,7 +2666,6 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
                 nuggets_list=[]
                
                 for nuggets in get_nuggets:
-                    
                     attachments=[]
                     poll_options=[]
                     is_downloadable=0
@@ -4879,7 +4906,7 @@ async def uploadchatattachment(db:Session=Depends(deps.get_db),token:str=Form(No
 
 # 47. List Notifications
 @router.post("/listnotifications")
-async def listnotifications(db:Session=Depends(deps.get_db),token:str=Form(None),page_number:str=Form(default=1),notification_type:str=Form(None,description="1-Nugget,2-Event,3-Friend Request,4-Group,5-Fans")):
+async def listnotifications(db:Session=Depends(deps.get_db),token:str=Form(None),page_number:str=Form(default=1),notification_type:str=Form(None,description="1-Nugget,2-Event,3-Friend Request,4-Group,5-Fans,6-Poll Results")):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     
@@ -4903,7 +4930,27 @@ async def listnotifications(db:Session=Depends(deps.get_db),token:str=Form(None)
             
             current_page_no=int(page_number)
             
-            get_notification=db.query(Notification).filter(Notification.status == 1,Notification.user_id == login_user_id)
+            get_notification=db.query(Notification).filter(Notification.status == 1,Notification.notification_origin_id == login_user_id)
+            
+            get_nuggets=db.query(NuggetsMaster).filter(NuggetsMaster.user_id == login_user_id)
+            if notification_type == 6:
+                # Poll Notification
+                get_nuggets=get_nuggets.filter(NuggetsMaster.poll_duration != None,NuggetsMaster.poll_duration != '')
+               
+                
+                nuggets_id=[]
+                for polls in get_nuggets:
+                    
+                    days, hours, minutes = map(int, (polls.poll_duration).split(':'))
+                    duration_seconds= (days * 24 * 3600) + (hours * 3600) + (minutes * 60)
+                    
+                    poll_expire_date=polls.created_date + timedelta(seconds = duration_seconds)
+                
+                    if datetime.datetime.utcnow() >= poll_expire_date:
+                        nuggets_id.append(polls.id)
+                
+                get_nuggets=get_nuggets.filter(NuggetsMaster.id.in_(nuggets_id))
+
             
             if notification_type == 1: # Nugget
                 filters=[3,4,5,6,7,8]
@@ -4911,7 +4958,14 @@ async def listnotifications(db:Session=Depends(deps.get_db),token:str=Form(None)
                 
             if notification_type == 2:  # Event
                 filters=[9,10,13]
-                get_notification=get_notification.filter(Notification.notification_type.in_(filters))
+                
+                my_friends=db.query(MyFriends).filter(MyFriends.receiver_id == login_user_id,MyFriends.request_status == 1).all()
+                my_frnd_ids=[frnd.id for frnd in my_friends]
+                return my_frnd_ids
+                get_events=db.query(Events).filter(Events.created_by.in_(my_frnd_ids)).all()
+                get_event_ids=[event.id for event in get_events]
+                return get_event_ids
+                get_notification=get_notification.filter(Notification.notification_type.in_(filters),Notification.ref_id.in_(get_event_ids))
             
             if  notification_type == 3: # Friend Request Accept/Reject
                 filters=[11,12]
@@ -4923,24 +4977,29 @@ async def listnotifications(db:Session=Depends(deps.get_db),token:str=Form(None)
             if notification_type == 5: # Fans
                 get_notification=get_notification.filter(Notification.notification_type == 15)
                 
-            get_row_count=get_notification.count()
+            get_row_count=get_nuggets.count() if notification_type == 6 else get_notification.count()
+            
             if get_row_count < 1:
-                return {"status":2,"msg":"No Result found"}
+                return {"status":0,"msg":"No Result found"}
             else:
                 default_page_size=25
                 limit,offset,total_pages=get_pagination(get_row_count,current_page_no,default_page_size)
+                if notification_type == 6:
+                    get_notification=get_nuggets.order_by(NuggetsMaster.id.desc()).limit(limit).offset(offset).all()
+                else:
+                    get_notification=get_notification.order_by(Notification.id.desc()).limit(limit).offset(offset).all()
                 
-                get_notification=get_notification.order_by(Notification.id.desc()).limit(limit).offset(offset).all()
                 result_list=[]
                 for res in get_notification:
                     friend_request_id=None
                     friend_request_status=None
                     
-                    if res.notification_type == 11:
-                        myfriends=db.query(MyFriends).filter_by(sender_id = res.notification_origin_id,receiver_id = res.user_id,request_status=0,status=1).first()
-                        if myfriends:
-                            friend_request_id=myfriends.id
-                            friend_request_status=myfriends.request_status
+                    if notification_type != 6:
+                        if res.notification_type == 11:
+                            myfriends=db.query(MyFriends).filter_by(sender_id = res.notification_origin_id,receiver_id = res.user_id,request_status=0,status=1).first()
+                            if myfriends:
+                                friend_request_id=myfriends.id
+                                friend_request_status=myfriends.request_status
 
                     if notification_type == 1:
                         get_nugget=db.query(Nuggets).filter(Nuggets.id == res.ref_id).first()
@@ -4963,6 +5022,7 @@ async def listnotifications(db:Session=Depends(deps.get_db),token:str=Form(None)
                                         "userImage":res.user2.profile_img if res.notification_origin_id else "",
                                         "type":res.notification_type,
                                         "content":get_event.title if get_event else "",
+                                        "event_start_time":common_date(get_event.start_date_time) if get_event else "",
                                         "created_datetime":common_date(res.created_datetime) if res.created_datetime else None
                                         })
                         
@@ -5007,6 +5067,25 @@ async def listnotifications(db:Session=Depends(deps.get_db),token:str=Form(None)
                                         "type":res.notification_type,
                                         "content":'Following',
                                         "created_datetime":common_date(res.created_datetime) if res.created_datetime else None
+                                        })
+                    elif notification_type == 6: # Poll Result
+                        gte_poll_vote_option=db.query(NuggetPollOption).filter(NuggetPollOption.nuggets_master_id == res.id,NuggetPollOption.status == 1)
+                        total_vote=db.query(NuggetPollVoted).filter(NuggetPollVoted.nugget_master_id == res.id).count()
+                        
+                        poll_options=[]
+                        for option in gte_poll_vote_option:
+                            if option.status == 1:
+                                poll_options.append({"option_id":option.id,"option_name":option.option_name,"option_percentage":option.poll_vote_percentage,"votes":option.votes})
+                    
+                        result_list .append({           
+                                        "nugget_id":res.id,  # Nugget Id
+                                        "userName":res.user.display_name if res.user_id else "",
+                                        "userImage":res.user.profile_img if res.user_id else defaultimage('profile_img'),
+                                        'content':res.content,
+                                        'poll_option':poll_options,
+                                        "type":16,
+                                        "total_vote":total_vote,
+                                        "created_datetime":common_date(res.created_date) if res.created_date else None
                                         })
                     else:
                         result_list.append({
@@ -6748,7 +6827,7 @@ async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),use
                                             User.last_name.like('%'+search_key+'%'),
                                             func.concat(User.first_name, ' ', User.last_name).like('%'+search_key+'%')))
             if location:
-                get_user=db.query(User).filter(User.geo_location.like("%"+location)).all()
+                get_user=db.query(User).filter(User.geo_location.like(location+"%")).all()
                 user_location_ids={usr.id for usr in get_user}
                 
                 get_follow_user=get_follow_user.filter(or_(or_(FollowUser.following_userid.in_(user_location_ids),FollowUser.follower_userid.in_(user_location_ids)),FollowUser.following_userid.in_(user_location_ids),FollowUser.follower_userid.in_(user_location_ids)))

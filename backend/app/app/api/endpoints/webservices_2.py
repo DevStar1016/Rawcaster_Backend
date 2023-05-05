@@ -8,9 +8,10 @@ from datetime import datetime,date
 
 
 router = APIRouter() 
-
+    
 
 # 85 Event Abuse Report
+
  
 @router.post("/addeventabusereport")
 async def add_event_abuse_report(db:Session=Depends(deps.get_db),token:str=Form(None),event_id:str=Form(None),message:str=Form(None),attachment:UploadFile=File(None)):
@@ -175,40 +176,75 @@ async def listunclaimaccount(db:Session=Depends(deps.get_db),token:str=Form(None
 
 
 # 87  Influencer Chat
-@router.post("/influencerchat")
-async def influencer_chat(db:Session=Depends(deps.get_db),token:str=Form(None),user_id:str=Form(None),message:str=Form(None)):
+@router.post("/friendgroupchat")
+async def friendgroupchat(db:Session=Depends(deps.get_db),token:str=Form(None),group_id:str=Form(None),type:str=Form(None),message:str=Form(None),attachment:UploadFile=File(None)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    elif user_id == None:
-        return {"status":0,"msg":"User id is missing"}
     
-    elif not user_id.isnumeric():
-        return {"status":0,"msg":"Invaid User Id"}
+    elif group_id == None:
+        return {"status":0,"msg":"Group Id is missing"}
     
+    elif type == None:
+        return {"status":0,"msg":"Type is missing"}
+        
     elif message == None or message.strip() == '':
         return {"status":0,"msg":"Message cant empty"}
     
     else:
+        type=int(type)
+        
+        if (type == 2 or type == 3 or type == 4 or type == 5) and not attachment:
+            return {"status":0,"msg":"File missing"}
+            
         access_token=checkToken(db,token)
         
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
-            user_id=int(user_id)
-            check_influencer=db.query(User).filter(User.id == user_id,User.status != 4).first()
-            if check_influencer:
+            get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+            login_user_id = get_token_details.user_id if get_token_details else None
             
-                get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
-                login_user_id = get_token_details.user_id if get_token_details else None
+            file_type=[2,3,4,5]
+            content=''
+            if type == 1:
+                content=message
                 
-                # Add Chat:
-                new_chat=InfluencerChat(sender_id=login_user_id,receiver_id=user_id,message=message,created_at=datetime.utcnow(),status =1)
-                db.add(new_chat)
-                db.commit()
-                db.refresh(new_chat)
+            elif type in file_type:
+                if type == 2 or type == 5:
+                    file_ext = os.path.splitext(attachment.filename)[1]
+                    
+                    uploaded_file_path=file_upload(attachment,compress=1)
+                    s3_file_path=f'Image_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}'
+                    
+                    result=upload_to_s3(uploaded_file_path,s3_file_path)
+                    if result['status'] and result['status'] == 1:
+                        content=result['url']
+                    else:
+                        return result
+                if type == 4: # Video
+                    readed_file=await attachment.read()
+                    save_file_path=video_file_upload(readed_file,compress=None)
+                    segment_filename = f"video_{random.randint(1111,9999)}{int(datetime.now().timestamp())}.mp4"
+                    
+                    result=upload_to_s3(save_file_path,segment_filename)
+                    if result['status'] and result['status'] == 1:
+                        content=result['url']
+                    else:
+                        return result
+                    
+                if type == 3: # Audio
+                    readed_file=await attachment.read()
+                    save_file_path=audio_file_upload(readed_file,compress=None)
+                    segment_filename = f"audio_{random.randint(1111,9999)}{int(datetime.now().timestamp())}.mp3"
+                    
+                    result=upload_to_s3(save_file_path,segment_filename)
+                    if result['status'] and result['status'] == 1:
+                        content=result['url']
+                    else:
+                        return result
+
+            # Add Group Chat
+            add_group_chat=GroupChat(group_id=group_id,sender_id = login_user_id)          
                 
-                return {"status":1,"msg":"Success"}
             
-            else:   
-                return {"status":0,"msg":"Invalid Influencer"}
             
