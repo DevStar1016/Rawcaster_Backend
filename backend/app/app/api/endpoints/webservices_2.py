@@ -176,75 +176,86 @@ async def listunclaimaccount(db:Session=Depends(deps.get_db),token:str=Form(None
 
 
 # 87  Influencer Chat
-@router.post("/friendgroupchat")
-async def friendgroupchat(db:Session=Depends(deps.get_db),token:str=Form(None),group_id:str=Form(None),type:str=Form(None),message:str=Form(None),attachment:UploadFile=File(None)):
+@router.post("/influencerchat")
+async def influencerchat(db:Session=Depends(deps.get_db),token:str=Form(None),type:str=Form(None,description="1-text,2-image,3-audio,4-video"),message:str=Form(None),attachment:UploadFile=File(None)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    
-    elif group_id == None:
-        return {"status":0,"msg":"Group Id is missing"}
     
     elif type == None:
         return {"status":0,"msg":"Type is missing"}
         
-    elif message == None or message.strip() == '':
+    elif type == 1 and (message == None or message.strip() == ''):
         return {"status":0,"msg":"Message cant empty"}
     
     else:
         type=int(type)
         
+        if not 1 <= type <= 5:
+            return {"status":0,"msg":"Check type"}
+            
         if (type == 2 or type == 3 or type == 4 or type == 5) and not attachment:
             return {"status":0,"msg":"File missing"}
             
         access_token=checkToken(db,token)
         
         if access_token == False:
+            
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
             get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
             login_user_id = get_token_details.user_id if get_token_details else None
             
-            file_type=[2,3,4,5]
-            content=''
-            if type == 1:
-                content=message
-                
-            elif type in file_type:
-                if type == 2 or type == 5:
-                    file_ext = os.path.splitext(attachment.filename)[1]
+            # Get Default Friend Group
+            get_friend_group=db.query(FriendGroups).filter(FriendGroups.created_by == login_user_id,FriendGroups.status == 1,FriendGroups.group_name == 'My Fans').first()
+            if not get_friend_group:
+                return {"status":0,"msg":"Check Group"}
+            else:
+                file_type=[2,3,4,5]
+                content=''
+                if type == 1:
+                    content=None
                     
-                    uploaded_file_path=file_upload(attachment,compress=1)
-                    s3_file_path=f'Image_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}'
-                    
-                    result=upload_to_s3(uploaded_file_path,s3_file_path)
-                    if result['status'] and result['status'] == 1:
-                        content=result['url']
-                    else:
-                        return result
-                if type == 4: # Video
-                    readed_file=await attachment.read()
-                    save_file_path=video_file_upload(readed_file,compress=None)
-                    segment_filename = f"video_{random.randint(1111,9999)}{int(datetime.now().timestamp())}.mp4"
-                    
-                    result=upload_to_s3(save_file_path,segment_filename)
-                    if result['status'] and result['status'] == 1:
-                        content=result['url']
-                    else:
-                        return result
-                    
-                if type == 3: # Audio
-                    readed_file=await attachment.read()
-                    save_file_path=audio_file_upload(readed_file,compress=None)
-                    segment_filename = f"audio_{random.randint(1111,9999)}{int(datetime.now().timestamp())}.mp3"
-                    
-                    result=upload_to_s3(save_file_path,segment_filename)
-                    if result['status'] and result['status'] == 1:
-                        content=result['url']
-                    else:
-                        return result
+                elif type in file_type:
+                    if type == 2 or type == 5:
+                        file_ext = os.path.splitext(attachment.filename)[1]
+                        
+                        uploaded_file_path=file_upload(attachment,compress=1)
+                        s3_file_path=f'Image_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}{file_ext}'
+                        
+                        result=upload_to_s3(uploaded_file_path,s3_file_path)
+                        if result['status'] and result['status'] == 1:
+                            content=result['url']
+                        else:
+                            return result
+                        
+                    if type == 4: # Video
+                        readed_file=await attachment.read()
+                        save_file_path=video_file_upload(readed_file,compress=None)
+                        segment_filename = f"video_{random.randint(1111,9999)}{int(datetime.now().timestamp())}.mp4"
+                        
+                        result=upload_to_s3(save_file_path,segment_filename)
+                        if result['status'] and result['status'] == 1:
+                            content=result['url']
+                        else:
+                            return result
+                        
+                    if type == 3: # Audio
+                        readed_file=await attachment.read()
+                        save_file_path=await audio_file_upload(readed_file,compress=None)
+                        segment_filename = f"audio_{random.randint(1111,9999)}{int(datetime.now().timestamp())}.mp3"
+                        
+                        result=upload_to_s3(save_file_path,segment_filename)
+                        if result['status'] and result['status'] == 1:
+                            content=result['url']
+                        else:
+                            return result
 
-            # Add Group Chat
-            add_group_chat=GroupChat(group_id=group_id,sender_id = login_user_id)          
+                # Add Group Chat
+                add_group_chat=GroupChat(group_id=get_friend_group.id,sender_id = login_user_id,message=message,path=content,type=type,sent_datetime=datetime.utcnow(),status=1)          
+                db.add(add_group_chat)
+                db.commit()
+                db.refresh(add_group_chat)
                 
+                return {"status":1,"msg":"Success"}
             
             

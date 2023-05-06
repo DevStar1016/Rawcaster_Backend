@@ -347,3 +347,463 @@ def welcome_mail():
             </div>
         </div> '''
     return html_message
+
+
+def invite_mail(content):
+    html_code='''<!doctype html>
+            <html xmlns="http://www.w3.org/1999/xhtml">
+
+            <head>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+                <title>Rawcater-Newsletter</title>
+                <link href='http://fonts.googleapis.com/css?family=Pacifico' rel='stylesheet' type='text/css'>
+
+                <style type="text/css">
+                    body {
+                        width: 100%;
+                        margin: 0;
+                        padding: 0;
+                        -webkit-font-smoothing: antialiased;
+                        font-family: "Roboto";
+                        background: #eaeced;
+                    }
+
+                    @media only screen and (max-width: 640px) {
+                        body[yahoo] .deviceWidth {
+                            width: 440px !important;
+                            padding: 0;
+                        }
+                    }
+
+                    @media only screen and (max-width: 479px) {
+                        body[yahoo] .deviceWidth {
+                            width: 280px !important;
+                            padding: 0;
+                        }
+                    }
+                </style>
+            </head>
+
+            <body leftmargin="0" topmargin="0" marginwidth="0" marginheight="0" yahoo="fix"
+                style="background:#eaeced; padding: 0;">
+
+            <div style="background-color:#eaeced; width:100%;font-family: Roboto">
+                <div style="width:100%; background:#fff; padding:0; max-width:1000px; margin:auto;">
+
+                    <table width="100%" border="0" cellpadding="0" cellspacing="0" align="center">
+
+                        <table width="100%" border="0" cellpadding="0" cellspacing="0" align="center"
+                            class="border-complete deviceWidth border-lr ">
+                            <tr>
+                                <td width="100%" valign="bottom">
+                                    <table border="0" width="100%" valign="bottom" cellpadding="0" cellspacing="0"
+                                        align="center" class="deviceWidth">
+                                        <tr>
+                                            <td>
+                                                <div
+                                                        style="text-align: center; padding: 40px 0px; background: url('<?php echo Url::to(Yii::getAlias('@web').'/web/images/background.jpg',true); ?>');
+                                                        background-size: cover;">
+                                                    <div>
+                                                        <img src="<?php echo Url::to(Yii::getAlias('@web').'/web/images/logo-white.png',true); ?>" alt="logo"
+                                                            style="max-width: 230px; margin:0 auto 10px auto;">
+                                                        <p align="center"
+                                                        style="color: #fff; text-align: center; max-width: 740px; font-size: 16px;  line-height: 25px;padding: 0 15px; font-weight:300; margin: auto;">
+                                                            Hi, I have joined Rawcaster. A one-stop platform for all social media needs. I am asking all my friends and special people to join this platform to make it easier to reach everyone with content, personalized messages, Nuggets, and invitations to participate in my special events. I expect to see you there soon. <a href={content} style="text-transform: uppercase; text-decoration: underline; font-size: 19px; color: #fff; font-weight:500;">Try it free</a></p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <table width="100%" border="0" style="margin: auto; max-width: 900px;" cellpadding="0" cellspacing="0" align="center"
+                            class="border-lr deviceWidth">
+
+                            <tr align="center">
+                                <td align="left" style="padding:0 25px;">
+                                    <div style="border: 1px solid #E8EAEE; border-radius: 22px; width: 100%; float: left; position: relative;  margin: 40px 0 0 0; background: url('<?php echo Url::to(Yii::getAlias('@web').'/web/images/style-bg.png',true); ?>'); background-repeat: no-repeat;
+                                        background-position: right top;background-size: 40px;">
+
+                                        <table width="100%" border="0" cellpadding="0" cellspacing="0" align="center"
+                                            class="border-lr deviceWidth">
+                                            <tr>
+                                                <td class="center">
+
+                                                    <table width="400px" border="0" cellpadding="0" cellspacing="0" align="left"
+                                                        class="deviceWidth">
+
+                                                        <tr>
+                                                            <td align="left" style="line-height: 0;">
+                                                                <a href="#">
+                                                                    <img src="<?php echo Url::to(Yii::getAlias('@web').'/web/images/bg-1.png',true); ?>" width="100%" border="0"
+                                                                        class="deviceWidth" />
+                                                                </a>
+                                                            </td>
+                                                        </tr>
+
+                                                    </table>
+
+                                                    <table width="400px" border="0" cellpadding="0" cellspacing="0"
+                                                        align="right" class="deviceWidth">
+                                                        <tr>
+                                                            <td align="left">
+                                                                <div style="margin-top:30px;float: left;">
+                                                                    <ul style="padding-left: 10px;">
+                                                                        <li
+                                                                                style="margin-bottom: 15px; list-style: none; font-size: 16px; font-weight: 500;">
+                                                                                <span
+                                                                                        style="width: 15px;height: 15px; background: linear-gradient(116.6deg, #F3738B 0.88%, #F99F46 99.2%); display: block; border-radius: 50%;margin-top: 6px; float: left; margin-right: 10px;"></span>
+                                                                            <p
+                                                                                    style="margin-top: 0;width: 89%; float: left; line-height: 25px;font-weight: 400;">
+                                                                                Radio/TV style talk-show events</p>
+                                                                        </li>
+                                                                        <li
+                                                                                style="margin-bottom: 15px; list-style: none; font-size: 16px; font-weight: 500;">
+                                                                                <span
+                                                                                        style="width: 15px;height: 15px; background: linear-gradient(116.6deg, #F3738B 0.88%, #F99F46 99.2%); display: block; border-radius: 50%;margin-top: 6px; float: left; margin-right: 10px;"></span>
+                                                                            <p
+                                                                                    style="margin-top: 0;width: 89%; float: left; line-height: 25px;font-weight: 400;">
+                                                                                Participants in listen-only mode</p>
+                                                                        </li>
+                                                                        <li
+                                                                                style="margin-bottom: 15px; list-style: none; font-size: 16px; font-weight: 500;">
+                                                                                <span
+                                                                                        style="width: 15px;height: 15px; background: linear-gradient(116.6deg, #F3738B 0.88%, #F99F46 99.2%); display: block; border-radius: 50%;margin-top: 6px; float: left; margin-right: 10px;"></span>
+                                                                            <p
+                                                                                    style="margin-top: 0;width: 89%; float: left; line-height: 25px;font-weight: 400;">
+                                                                                Live interaction with participants</p>
+                                                                        </li>
+                                                                        <li
+                                                                                style="margin-bottom: 15px; list-style: none; font-size: 16px; font-weight: 500;">
+                                                                                <span
+                                                                                        style="width: 15px;height: 15px; background: linear-gradient(116.6deg, #F3738B 0.88%, #F99F46 99.2%); display: block; border-radius: 50%;margin-top: 6px; float: left; margin-right: 10px;"></span>
+                                                                            <p
+                                                                                    style="margin-top: 0;width: 89%; float: left; line-height: 25px;font-weight: 400;">
+                                                                                Host with a panel of speakers</p>
+                                                                        </li>
+                                                                    </ul>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    </table>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td align="left" style="padding:0 25px;">
+                                    <div style="border: 1px solid #E8EAEE; border-radius: 22px; width: 100%; float: left; position: relative;   margin: 40px 0 0 0;
+                                        background: url('<?php echo Url::to(Yii::getAlias('@web').'/web/images/style-bg.png',true); ?>');
+                                        background-repeat: no-repeat;
+                                        background-position: left top;background-size: 40px;">
+
+                                        <table width="100%" border="0" cellpadding="0" cellspacing="0" align="center"
+                                            class="border-lr deviceWidth">
+                                            <tr>
+                                                <td class="center">
+                                                    <table width="400px" border="0" cellpadding="0" cellspacing="0"
+                                                        align="right" class="deviceWidth">
+
+                                                        <tr>
+                                                            <td align="left" style="line-height: 0;">
+                                                                <a href="#">
+                                                                    <img src="<?php echo Url::to(Yii::getAlias('@web').'/web/images/bg-2.png',true); ?>" width="100%" border="0"
+                                                                        class="deviceWidth" />
+                                                                </a>
+                                                            </td>
+                                                        </tr>
+
+                                                    </table>
+
+                                                    <table width="400px" border="0" cellpadding="0" cellspacing="0"
+                                                        align="right" class="deviceWidth">
+                                                        <tr>
+                                                            <td align="left">
+                                                                <div style="margin-top:30px;float: left;">
+                                                                    <ul style="padding-left: 10px;">
+                                                                        <li
+                                                                                style="margin-bottom: 15px; list-style: none; font-size: 16px; font-weight: 500;">
+                                                                                <span
+                                                                                        style="width: 15px;height: 15px; background: linear-gradient(116.6deg, #F3738B 0.88%, #F99F46 99.2%); display: block; border-radius: 50%;margin-top: 6px; float: left; margin-right: 10px;"></span>
+                                                                            <p
+                                                                                    style="margin-top: 0;width: 90%; float: left; line-height: 25px;font-weight: 400">
+                                                                                End-to-end encrypted live conversations</p>
+                                                                        </li>
+                                                                        <li
+                                                                                style="margin-bottom: 15px; list-style: none; font-size: 16px; font-weight: 500;">
+                                                                                <span
+                                                                                        style="width: 15px;height: 15px; background: linear-gradient(116.6deg, #F3738B 0.88%, #F99F46 99.2%); display: block; border-radius: 50%;margin-top: 6px; float: left; margin-right: 10px;"></span>
+                                                                            <p
+                                                                                    style="margin-top: 0;width: 90%; float: left; line-height: 25px;font-weight: 400">
+                                                                                Video calls</p>
+                                                                        </li>
+                                                                        <li
+                                                                                style="margin-bottom: 15px; list-style: none; font-size: 16px; font-weight: 500;">
+                                                                                <span
+                                                                                        style="width: 15px;height: 15px; background: linear-gradient(116.6deg, #F3738B 0.88%, #F99F46 99.2%); display: block; border-radius: 50%;margin-top: 6px; float: left; margin-right: 10px;"></span>
+                                                                            <p
+                                                                                    style="margin-top: 0;width: 90%; float: left; line-height: 25px;font-weight: 400">
+                                                                                Audio calls</p>
+                                                                        </li>
+                                                                    </ul>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    </table>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td align="left" style="padding:0 25px;">
+                                    <div style="border: 1px solid #E8EAEE; border-radius: 22px; width: 100%; float: left; position: relative;  margin: 40px 0 0 0; background: url('<?php echo Url::to(Yii::getAlias('@web').'/web/images/style-bg.png',true); ?>'); background-repeat: no-repeat;background-repeat: no-repeat;
+                                        background-position: right top;background-size: 40px;">
+
+                                        <table width="100%" border="0" cellpadding="0" cellspacing="0" align="center"
+                                            class="border-lr deviceWidth">
+                                            <tr>
+                                                <td class="center">
+
+                                                    <table width="400px" border="0" cellpadding="0" cellspacing="0" align="left"
+                                                        class="deviceWidth">
+
+                                                        <tr>
+                                                            <td align="left" style="line-height: 0;">
+                                                                <a href="#">
+                                                                    <img src="<?php echo Url::to(Yii::getAlias('@web').'/web/images/bg-3.png',true); ?>" width="100%" border="0"
+                                                                        class="deviceWidth" />
+                                                                </a>
+                                                            </td>
+                                                        </tr>
+
+                                                    </table>
+
+                                                    <table width="400px" border="0" cellpadding="0" cellspacing="0"
+                                                        align="right" class="deviceWidth">
+                                                        <tr>
+                                                            <td align="left">
+                                                                <div style="margin-top:30px;float: left;">
+                                                                    <ul style="padding-left: 10px;">
+                                                                        <li
+                                                                                style="margin-bottom: 15px; list-style: none; font-size: 16px; font-weight: 500;">
+                                                                                <span
+                                                                                        style="width: 15px;height: 15px; background: linear-gradient(116.6deg, #F3738B 0.88%, #F99F46 99.2%); display: block; border-radius: 50%;margin-top: 6px; float: left; margin-right: 10px;"></span>
+                                                                            <p
+                                                                                    style="margin-top: 0;width: 90%; float: left; line-height: 25px;font-weight: 400">
+                                                                                Host a virtual meeting with anyone anywhere</p>
+                                                                        </li>
+                                                                        <li
+                                                                                style="margin-bottom: 15px; list-style: none; font-size: 16px; font-weight: 500;">
+                                                                                <span
+                                                                                        style="width: 15px;height: 15px; background: linear-gradient(116.6deg, #F3738B 0.88%, #F99F46 99.2%); display: block; border-radius: 50%;margin-top: 6px; float: left; margin-right: 10px;"></span>
+                                                                            <p
+                                                                                    style="margin-top: 0;width: 90%; float: left; line-height: 25px;font-weight: 400">
+                                                                                One-on-one or one-to-many video conference</p>
+                                                                        </li>
+                                                                        <li
+                                                                                style="margin-bottom: 15px; list-style: none; font-size: 16px; font-weight: 500;">
+                                                                                <span
+                                                                                        style="width: 15px;height: 15px; background: linear-gradient(116.6deg, #F3738B 0.88%, #F99F46 99.2%); display: block; border-radius: 50%;margin-top: 6px; float: left; margin-right: 10px;"></span>
+                                                                            <p
+                                                                                    style="margin-top: 0;width: 90%; float: left; line-height: 25px;font-weight: 400">
+                                                                                Break-out rooms</p>
+                                                                        </li>
+                                                                        <li
+                                                                                style="margin-bottom: 15px; list-style: none; font-size: 16px; font-weight: 500;">
+                                                                                <span
+                                                                                        style="width: 15px;height: 15px; background: linear-gradient(116.6deg, #F3738B 0.88%, #F99F46 99.2%); display: block; border-radius: 50%;margin-top: 6px; float: left; margin-right: 10px;"></span>
+                                                                            <p
+                                                                                    style="margin-top: 0;width: 90%; float: left; line-height: 25px;font-weight: 400">
+                                                                                Schmoozing</p>
+                                                                        </li>
+                                                                        <li
+                                                                                style="margin-bottom: 15px; list-style: none; font-size: 16px; font-weight: 500;">
+                                                                                <span
+                                                                                        style="width: 15px;height: 15px; background: linear-gradient(116.6deg, #F3738B 0.88%, #F99F46 99.2%); display: block; border-radius: 50%;margin-top: 6px; float: left; margin-right: 10px;"></span>
+                                                                            <p
+                                                                                    style="margin-top: 0;width: 90%; float: left; line-height: 25px;font-weight: 400">
+                                                                                Voting</p>
+                                                                        </li>
+                                                                    </ul>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    </table>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td align="left" style="padding:0 25px;">
+                                    <div style="border: 1px solid #E8EAEE; border-radius: 22px; width: 100%; float: left; position: relative;  margin: 40px 0 0 0; background: url('<?php echo Url::to(Yii::getAlias('@web').'/web/images/style-bg.png',true); ?>'); background-repeat: no-repeat;background-repeat: no-repeat;
+                                        background-position: left top;background-size: 40px;">
+
+                                        <table width="100%" border="0" cellpadding="0" cellspacing="0" align="center"
+                                            class="border-lr deviceWidth">
+                                            <tr>
+                                                <td class="center">
+
+                                                    <table width="400px" border="0" cellpadding="0" cellspacing="0"
+                                                        align="right" class="deviceWidth">
+
+                                                        <tr>
+                                                            <td align="left" style="line-height: 0;">
+                                                                <a href="#">
+                                                                    <img src="<?php echo Url::to(Yii::getAlias('@web').'/web/images/bg-4.png',true); ?>" width="100%" border="0"
+                                                                        class="deviceWidth" />
+                                                                </a>
+                                                            </td>
+                                                        </tr>
+
+                                                    </table>
+
+                                                    <table width="400px" border="0" cellpadding="0" cellspacing="0"
+                                                        align="right" class="deviceWidth">
+                                                        <tr>
+                                                            <td align="left">
+                                                                <div style="margin-top:30px;float: left;">
+                                                                    <ul style="padding-left: 10px;">
+                                                                        <li
+                                                                                style="margin-bottom: 15px; list-style: none; font-size: 16px; font-weight: 500;">
+                                                                                <span
+                                                                                        style="width: 15px;height: 15px; background: linear-gradient(116.6deg, #F3738B 0.88%, #F99F46 99.2%); display: block; border-radius: 50%;margin-top: 6px; float: left; margin-right: 10px;"></span>
+                                                                            <p
+                                                                                    style="margin-top: 0;width: 90%; float: left; line-height: 25px;font-weight: 400">
+                                                                                Post contents to fans, public or a connection
+                                                                            </p>
+                                                                        </li>
+                                                                        <li
+                                                                                style="margin-bottom: 15px; list-style: none; font-size: 16px; font-weight: 500;">
+                                                                                <span
+                                                                                        style="width: 15px;height: 15px; background: linear-gradient(116.6deg, #F3738B 0.88%, #F99F46 99.2%); display: block; border-radius: 50%;margin-top: 6px; float: left; margin-right: 10px;"></span>
+                                                                            <p
+                                                                                    style="margin-top: 0;width: 90%; float: left; line-height: 25px;font-weight: 400">
+                                                                                Connect with images including videos and
+                                                                                pictures</p>
+                                                                        </li>
+                                                                        <li
+                                                                                style="margin-bottom: 15px; list-style: none; font-size: 16px; font-weight: 500;">
+                                                                                <span
+                                                                                        style="width: 15px;height: 15px; background: linear-gradient(116.6deg, #F3738B 0.88%, #F99F46 99.2%); display: block; border-radius: 50%;margin-top: 6px; float: left; margin-right: 10px;"></span>
+                                                                            <p
+                                                                                    style="margin-top: 0;width: 90%; float: left; line-height: 25px;font-weight: 400">
+                                                                                Ability to download post</p>
+                                                                        </li>
+                                                                        <li
+                                                                                style="margin-bottom: 15px; list-style: none; font-size: 16px; font-weight: 500;">
+                                                                                <span
+                                                                                        style="width: 15px;height: 15px; background: linear-gradient(116.6deg, #F3738B 0.88%, #F99F46 99.2%); display: block; border-radius: 50%;margin-top: 6px; float: left; margin-right: 10px;"></span>
+                                                                            <p
+                                                                                    style="margin-top: 0;width: 90%; float: left; line-height: 25px;font-weight: 400">
+                                                                                Ability to edit posts</p>
+                                                                        </li>
+                                                                    </ul>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    </table>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td align="left" style="padding:0 25px;">
+                                    <div style="border: 1px solid #E8EAEE; border-radius: 22px; width: 100%; float: left; position: relative;  margin: 40px 0; background: url('<?php echo Url::to(Yii::getAlias('@web').'/web/images/style-bg.png',true); ?>'); background-repeat: no-repeat;background-repeat: no-repeat;
+                                        background-position: right top;background-size: 40px;">
+
+                                        <table width="100%" border="0" cellpadding="0" cellspacing="0" align="center"
+                                            class="border-lr deviceWidth">
+                                            <tr>
+                                                <td class="center">
+
+                                                    <table width="400px" border="0" cellpadding="0" cellspacing="0" align="left"
+                                                        class="deviceWidth">
+
+                                                        <tr>
+                                                            <td align="left" style="line-height: 0;">
+                                                                <a href="#">
+                                                                    <img src="<?php echo Url::to(Yii::getAlias('@web').'/web/images/bg-5.png',true); ?>" width="100%" border="0"
+                                                                        class="deviceWidth" />
+                                                                </a>
+                                                            </td>
+                                                        </tr>
+
+                                                    </table>
+
+                                                    <table width="400px" border="0" cellpadding="0" cellspacing="0"
+                                                        align="right" class="deviceWidth">
+                                                        <tr>
+                                                            <td align="left">
+                                                                <div style="margin-top:30px;float: left;">
+                                                                    <ul style="padding-left: 10px;">
+                                                                        <li
+                                                                                style="margin-bottom: 15px; list-style: none; font-size: 16px; font-weight: 500;">
+                                                                                <span
+                                                                                        style="width: 15px;height: 15px; background: linear-gradient(116.6deg, #F3738B 0.88%, #F99F46 99.2%); display: block; border-radius: 50%;margin-top: 6px; float: left; margin-right: 10px;"></span>
+                                                                            <p
+                                                                                    style="margin-top: 0;width: 90%; float: left; line-height: 25px;font-weight: 400">
+                                                                                Go live with a click of a button</p>
+                                                                        </li>
+                                                                        <li
+                                                                                style="margin-bottom: 15px; list-style: none; font-size: 16px; font-weight: 500;">
+                                                                                <span
+                                                                                        style="width: 15px;height: 15px; background: linear-gradient(116.6deg, #F3738B 0.88%, #F99F46 99.2%); display: block; border-radius: 50%;margin-top: 6px; float: left; margin-right: 10px;"></span>
+                                                                            <p
+                                                                                    style="margin-top: 0;width: 90%; float: left; line-height: 25px;font-weight: 400">
+                                                                                Live stream a concert, show or any event around
+                                                                                you</p>
+                                                                        </li>
+                                                                        <li
+                                                                                style="margin-bottom: 15px; list-style: none; font-size: 16px; font-weight: 500;">
+                                                                                <span
+                                                                                        style="width: 15px;height: 15px; background: linear-gradient(116.6deg, #F3738B 0.88%, #F99F46 99.2%); display: block; border-radius: 50%;margin-top: 6px; float: left; margin-right: 10px;"></span>
+                                                                            <p
+                                                                                    style="margin-top: 0;width: 90%; float: left; line-height: 25px;font-weight: 400">Choose your audience
+                                                                            </p>
+                                                                        </li>
+                                                                    </ul>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    </table>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </td>
+                        </table>
+                        <table style="width: 100%;">
+                            <tr>
+                                <td>
+                                    <center style="width: 100%; float: left;">
+                                        <a href="<?php echo $join_link; ?>"
+                                                style="background: #E26386;border-radius: 12px; padding:21px 23px; color: #fff; font-size: 18px;  border: none; display: block; max-width: 200px; text-decoration: none;">Get
+                                            Started for Free</a> </center>
+                                    <p
+                                            style="font-size: 16px;margin: 30px auto; text-align: center; opacity: 0.6; color: #1D1C1C; line-height: 22px; width: 100%; float: left;">
+                                        If you’d rather not receive future emails of this sort from Rawcaster, <br>
+                                        please let us know by email at <a style="color: #000; font-weight: 500;" href="mailto:info@rawcaster.com">info@rawcaster.com</a> <br>
+                                        @2021 Rawcaster.com LLC</p>
+                                </td>
+                            </tr>
+                        </table>
+
+                        </tr>
+
+                    </table>
+                </div>
+            </div>
+            </body>'''
+    
+    return html_code

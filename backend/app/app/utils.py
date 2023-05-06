@@ -144,7 +144,7 @@ async def audio_file_upload(upload_file,compress):
 
 def upload_to_s3(local_file_pth,s3_bucket_path):
     bucket_name='rawcaster'
-    
+    print(local_file_pth)
     access_key="AKIAYFYE6EFYGNPCA32D"
     access_secret="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"
     try:
@@ -152,7 +152,7 @@ def upload_to_s3(local_file_pth,s3_bucket_path):
         
         with open(local_file_pth, 'rb') as data:  # Upload File To S3
             upload=client_s3.upload_fileobj(data, bucket_name, s3_bucket_path,ExtraArgs={'ACL': 'public-read'})
-        print(local_file_pth)
+        
         os.remove(local_file_pth)
         
         url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
@@ -391,25 +391,29 @@ def friendRequestNotifcationEmail(db,senderId,receiverId,flag):   # flag = 1 Fri
         
                 
 def addNotificationSmsEmail(db,user,email_detail,login_user_id):
-    sms_message = email_detail['sms_message'] if email_detail['sms_message'] else ""
-    mail_message = email_detail['mail_message'] if email_detail['mail_message'] else ""
-    subject = email_detail['subject'] if email_detail['subject'] else ""
-    type_ = email_detail['type'] if email_detail['type'] else "nuggets"
-    # email = email_detail['email'] if email_detail['email'] else ""
-    email=''
+    
+    sms_message = email_detail['sms_message'] if 'sms_message' in email_detail else ""
+    mail_message = email_detail['mail_message'] if 'mail_message' in email_detail  else ""
+    subject = email_detail['subject'] if 'subject' in email_detail else ""
+    type = email_detail['type'] if 'type' in email_detail else "nuggets"
+    email = email_detail['email'] if 'email' in email_detail else ""
+    
     mobile_nos = ""
     if user:
+        
         get_user =db.query(User.id,User.country_code,User.email_id,User.mobile_no,UserSettings.nuggets,UserSettings.events,UserSettings.friend_request)
         get_user=get_user.filter(UserSettings.user_id == User.id,User.status == 1,User.id.in_(user)).all()
         
         for user in get_user:
-            permission_arr = list(user[type_])
+            permission_arr = list(user[type])
             if len(permission_arr) > 2 and permission_arr[1] == "1":
                 email += user["email_id"] + ","
+            
             elif len(permission_arr) > 2 and permission_arr[2] == "1" and user["mobile_no"]:
                 mobile_nos += user["country_code"] + user["mobile_no"] + ","
 
     if email:
+        
         add_notification = NotificationSmsEmail(
             user_id=login_user_id,
             type=2,
@@ -1492,10 +1496,16 @@ def GetRawcasterUserID(db,type):
 async def logins(db,username, password, device_type, device_id, push_id,login_from,voip_token,app_type,socual,first_time):
     username=username.strip() if username else None
    
-    get_user=db.query(User).filter(or_(
-                            and_(User.email_id == username, User.email_id != None),
-                            and_(User.mobile_no == username, User.mobile_no != None)
-                                                )).first()
+    get_user = db.query(User).filter(
+            or_(
+                getattr(User, 'email_id').like(username + '%'),
+                getattr(User, 'mobile_no').like(username + '%')
+            ),
+            or_(
+                getattr(User, 'email_id') != None,
+                getattr(User, 'mobile_no') != None
+            )
+        ).first()
     
     if get_user == None or not get_user:
         
