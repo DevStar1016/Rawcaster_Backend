@@ -24,7 +24,7 @@ from PIL import Image
 import time
 from dateutil.parser import parse
 import subprocess
-# from mail_templates.mail_template import *
+from mail_templates.mail_template import *
 import shutil
 from cryptography.fernet import Fernet
 
@@ -59,10 +59,8 @@ def EncryptandDecrypt(otp,flag=1):
         return decrypted
         
 
-def file_upload(file_name,compress):
-    
-    uploads_file_name=file_name.filename
-    
+def file_upload(file_name,ext,compress):
+        
     base_dir = f"{st.BASE_DIR}/rawcaster"
     try:
         os.makedirs(base_dir, mode=0o777, exist_ok=True)
@@ -76,12 +74,11 @@ def file_upload(file_name,compress):
     # Generate the random string
     random_string = ''.join(random.choice(characters) for i in range(18))
     
-    ext = os.path.splitext(uploads_file_name)[-1].lower()
-    filename=f"Image_{random_string}{ext}"    
+    filename=f"uploadfile_{random_string}{ext}"    
     
     save_full_path=f'{output_dir}{filename}'  
     with open(save_full_path, "wb") as buffer:
-        shutil.copyfileobj(file_name.file, buffer)        
+        buffer.write(file_name)    
             
     return save_full_path
 
@@ -143,7 +140,6 @@ async def audio_file_upload(upload_file,compress):
 
 def upload_to_s3(local_file_pth,s3_bucket_path):
     bucket_name='rawcaster'
-    print(local_file_pth)
     access_key="AKIAYFYE6EFYGNPCA32D"
     access_secret="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"
     try:
@@ -190,7 +186,6 @@ async def send_email(db,to_mail, subject, message):
         return True
     
     else:
-        print("sdfsfsdf121212")
         
         return False
 
@@ -1262,16 +1257,16 @@ def defaultimage(flag):
         url="https://rawcaster.s3.us-west-2.amazonaws.com/profileimage/Image_81501682594590.png"
        
     elif flag == 'group_icon':
-        url="https://rawcaster.s3.us-west-2.amazonaws.com/profileimage/Image_16461682594653.png"
-       
+        url="https://rawcaster.s3.us-west-2.amazonaws.com/chat/attachment_91971683678695.jpg",
+               
     elif flag == 'event_banner':
-        url="https://rawcaster.s3.us-west-2.amazonaws.com/profileimage/Image_53341682575319.jpg"
+        url='https://rawcaster.s3.us-west-2.amazonaws.com/chat/attachment_61041683698967.jpg'
         
     elif flag == 'talkshow':
-        url="https://rawcaster.s3.us-west-2.amazonaws.com/profileimage/Image_39631682575151.jpg"
+        url='https://rawcaster.s3.us-west-2.amazonaws.com/chat/attachment_87681683699905.jpg'
        
     elif flag == 'live':
-        url="https://rawcaster.s3.us-west-2.amazonaws.com/profileimage/Image_31431682575389.jpg"
+        url='https://rawcaster.s3.us-west-2.amazonaws.com/chat/attachment_61611683699058.jpg'
         
     return url
 
@@ -1396,14 +1391,18 @@ def ProfilePreference(db,myid,otherid,field,value):
     settings=db.query(UserSettings).filter(UserSettings.user_id == otherid).first()
     
     if hasattr(settings, field):
-        
+        print('1')
         if getattr(settings, field) == 0:
             return ""
         
         elif getattr(settings, field) == 1:
+            print('2')
+            
             return value
         
         elif getattr(settings, field) == 2:
+            print('3')
+            
             if FriendsandGroupPermission(db,myid,otherid,1):
                 return value
             else:
@@ -1417,6 +1416,8 @@ def ProfilePreference(db,myid,otherid,field,value):
                     lists.append(group_list)
             if len(lists)>0:
                 if FriendsandGroupPermission(db,myid,lists,2):
+                    print('4')
+                    
                     return value
                 else:
                     return ""
@@ -1424,6 +1425,7 @@ def ProfilePreference(db,myid,otherid,field,value):
                 return ""
         
     else:
+        print(value)
         return value
     
 def FriendsandGroupPermission(db,myid,friendid,flag=1):

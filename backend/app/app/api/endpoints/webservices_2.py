@@ -155,8 +155,6 @@ async def listunclaimaccount(db:Session=Depends(deps.get_db),token:str=Form(None
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
-            # get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
-            # login_user_id = get_token_details.user_id if get_token_details else None
             
             get_unclaimed_account=db.query(User).join(UserStatusMaster,User.user_status_id == UserStatusMaster.id,isouter=True).filter(User.created_by == 1,UserStatusMaster.type == 2).all()
             

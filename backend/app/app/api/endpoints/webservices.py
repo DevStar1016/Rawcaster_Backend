@@ -1088,9 +1088,8 @@ async def updatemyprofile(db:Session=Depends(deps.get_db),token:str=Form(None),n
                     
                     # Image Part Pending
                     if profile_image:
-                        file_name=profile_image.filename
-                        file_temp=profile_image.content_type
-                        file_size=len(await profile_image.read())
+                        
+                        readed_file=await profile_image.read()
                         file_ext = os.path.splitext(profile_image.filename)[1]
                         
                         extensions=[".jpeg", ".jpg", ".png"]
@@ -1099,7 +1098,7 @@ async def updatemyprofile(db:Session=Depends(deps.get_db),token:str=Form(None),n
                             return {"status":0,"msg":"Profile Image format does not support"}                        
                         
                         # Upload File to Server
-                        uploaded_file_path=file_upload(profile_image,compress=None)
+                        uploaded_file_path=file_upload(readed_file,file_ext,compress=None)
                         s3_file_path=f"profileimage/Image_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                         
                         result=upload_to_s3(uploaded_file_path,s3_file_path)
@@ -1110,9 +1109,10 @@ async def updatemyprofile(db:Session=Depends(deps.get_db),token:str=Form(None),n
                             return result
                     
                     if cover_image:
-                        file_name=cover_image.filename
-                        file_temp=cover_image.content_type
-                        file_size=len(await cover_image.read())
+                        # file_name=cover_image.filename
+                        # file_temp=cover_image.content_type
+                        read_file=await cover_image.read()
+                        
                         file_ext = os.path.splitext(cover_image.filename)[1]
                         
                         extensions=[".jpeg", ".jpg", ".png"]
@@ -1121,7 +1121,7 @@ async def updatemyprofile(db:Session=Depends(deps.get_db),token:str=Form(None),n
                             return {"status":0,"msg":'Profile Image format does not support'}                        
                         
                         # Upload File to Server
-                        output_dir=file_upload(cover_image,compress=None)
+                        output_dir=file_upload(read_file,file_ext,compress=None)
 
                         s3_file_path=f"coverimage/coverimage_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}"  
                         
@@ -1174,11 +1174,7 @@ async def searchrawcasterusers(db:Session=Depends(deps.get_db),token:str=Form(No
                 
                 current_page_no=int(page_number)
                 
-                get_user = db.query(User.id, User.email_id, User.user_ref_id, User.first_name, User.last_name, User.display_name, User.gender, User.profile_img, User.geo_location, MyFriends.request_status.label('friend_request_status'), FollowUser.id.label('follow_id')).\
-                    outerjoin(MyFriends, ((MyFriends.sender_id==User.id) | (MyFriends.receiver_id==User.id)) & (MyFriends.status==1) & ((MyFriends.sender_id==login_user_id) | (MyFriends.receiver_id==login_user_id))).\
-                    outerjoin(FollowUser, (FollowUser.following_userid==User.id) & (FollowUser.follower_userid==login_user_id)).\
-                    filter(User.status == 1).\
-                    filter(User.id != login_user_id)
+                get_user=db.query(User).filter(User.status == 1,User.id != login_user_id)
                 
                 # Omit blocked users --
                 request_status=3
@@ -1190,13 +1186,14 @@ async def searchrawcasterusers(db:Session=Depends(deps.get_db),token:str=Form(No
                 if blocked_users:
                     get_user=get_user.filter(User.id.not_in(blocked_users))
                 
-                if search_key and (search_key != None or search_key != ""):
+                if search_key:
                     
-                    get_user=get_user.filter(or_(User.email_id.like(search_key+"%"),User.mobile_no.like(search_key+"%"),User.display_name.like(search_key+"%"),User.first_name.like(search_key+"%"),User.last_name.like(search_key+"%")))
+                    get_user=get_user.filter(or_(User.email_id.like("%"+search_key+"%"),User.mobile_no.like("%"+search_key+"%"),User.display_name.like("%"+search_key+"%"),User.first_name.like("%"+search_key+"%"),User.last_name.like("%"+search_key+"%")))
                 
                 get_row_count=get_user.count()
                 
                 if get_row_count < 1 :
+                    
                     if login_user_email == search_key:
                         return {"status":0,"msg":"No Result found","invite_flag":0}
                     else:
@@ -1211,7 +1208,12 @@ async def searchrawcasterusers(db:Session=Depends(deps.get_db),token:str=Form(No
                     user_list=[]
                     for user in get_user:
                         
+                        get_my_friends=db.query(MyFriends).filter(or_(MyFriends.sender_id == user.id,MyFriends.receiver_id == user.id),or_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == login_user_id)).first()
+                        
+                        get_follow_user= db.query(FollowUser).filter(FollowUser.following_userid == user.id,FollowUser.follower_userid == login_user_id).first()
+                        
                         mutual_friends=MutualFriends(db,login_user_id,user.id)
+                        
                         user_list.append({  "user_id":user.id,
                                             "user_ref_id":user.user_ref_id,
                                             "email_id":user.email_id if user.email_id else "",
@@ -1220,10 +1222,11 @@ async def searchrawcasterusers(db:Session=Depends(deps.get_db),token:str=Form(No
                                             "display_name":user.display_name if user.display_name else "",
                                             "gender":user.gender if user.gender else "",
                                             "profile_img":user.profile_img if user.profile_img else "",
-                                            "friend_request_status":user.friend_request_status if user.friend_request_status != None else "",
-                                            "follow":user.follow_id if user.follow_id else "",
+                                            "friend_request_status":get_my_friends.request_status if get_my_friends else "",
+                                            "follow":True if get_follow_user else False,                                            
                                             "location":user.geo_location if user.geo_location else "",
-                                            "mutual_friends":mutual_friends
+                                            "mutual_friends":mutual_friends,
+                                            "bio":user.bio_data if user.bio_data else ""
                                         })
                     return {"status":1,"msg":"Success","total_pages":total_pages,"current_page_no":current_page_no,"users_list":user_list}
                     
@@ -1497,7 +1500,7 @@ async def respondtofriendrequests(db:Session=Depends(deps.get_db),token:str=Form
                         
                         email_detail = {"subject": subject, "mail_message": body, "sms_message": sms_message, "type": "friend_request"}
                         user_id=[sender_id]
-                        print(type(user_id))
+                        
                         add_notification=addNotificationSmsEmail(db,user_id,email_detail,login_user_id)
                         
                         return {"status":1,"msg":"Success","friend_details":friend_details}
@@ -1732,7 +1735,10 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
                     get_follow_user_id=db.query(FollowUser).filter(or_(FollowUser.following_userid == friend_requests.sender_id,FollowUser.following_userid == friend_requests.receiver_id),FollowUser.follower_userid == login_user_id).first()
                     
                     get_last_msg=db.query(FriendsChat).filter(FriendsChat.sent_type == 1,or_(and_(FriendsChat.sender_id == friend_requests.sender_id,FriendsChat.receiver_id == friend_requests.receiver_id),and_(FriendsChat.sender_id == friend_requests.receiver_id,FriendsChat.receiver_id == friend_requests.sender_id)),or_(and_(FriendsChat.sender_id == login_user_id,FriendsChat.sender_delete == None),and_(FriendsChat.receiver_id == login_user_id,FriendsChat.receiver_delete == None))).order_by(FriendsChat.sent_datetime.desc()).first()
-                   
+                    # Check Is User is Frnd or Not
+                    
+                    get_friend_request=db.query(MyFriends).filter(MyFriends.status == 1,or_(MyFriends.sender_id == get_token_details.user_id,MyFriends.sender_id == friend_requests.receiver_id),or_(MyFriends.receiver_id == get_token_details.user_id,MyFriends.receiver_id == friend_requests.receiver_id)).order_by(MyFriends.id.desc()).first()
+                                            
                     if friend_requests.sender_id == login_user_id:
                         friendid=friend_requests.receiver_id
                         
@@ -1758,7 +1764,8 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
                                                 "last_msg_datetime":(common_date(get_last_msg.sent_datetime) if get_last_msg.sent_datetime else "") if get_last_msg else None,
                                                 "login_from":friend_login_from,  #  1 - WEB, 2 - APP
                                                 "login_from_app":friend_requests.user2.app_online if friend_requests.receiver_id else "",  # 1 - true, 0 - False
-                                                "login_from_web":friend_requests.user2.web_online if friend_requests.receiver_id else ""   # 1 - true, 0 - False
+                                                "login_from_web":friend_requests.user2.web_online if friend_requests.receiver_id else "",   # 1 - true, 0 - False
+                                                "request_status":get_friend_request.request_status if get_friend_request else 0
                                             })
                     else:
                         friendid=friend_requests.sender_id
@@ -1783,8 +1790,8 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
                                                 "last_msg_datetime":(common_date(get_last_msg.sent_datetime) if get_last_msg.sent_datetime else "") if get_last_msg else None,
                                                 "login_from":friend_login_from,  #  1 - WEB, 2 - APP
                                                 "login_from_app":friend_requests.user1.app_online if friend_requests.sender_id else "",  # 1 - true, 0 - False
-                                                "login_from_web":friend_requests.user1.web_online if friend_requests.sender_id else ""   # 1 - true, 0 - False
-                                            
+                                                "login_from_web":friend_requests.user1.web_online if friend_requests.sender_id else "",   # 1 - true, 0 - False
+                                                "request_status":get_friend_request.request_status if get_friend_request else None
                                             })
                         
                         
@@ -1845,9 +1852,10 @@ async def addfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),gr
                                 
                     # Profile Image
                     if group_icon:
-                        file_name=group_icon.filename
-                        file_temp=group_icon.content_type
-                        file_size=len(await group_icon.read())
+                        # file_name=group_icon.filename
+                        # file_temp=group_icon.content_type
+                        read_file=await group_icon.read()
+                        file_size=len(read_file)
                         file_ext = os.path.splitext(group_icon.filename)[1]
                         
                         extensions=[".jpeg", ".jpg", ".png"]
@@ -1857,7 +1865,7 @@ async def addfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),gr
                         
                         s3_file_path=f'groupicon/groupicon_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}'
                         if file_size > 400 :
-                            uploaded_file_path=file_upload(group_icon,compress=1)
+                            uploaded_file_path=file_upload(read_file,file_ext,compress=1)
 
                             result=upload_to_s3(uploaded_file_path,s3_file_path)
                             if result['status'] == 1:
@@ -1867,7 +1875,7 @@ async def addfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),gr
                             else:
                                 return result
                         else:
-                            uploaded_file_path=file_upload(group_icon,compress=None)
+                            uploaded_file_path=file_upload(read_file,file_ext,compress=None)
                             if result['status'] == 1:
                                 add_friend_group.group_icon = result['url']
                                 db.commit()
@@ -1937,9 +1945,10 @@ async def editfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),g
                     img_path=get_group.group_icon if get_group.group_icon else None
                     # Profile Image
                     if group_icon:
-                        file_name=group_icon.filename
-                        file_temp=group_icon.content_type
-                        file_size=len(await group_icon.read())
+                        # file_name=group_icon.filename
+                        # file_temp=group_icon.content_type
+                        file_read=await group_icon.read()
+                        file_size=len(file_read)
                         file_ext = os.path.splitext(group_icon.filename)[1]
                         
                         extensions=[".jpeg", ".jpg", ".png"]
@@ -1949,7 +1958,7 @@ async def editfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),g
                         
                         s3_file_path=f'groupicon/groupicon_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}'
                         if file_size > 400 :
-                            uploaded_file_path=file_upload(group_icon,compress=1)
+                            uploaded_file_path=file_upload(file_read,file_ext,compress=1)
 
                             result=upload_to_s3(uploaded_file_path,s3_file_path)
                             if result['status'] == 1:
@@ -1960,7 +1969,7 @@ async def editfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),g
                             else:
                                 return result
                         else:
-                            uploaded_file_path=file_upload(group_icon,compress=None)
+                            uploaded_file_path=file_upload(file_read,file_ext,compress=None)
                             if result['status'] == 1:
                                 get_group.group_icon = result['url']
                                 db.commit()
@@ -2263,7 +2272,7 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),conten
                                 type='audio'
                             
                             if file_size > 1000000 and type == 'image' and file_ext != '.gif':
-                                uploaded_file_path=file_upload(nugget_media,compress=1)
+                                uploaded_file_path=file_upload(read_file,file_ext,compress=1)
                                 s3_file_path=f'nuggets/Image_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}'
                                 
                                 result=upload_to_s3(uploaded_file_path,s3_file_path)
@@ -2358,7 +2367,7 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),conten
                                     uploaded_file_path=await audio_file_upload(read_file,compress=None)
                                 
                                 else:
-                                    uploaded_file_path=file_upload(nugget_media,compress=0)
+                                    uploaded_file_path=file_upload(read_file,file_ext,compress=0)
                                 
                                 result=upload_to_s3(uploaded_file_path,s3_file_path)
                                 
@@ -3382,7 +3391,8 @@ async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugg
                                 for nugget_media in nuggets_media:
                                     file_name=nugget_media.filename
                                     file_temp=nugget_media.content_type
-                                    file_size=len(await nugget_media.read())
+                                    read_file=await nugget_media.read()
+                                    file_size=len(read_file)
                                     file_ext = os.path.splitext(nugget_media.filename)[1]
                                     type='image'
                                     if 'video' in file_temp:
@@ -3398,7 +3408,7 @@ async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugg
                                     db.refresh(add_nugget_attachment)
                                     if add_nugget_attachment:
                                         if file_size > 1000000 and type == 'image' and file_ext != '.gif':
-                                            uploaded_file_path=file_upload(nugget_media,compress=1)
+                                            uploaded_file_path=file_upload(read_file,file_ext,compress=1)
                                             s3_file_path=f'nuggets/Image_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}'
 
                                             result=upload_to_s3(uploaded_file_path,s3_file_path)
@@ -3872,9 +3882,10 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                     
                     # Banner Image
                     if event_banner:
-                        file_name=event_banner.filename
+                        # file_name=event_banner.filename
                         file_temp=event_banner.content_type
-                        file_size=len(await event_banner.read())
+                        read_file=await event_banner.read()
+                        file_size=len(read_file)
                         file_ext = os.path.splitext(event_banner.filename)[1]
                                                 
                         type='image'
@@ -3884,7 +3895,7 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                         if file_size > 1024 and type == 'image' and file_ext != '.gif':
                             
                             s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                            uploaded_file_path=file_upload(event_banner,compress=1)
+                            uploaded_file_path=file_upload(read_file,file_ext,compress=1)
                             
                             result=upload_to_s3(uploaded_file_path,s3_path)
                             if result['status'] == 1:
@@ -3895,7 +3906,7 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                                 return result
                         else:
                             s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                            uploaded_file_path=file_upload(event_banner,compress=None)
+                            uploaded_file_path=file_upload(read_file,file_ext,compress=None)
                             
                             result=upload_to_s3(uploaded_file_path,s3_path)
                             # Upload to S3
@@ -3908,9 +3919,10 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                     
                     # Event Melody
                     if event_melody:
-                        file_name=event_melody.filename
+                        # file_name=event_melody.filename
                         file_temp=event_melody.content_type
-                        file_size=len(await event_melody.read())
+                        read_file=await event_melody.read()
+                        file_size=len(read_file)
                         file_ext = os.path.splitext(event_melody.filename)[1]
                         media_type=1
                         if file_ext == '.png' or file_ext == '.jpeg' or file_ext == 'jpg':
@@ -3925,7 +3937,7 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                         
                         if file_size > 1000000 and type == 'image' and file_ext != '.gif':
                             s3_file_path=f"eventsmelody/eventsmelody{random.randint(11111,99999)}{new_event.id}{int(datetime.datetime.utcnow().timestamp())}"
-                            upload_file_path=file_upload(event_melody,compress=1)
+                            upload_file_path=file_upload(read_file,file_ext,compress=1)
                             
                             result=upload_to_s3(upload_file_path,s3_file_path)
                             
@@ -3943,7 +3955,7 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                                         
                         else:
                             s3_file_path=f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{new_event.id}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                            upload_file_path=file_upload(event_melody)
+                            upload_file_path=file_upload(read_file,file_ext,compress=None)
                             
                             if type == 'video' and file_ext != '.mp4':
                                 s3_file_path=f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{new_event.id}{int(datetime.datetime.utcnow().timestamp())}.mp4"
@@ -4588,9 +4600,10 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                     
                     # Banner Image
                     if event_banner:
-                        file_name=event_banner.filename
+                        # file_name=event_banner.filename
                         file_temp=event_banner.content_type
-                        file_size=len(await event_banner.read())
+                        read_file=await event_banner.read()
+                        file_size=len(read_file)
                         file_ext = os.path.splitext(event_banner.filename)[1]
                                                 
                         type='image'
@@ -4600,7 +4613,7 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                         if file_size > 1024 and type == 'image' and file_ext != '.gif':
                             
                             s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                            uploaded_file_path=file_upload(event_banner,compress=1)
+                            uploaded_file_path=file_upload(read_file,file_ext,compress=1)
                             
                             result=upload_to_s3(uploaded_file_path,s3_path)
                             if result['status'] == 1:
@@ -4611,7 +4624,7 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                                 return result
                         else:
                             s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                            uploaded_file_path=file_upload(event_banner,compress=None)
+                            uploaded_file_path=file_upload(read_file,file_ext,compress=None)
                             
                             result=upload_to_s3(uploaded_file_path,s3_path)
                             # Upload to S3
@@ -4630,7 +4643,8 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                     if event_melody:
                         file_name=event_melody.filename
                         file_temp=event_melody.content_type
-                        file_size=len(await event_melody.read())
+                        file_read=await event_melody.read()
+                        file_size=len(file_read)
                         file_ext = os.path.splitext(event_melody.filename)[1]
                         media_type=1
                         if file_ext == '.png' or file_ext == '.jpeg' or file_ext == 'jpg':
@@ -4645,7 +4659,7 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                         
                         if file_size > 1000000 and type == 'image' and file_ext != '.gif':
                             s3_file_path=f"eventsmelody/eventsmelody{random.randint(11111,99999)}{edit_event.id}{int(datetime.datetime.utcnow().timestamp())}"
-                            upload_file_path=file_upload(event_melody,compress=1)
+                            upload_file_path=file_upload(file_read,file_ext,compress=1)
                             
                             result=upload_to_s3(upload_file_path,s3_file_path)
                             
@@ -4663,7 +4677,7 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                                         
                         else:
                             s3_file_path=f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{edit_event.id}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                            upload_file_path=file_upload(event_melody)
+                            upload_file_path=file_upload(file_read,file_ext,compress=None)
                             
                             if type == 'video' and file_ext != '.mp4':
                                 s3_file_path=f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{edit_event.id}{int(datetime.datetime.utcnow().timestamp())}.mp4"
@@ -4867,18 +4881,22 @@ async def uploadchatattachment(db:Session=Depends(deps.get_db),token:str=Form(No
            
             else:
                 
+                readed_file=await chatattachment.read()
+                file_size=len(readed_file)
                 file_ext = os.path.splitext(chatattachment.filename)[1]
                 
-                uploaded_file_path=file_upload(chatattachment,compress=None)
-                
-                # S3 File Path
-                s3_file_path=f"chat/attachment_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                
-                result=upload_to_s3(uploaded_file_path,s3_file_path)
-                if result['status'] == 1:    
-                    return {"status":1, "msg":"Success","filepath":result['url'],"refid":refid}
+                if file_size > 100000000:
+                    return {"status":0, "msg":"Max 100MB allowed"}
+                    
                 else:
-                    return {"status":0, "msg":"Not able to upload"}
+                    uploaded_file_path=file_upload(readed_file,file_ext,compress=None)
+                    s3_file_path=f"chat/attachment_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
+                    
+                    result=upload_to_s3(uploaded_file_path,s3_file_path)
+                    if result['status'] == 1:    
+                        return {"status":1, "msg":"Success","filepath":result['url'],"refid":refid}
+                    else:
+                        return {"status":0, "msg":"Not able to upload"}
                    
                         
 
@@ -5263,13 +5281,13 @@ async def getothersprofile(db:Session=Depends(deps.get_db),token:str=Form(None),
                     return {"status": 0, "msg": "No result found!"}
             
                 else:
-                    get_user = db.query(User, FollowUser.id.label('follow_id')).\
-                        outerjoin(FollowUser, (FollowUser.following_userid == User.id) & (FollowUser.follower_userid == login_user_id)).\
-                        filter(User.id == user_id).first()
+                    get_user = db.query(User).filter(User.id == user_id).first()
                     
                     followers_count=db.query(FollowUser).filter_by(following_userid = user_id).count()
                     
                     following_count=db.query(FollowUser).filter_by(follower_userid = user_id).count()
+                    
+                    get_follow_user= db.query(FollowUser).filter(FollowUser.following_userid == user_id ,FollowUser.follower_userid == login_user_id).first()
                     
                     if not get_user:
                         return {"status": 0, "msg": "No result found!"}
@@ -5281,47 +5299,49 @@ async def getothersprofile(db:Session=Depends(deps.get_db),token:str=Form(None),
                         settings=db.query(UserSettings).filter(UserSettings.user_id == user_id).first()
                         
                         get_friend_request=db.query(MyFriends).filter(MyFriends.status == 1,or_(MyFriends.sender_id == login_user_id,MyFriends.sender_id == user_id),or_(MyFriends.receiver_id == user_id,MyFriends.receiver_id == login_user_id)).order_by(MyFriends.id.desc()).first()
-                        
+                        # Check Claim Influence Or Not
+                        # check_claim=db.query(ClaimAccounts).filter(ClaimAccounts.user_id == login_user_id,ClaimAccounts.influencer_id == user_id,ClaimAccounts.admin_status == 1).first()
+                        get_unclaimed_account=db.query(User).join(UserStatusMaster,User.user_status_id == UserStatusMaster.id,isouter=True).filter(User.created_by == 1,UserStatusMaster.type == 2,User.id == user_id).first()
                         
                         result_list={
                                         "user_id":user_id,
-                                        "user_ref_id":get_user['User'].user_ref_id if get_user['User'].user_ref_id else "",
-                                        "name":get_user["User"].display_name if get_user["User"].display_name else "",
-                                        "email_id":get_user["User"].email_id if get_user["User"].email_id else "",
-                                        "mobile":get_user['User'].mobile_no if get_user['User'].mobile_no else "",
-                                        "dob":get_user['User'].dob if get_user['User'].dob else "",
-                                        "geo_location":get_user['User'].geo_location if get_user['User'].geo_location else "",
-                                        "bio_data":ProfilePreference(db,login_user_id,get_user['User'].id,field,get_user["User"].bio_data),
+                                        "user_ref_id":get_user.user_ref_id if get_user.user_ref_id else "",
+                                        "name":get_user.display_name if get_user.display_name else "",
+                                        "email_id":get_user.email_id if get_user.email_id else "",
+                                        "mobile":get_user.mobile_no if get_user.mobile_no else "",
+                                        "dob":get_user.dob if get_user.dob else "",
+                                        "geo_location":get_user.geo_location if get_user.geo_location else "",
+                                        "bio_data":ProfilePreference(db,login_user_id,get_user.id,field,get_user.bio_data),
                                         
-                                        "profile_image":get_user['User'].profile_img if get_user['User'].profile_img else defaultimage('profile_img'),
-                                        "cover_image":get_user['User'].cover_image if get_user['User'].cover_image else defaultimage('cover_img'),
-                                        "website":get_user['User'].website if get_user['User'].website else "",
-                                        "first_name":get_user['User'].first_name if get_user['User'].first_name else "",
-                                        "last_name":get_user['User'].last_name if get_user['User'].last_name else "",
-                                        "gender":get_user['User'].gender if get_user['User'].gender else "",
-                                        "country_code":get_user['User'].country_code if get_user['User'].country_code else "",
-                                        "country_id":get_user['User'].country_id if get_user['User'].country_id else "",
-                                        "user_code":get_user['User'].user_code if get_user['User'].user_code else "",
-                                        "latitude":get_user['User'].latitude if get_user['User'].latitude else "",
-                                        "longitude":get_user['User'].longitude if get_user['User'].longitude else "",
-                                        "date_of_join":common_date(get_user['User'].created_at) if get_user['User'].created_at else "",
-                                        "user_type":get_user['User'].user_type_master.name if get_user['User'].user_type_master.name else "",
-                                        "user_status":get_user['User'].user_status_master.name if get_user['User'].user_status_master.name else "",
-                                        "user_status_id":get_user['User'].user_status_id if get_user['User'].user_status_id else "",
-                                        "friends_count":FriendsCount(db,get_user["User"].id),
-                                        "is_friend_request_sender":0,
-                                        "follow":True if get_user["User"].id else False,
+                                        "profile_image":get_user.profile_img if get_user.profile_img else defaultimage('profile_img'),
+                                        "cover_image":get_user.cover_image if get_user.cover_image else defaultimage('cover_img'),
+                                        "website":get_user.website if get_user.website else "",
+                                        "first_name":get_user.first_name if get_user.first_name else "",
+                                        "last_name":get_user.last_name if get_user.last_name else "",
+                                        "gender":get_user.gender if get_user.gender else "",
+                                        "country_code":get_user.country_code if get_user.country_code else "",
+                                        "country_id":get_user.country_id if get_user.country_id else "",
+                                        "user_code":get_user.user_code if get_user.user_code else "",
+                                        "latitude":get_user.latitude if get_user.latitude else "",
+                                        "longitude":get_user.longitude if get_user.longitude else "",
+                                        "date_of_join":common_date(get_user.created_at) if get_user.created_at else "",
+                                        "user_type":get_user.user_type_master.name if get_user.user_type_master.name else "",
+                                        "user_status":get_user.user_status_master.name if get_user.user_status_master.name else "",
+                                        "user_status_id":get_user.user_status_id if get_user.user_status_id else "",
+                                        "friends_count":FriendsCount(db,get_user.id),
+                                        "follow":True if get_follow_user else False,
                                         "followers_count":followers_count,
                                         "following_count":following_count,
                                         "language": settings.language.name if settings else "English",
                                         "friend_request_id":get_friend_request.id if get_friend_request else None,
                                         "friend_status":get_friend_request.request_status if get_friend_request else None,
-                                        "is_friend_request_sender": 1 if get_friend_request and get_friend_request.sender_id == get_user['User'].id else 0,
+                                        "is_friend_request_sender": 1 if get_friend_request and get_friend_request.sender_id == get_user.id else 0,
                                         
                                         "lock_nugget":(settings.lock_nugget if settings.lock_nugget else 0) if settings else "",
                                         "lock_fans":(settings.lock_fans if settings.lock_fans else 0) if settings else "",
                                         "lock_my_connection":(settings.lock_my_connection if settings.lock_my_connection else 0) if settings else "",
-                                        "lock_my_influencer":(settings.lock_my_influencer if settings.lock_my_influencer else 0) if settings else ""
+                                        "lock_my_influencer":(settings.lock_my_influencer if settings.lock_my_influencer else 0) if settings else "",
+                                        "unclaimed_status":0 if get_unclaimed_account else 1
                                 }
                     
                         return {"status":1,"msg":"Success","profile":result_list}
@@ -5711,7 +5731,8 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                     if default_melody:
                         file_name=default_melody.filename
                         file_temp=default_melody.content_type
-                        file_size=len(await default_melody.read())
+                        file_read=await default_melody.read()
+                        file_size=len(file_read)
                         file_ext = os.path.splitext(default_melody.filename)[1]
                         
                         media_type=1
@@ -5730,7 +5751,7 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                         
                         if file_size > 1000000 and type == 'image' and file_ext != '.gif':
                             compress=1
-                            uploaded_file_path=file_upload(default_melody,compress)
+                            uploaded_file_path=file_upload(file_read,file_ext,compress)
                             
                             s3_file_path=f"eventsmelody/eventsmelody_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                             
@@ -5756,7 +5777,7 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                                 
                         else:
                             compress=None
-                            uploaded_file_path=file_upload(default_melody,compress)
+                            uploaded_file_path=file_upload(file_read,file_ext,compress)
                             
                             s3_file_path=f"eventsmelody/eventsmelody_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                             if type == 'video' and file_ext != '.mp4':
@@ -5788,7 +5809,8 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                     if meeting_header_image:
                         file_name=meeting_header_image.filename
                         file_temp=meeting_header_image.content_type
-                        file_size=len(await meeting_header_image.read())
+                        file_read=await meeting_header_image.read()
+                        file_size=len(file_read)
                         file_ext = os.path.splitext(meeting_header_image.filename)[1]
                         local_file_upload=''
                         extensions=[".jpeg", ".jpg", ".png"]
@@ -5801,10 +5823,10 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                         
                         else:
                             if file_size > 1024:
-                                local_file_upload=file_upload(meeting_header_image,compress=1)
+                                local_file_upload=file_upload(file_read,file_ext,compress=1)
                                 header_image=local_file_upload
                             else:
-                                local_file_upload=file_upload(meeting_header_image,compress=None)
+                                local_file_upload=file_upload(file_read,file_ext,compress=None)
                                 header_image=local_file_upload
                         
                         if header_image:
@@ -5820,7 +5842,8 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                     if live_event_banner:
                         file_name=live_event_banner.filename
                         file_temp=live_event_banner.content_type
-                        file_size=len(await live_event_banner.read())
+                        file_read=await live_event_banner.read()
+                        file_size=len(file_read)
                         file_ext = os.path.splitext(live_event_banner.filename)[1]
                         local_file_upload=''
                         extensions=[".jpeg", ".jpg", ".png"]
@@ -5833,10 +5856,10 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                         
                         else:
                             if file_size > 1024:
-                                local_file_upload=file_upload(live_event_banner,compress=1)
+                                local_file_upload=file_upload(file_read,file_ext,compress=1)
                                 live_banner=local_file_upload
                             else:
-                                local_file_upload=file_upload(live_event_banner,compress=None)
+                                local_file_upload=file_upload(file_read,file_ext,compress=None)
                                 live_banner=local_file_upload
                         
                         if live_banner:
@@ -5852,7 +5875,8 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                     if talkshow_event_banner:
                         file_name=talkshow_event_banner.filename
                         file_temp=talkshow_event_banner.content_type
-                        file_size=len(await talkshow_event_banner.read())
+                        file_read=await talkshow_event_banner.read()
+                        file_size=len(file_read)
                         file_ext = os.path.splitext(talkshow_event_banner.filename)[1]
                         local_file_upload=''
                         extensions=[".jpeg", ".jpg", ".png"]
@@ -5865,10 +5889,10 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                         
                         else:
                             if file_size > 1024:
-                                local_file_upload=file_upload(talkshow_event_banner,compress=1)
+                                local_file_upload=file_upload(file_read,file_ext,compress=1)
                                 talkshow_banner=local_file_upload
                             else:
-                                local_file_upload=file_upload(talkshow_event_banner,compress=None)
+                                local_file_upload=file_upload(file_read,file_ext,compress=None)
                                 talkshow_banner=local_file_upload
                         
                         if talkshow_banner:
@@ -6765,11 +6789,12 @@ async def followandunfollow(db:Session=Depends(deps.get_db),token:str=Form(None)
                 
                 get_user_detail=db.query(User).filter(User.id == follow_userid,User.status == 1).first()
                 
-                follow_user=db.query(FollowUser).filter(or_(FollowUser.follower_userid == login_user_id,FollowUser.following_userid == follow_userid)).first()
+                follow_user=db.query(FollowUser).filter(FollowUser.follower_userid == login_user_id,FollowUser.following_userid == follow_userid).first()
                 
                 friend_groups=db.query(FriendGroups).filter(FriendGroups.group_name == "My Fans",FriendGroups.created_by == follow_userid).first()
                 
                 if type == 1 and get_user_detail and not follow_user and login_user_id != follow_userid :
+                    
                     add_follow_user=FollowUser(follower_userid = login_user_id,following_userid = follow_userid,created_date = datetime.datetime.utcnow())
                     db.add(add_follow_user)
                     db.commit()
@@ -7144,7 +7169,8 @@ async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),even
                     if event_banner:
                         file_name=event_banner.filename
                         file_temp=event_banner.content_type
-                        file_size=len(await event_banner.read())
+                        file_read=await event_banner.read()
+                        file_size=len(file_read)
                         file_ext = os.path.splitext(event_banner.filename)[1]
                                                 
                         type='image'
@@ -7154,7 +7180,7 @@ async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),even
                         if file_size > 1024 and type == 'image' and file_ext != '.gif':
                             
                             s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                            uploaded_file_path=file_upload(event_banner,compress=1)
+                            uploaded_file_path=file_upload(file_read,file_ext,compress=1)
                             
                             result=upload_to_s3(uploaded_file_path,s3_path)
                             if result['status'] == 1:
@@ -7165,7 +7191,7 @@ async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),even
                                 return result
                         else:
                             s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                            uploaded_file_path=file_upload(event_banner,compress=None)
+                            uploaded_file_path=file_upload(file_read,file_ext,compress=None)
                             
                             result=upload_to_s3(uploaded_file_path,s3_path)
                             # Upload to S3
@@ -7349,7 +7375,8 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
                 if event_banner:
                     file_name=event_banner.filename
                     file_temp=event_banner.content_type
-                    file_size=len(await event_banner.read())
+                    file_read=await event_banner.read()
+                    file_size=len(file_read)
                     file_ext = os.path.splitext(event_banner.filename)[1]
                                         
                     type='image'
@@ -7359,7 +7386,7 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
                     if file_size > 1024 and type == 'image' and file_ext != '.gif':
                         # Compress Image
                         compress=1
-                        uploaded_file_path=file_upload(event_banner,compress)
+                        uploaded_file_path=file_upload(file_read,file_ext,compress)
                     
                         s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                         # Upload to S3
@@ -7372,7 +7399,7 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
                             return result
                     else:
                         compress=None
-                        uploaded_file_path=file_upload(event_banner,compress)
+                        uploaded_file_path=file_upload(file_read,file_ext,compress)
                         
                         s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                         result=upload_to_s3(uploaded_file_path,s3_path)
@@ -7823,8 +7850,8 @@ async def influencerlist(db:Session=Depends(deps.get_db),token:str=Form(None),se
             if get_token_details:
                 login_user_id=get_token_details.user_id
                 
-            api_search_key=search_key if search_key!=None and (search_key.strip()!=None or search_key.strip()!="") else None
-            api_category=category if category !=None and category>0 else None
+            api_search_key=search_key if search_key and (search_key.strip() != None or search_key.strip()!= "") else None
+            api_category=category if category else None
             
             current_page_no=int(page_number) if int(page_number) > 0 else 1
             
@@ -7840,23 +7867,23 @@ async def influencerlist(db:Session=Depends(deps.get_db),token:str=Form(None),se
             blocked_users=get_all_blocked_users["blocked"]
             
             if blocked_users:
-                criteria.filter(User.status == 1).filter(User.id != login_user_id,User.id.in_(blocked_users))
+                criteria=criteria.filter(User.status == 1).filter(User.id != login_user_id,User.id.in_(blocked_users))
             
             if api_search_key !=None and api_search_key.strip() !='':
-                criteria.filter(User.status == 1).filter(and_(
-                or_(User.email_id.like("%" + api_search_key + "%"),
-                    User.mobile_no.like("%" + api_search_key + "%"),
-                    User.display_name.like("%" + api_search_key + "%"),
-                    User.first_name.like("%" + api_search_key + "%"),
-                    User.last_name.like("%" + api_search_key + "%"),
-                    User.first_name.concat(" ", User.last_name).like("%" + api_search_key + "%"))))
+                criteria=criteria.filter(User.status == 1).filter(and_(
+                    or_(User.email_id.like("%" + api_search_key + "%"),
+                        User.mobile_no.like("%" + api_search_key + "%"),
+                        User.display_name.like("%" + api_search_key + "%"),
+                        User.first_name.like("%" + api_search_key + "%"),
+                        User.last_name.like("%" + api_search_key + "%"),
+                        )))
             
             if api_category !=None and api_category !='':
-                criteria.filter(User.status == 1,User.id != login_user_id).filter(User.influencer_category.like("%" + api_category + "%"))
+                criteria=criteria.filter(User.status == 1,User.id != login_user_id).filter(User.influencer_category.like("%" + api_category + "%"))
             
             get_row_count=criteria.count()
             
-            if get_row_count <1:
+            if get_row_count < 1:
                 return {"status":0,"msg":"No Result found"}
             else:
                 default_page_size = 24
@@ -7886,7 +7913,7 @@ async def influencerlist(db:Session=Depends(deps.get_db),token:str=Form(None),se
                         'followers': follow_count,
                         'category': [influencer.name for influencer in influencer_category] if influencer_category else '' ,
                         'user_status_id': res.user_status_id,
-                        'bio': res.bio_data if res.bio_data != '' and res.bio_data !=None else None
+                        "bio_data":ProfilePreference(db,login_user_id,res.id,'bio_display_status',res.bio_data)
                     
                         })
                 return {"status":1,"msg":"Success","total_pages":total_pages,"current_page_no":current_page_no,"users_list":result_list}  
