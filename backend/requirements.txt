@@ -1,0 +1,16 @@
+fastapi
+pydantic[email]
+sqlalchemy
+python-jose
+fastapi_pagination
+passlib
+python-multipart
+boto3 
+fastapi_mail
+websockets
+python-dateutil
+Pillow
+moviepy
+langdetect
+gtts
+playsound

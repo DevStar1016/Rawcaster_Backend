@@ -2,6 +2,7 @@ from sqlalchemy import or_,and_,func
 import math
 from app.core.config import settings as st
 from datetime import datetime,timedelta
+import datetime
 from app.models import *
 import random,string
 import hashlib
@@ -23,7 +24,8 @@ from PIL import Image
 import time
 from dateutil.parser import parse
 import subprocess
-from mail_templates.mail_template import *
+# from mail_templates.mail_template import *
+import shutil
 from cryptography.fernet import Fernet
 
 def is_date(string, fuzzy=False):
@@ -58,6 +60,7 @@ def EncryptandDecrypt(otp,flag=1):
         
 
 def file_upload(file_name,compress):
+    
     uploads_file_name=file_name.filename
     
     base_dir = f"{st.BASE_DIR}/rawcaster"
@@ -75,14 +78,10 @@ def file_upload(file_name,compress):
     
     ext = os.path.splitext(uploads_file_name)[-1].lower()
     filename=f"Image_{random_string}{ext}"    
-   
+    
     save_full_path=f'{output_dir}{filename}'  
-      
-    with Image.open(file_name.file) as img:   # Input File
-        if compress:
-            img.save(save_full_path, optimize=True, quality=50)  
-        else:
-            img.save(save_full_path)  
+    with open(save_full_path, "wb") as buffer:
+        shutil.copyfileobj(file_name.file, buffer)        
             
     return save_full_path
 
@@ -410,7 +409,7 @@ def addNotificationSmsEmail(db,user,email_detail,login_user_id):
                 email += user["email_id"] + ","
             
             elif len(permission_arr) > 2 and permission_arr[2] == "1" and user["mobile_no"]:
-                mobile_nos += user["country_code"] + user["mobile_no"] + ","
+                mobile_nos += user["country_code"] + str(user["mobile_no"]) + ","
 
     if email:
         

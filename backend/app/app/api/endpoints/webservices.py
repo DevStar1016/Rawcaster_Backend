@@ -14,7 +14,6 @@ import json
 import pytz
 import boto3
 from urllib.parse import urlparse
-from sqlalchemy.orm import aliased
 from .webservices_2 import croninfluencemember
 import ast
 from mail_templates.mail_template import *
@@ -907,8 +906,8 @@ def user_profile(db,id):
                             "name":get_user.display_name if get_user.display_name else "",
                             "email_id":get_user.email_id if get_user.email_id else "",
                             "mobile":str(get_user.mobile_no) if get_user.mobile_no else "",
-                            "profile_image":get_user.profile_img if get_user.profile_img else "",
-                            "cover_image":get_user.cover_image if get_user.cover_image else "",
+                            "profile_image":get_user.profile_img if get_user.profile_img else defaultimage('profile_img'),
+                            "cover_image":get_user.cover_image if get_user.cover_image else defaultimage('cover_img'),
                             "website":get_user.website if get_user.website else "",
                             "first_name":get_user.first_name if get_user.first_name else "",
                             "last_name":get_user.last_name if get_user.last_name else "",
@@ -949,6 +948,9 @@ def user_profile(db,id):
         two_type_verification=OTPverificationtype(db,get_user)
         
         user_details.update({"two_type_verification":two_type_verification})
+        # Get Notification 
+        total_unread_count=db.query(Notification).filter_by(status=1,is_read=0,user_id=id).count()
+        user_details.update({"unread_notification_count":total_unread_count})
         
         return {"status":1,"msg":"Success","profile":user_details}
         
@@ -1418,7 +1420,7 @@ async def listallfriendrequests(db:Session=Depends(deps.get_db),token:str=Form(N
 @router.post("/respondtofriendrequests")
 async def respondtofriendrequests(db:Session=Depends(deps.get_db),token:str=Form(None),friend_request_id:str=Form(None),notification_id:str=Form(None),
                                   response:str=Form(None,description="1-Accept,2-Reject,3-Block")):
-                    
+    
     if token == None or token.strip() == '':
         return {"status": -1, "msg": "Sorry! your login session expired. please login again."}
     
@@ -1442,7 +1444,7 @@ async def respondtofriendrequests(db:Session=Depends(deps.get_db),token:str=Form
             my_friends=db.query(MyFriends).filter(MyFriends.status == 1,MyFriends.request_status== 0,MyFriends.id == friend_request_id,MyFriends.receiver_id == login_user_id ).first()
 
             if not my_friends:
-                return {"status": 0, "msg": "Invalid request"}
+                return {"status": 0, "msg": "Invalid Friend request/reject"}
                 
             else:
                 if response == 2:
@@ -1494,8 +1496,9 @@ async def respondtofriendrequests(db:Session=Depends(deps.get_db),token:str=Form
                         subject='Rawcaster - Connection Request Accepted'
                         
                         email_detail = {"subject": subject, "mail_message": body, "sms_message": sms_message, "type": "friend_request"}
-                        
-                        add_notification=addNotificationSmsEmail(db,sender_id,email_detail,login_user_id)
+                        user_id=[sender_id]
+                        print(type(user_id))
+                        add_notification=addNotificationSmsEmail(db,user_id,email_detail,login_user_id)
                         
                         return {"status":1,"msg":"Success","friend_details":friend_details}
                     else:
@@ -2285,70 +2288,70 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),conten
                                     
                                     segment_duration = 5 * 60
 
-                                    video = VideoFileClip(save_file_path)   # Video Splil ( 5 Minutes)
+                                    video = VideoFileClip(save_file_path)   # Video Split ( 5 Minutes)
                                     duration = video.duration
                                     splited_video_url=[]
                                     total_duration = video.duration
-                                    if duration < 3000:
-                                        num_segments = math.ceil(total_duration / segment_duration)
-                                        for i in range(num_segments):
+                                    
+                                    # if duration < 3000:
+                                    num_segments = math.ceil(total_duration / segment_duration)
+                                    for i in range(num_segments):
+                                    
+                                        start_time = i * segment_duration
+                                        end_time = min((i+1) * segment_duration, total_duration)
                                         
-                                            start_time = i * segment_duration
-                                            end_time = min((i+1) * segment_duration, total_duration)
-                                            
-                                            segment = video.subclip(start_time, end_time)
-                                            
-                                            # Save the segment as a new file
-                                            
-                                            segment_filename = f"video_clip_{random.randint(1111,9999)}{int(datetime.datetime.now().timestamp())}.mp4"
-                                            segment.write_videofile(segment_filename, codec="libx264")
-                                            
-                                            splited_video_url.append(segment_filename)
-                                            
-                                            bucket_name='rawcaster'
-    
-                                            access_key="AKIAYFYE6EFYGNPCA32D"
-                                            access_secret="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"
-                                            # try:
-                                            client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
-                                            s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
-                                            
-                                            with open(segment_filename, 'rb') as data:  # Upload File To S3
-                                                upload=client_s3.upload_fileobj(data, bucket_name, s3_file_path,ExtraArgs={'ACL': 'public-read'})
-                                            
-                                            os.remove(segment_filename)
-                                            
-                                            url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
-                                            url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{s3_file_path}'
-                                            if url:
-                                                add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,
-                                                                    media_type=type,media_file_type=file_ext,file_size=file_size,path=url,
-                                                                    created_date=datetime.datetime.utcnow(),status =1)
-                                                db.add(add_nugget_attachment)
-                                                db.commit()
-                                                db.refresh(add_nugget_attachment)
-                                                
-                                                # return {"status":1,"url":url}
-                                            else:
-                                                return "Fail"
-                                    else:
-                                        print("2")
+                                        segment = video.subclip(start_time, end_time)
                                         
-                                    # for url in splited_video_url:
-                                    #     # os.remove(save_file_path) # Remove Uploaded Video File
-                                    #     result=upload_to_s3(url,s3_file_path)  # Upload to S3
-                                    #     s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
+                                        # Save the segment as a new file
                                         
-                                    #     if result['status'] == 1:
+                                        segment_filename = f"video_clip_{random.randint(1111,9999)}{int(datetime.datetime.now().timestamp())}.mp4"
+                                        segment.write_videofile(segment_filename, codec="libx264")
+                                        
+                                        splited_video_url.append(segment_filename)
+                                        
+                                        bucket_name='rawcaster'
+
+                                        access_key="AKIAYFYE6EFYGNPCA32D"
+                                        access_secret="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"
+                                        # try:
+                                        client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
+                                        s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
+                                        
+                                        with open(segment_filename, 'rb') as data:  # Upload File To S3
+                                            upload=client_s3.upload_fileobj(data, bucket_name, s3_file_path,ExtraArgs={'ACL': 'public-read'})
+                                        
+                                        os.remove(segment_filename)
+                                        
+                                        url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
+                                        url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{s3_file_path}'
+                                        if url:
+                                            add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,
+                                                                media_type=type,media_file_type=file_ext,file_size=file_size,path=url,
+                                                                created_date=datetime.datetime.utcnow(),status =1)
+                                            db.add(add_nugget_attachment)
+                                            db.commit()
+                                            db.refresh(add_nugget_attachment)
+                                            
+                                            # return {"status":1,"url":url}
+                                        else:
+                                            return "Failed to Upload"
+                                    # else:
+                                    #     readed_file=await nugget_media.read()
+                                    #     save_file_path=video_file_upload(readed_file,compress=None)
+                                    #     segment_filename = f"video_{random.randint(1111,9999)}{int(datetime.now().timestamp())}.mp4"
+                                        
+                                    #     result=upload_to_s3(save_file_path,segment_filename)
+                                    #     if result['status'] and result['status'] == 1:
                                     #         add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,
                                     #                             media_type=type,media_file_type=file_ext,file_size=file_size,path=result['url'],
                                     #                             created_date=datetime.datetime.utcnow(),status =1)
                                     #         db.add(add_nugget_attachment)
                                     #         db.commit()
                                     #         db.refresh(add_nugget_attachment)
-                                            
+                                    #         content=result['url']
                                     #     else:
                                     #         return result
+                                        
                                                                       
                                 elif type == 'audio':
                                     s3_file_path=f"nuggets/audio_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp3"
@@ -4863,24 +4866,19 @@ async def uploadchatattachment(db:Session=Depends(deps.get_db),token:str=Form(No
                 return {"status":0,"msg":"Reference id is missing"}
            
             else:
-                file_name=chatattachment.filename
-                file_temp=chatattachment.content_type
-                file_size=len(await chatattachment.read())
+                
                 file_ext = os.path.splitext(chatattachment.filename)[1]
                 
-                if file_size > 100000000:
-                    return {"status":0, "msg":"Max 100MB allowed"}
-                    
+                uploaded_file_path=file_upload(chatattachment,compress=None)
+                
+                # S3 File Path
+                s3_file_path=f"chat/attachment_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
+                
+                result=upload_to_s3(uploaded_file_path,s3_file_path)
+                if result['status'] == 1:    
+                    return {"status":1, "msg":"Success","filepath":result['url'],"refid":refid}
                 else:
-                    uploaded_file_path=file_upload(chatattachment,compress=None)
-                    
-                    s3_file_path=f"chat/attachment_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                    
-                    result=upload_to_s3(uploaded_file_path,s3_file_path)
-                    if result['status'] == 1:    
-                        return {"status":1, "msg":"Success","filepath":result['url'],"refid":refid}
-                    else:
-                        return {"status":0, "msg":"Not able to upload"}
+                    return {"status":0, "msg":"Not able to upload"}
                    
                         
 
@@ -4988,6 +4986,7 @@ async def listnotifications(db:Session=Depends(deps.get_db),token:str=Form(None)
                     get_notification=get_notification.order_by(Notification.id.desc()).limit(limit).offset(offset).all()
                 
                 result_list=[]
+                
                 for res in get_notification:
                     friend_request_id=None
                     friend_request_status=None
@@ -5109,7 +5108,7 @@ async def listnotifications(db:Session=Depends(deps.get_db),token:str=Form(None)
                     
                 total_unread_count=db.query(Notification).filter_by(status=1,is_read=0,user_id=login_user_id).count()
                 
-                return {"status":1,"msg":"Success","total_pages":total_pages,"current_page_no":current_page_no,"notification_list":result_list,"total_unread_count":total_unread_count}
+                return {"status":1,"msg":"Success","total_pages":total_pages,"current_page_no":current_page_no,"notification_list":result_list,"total_unread_count":total_unread_count,"notification_count":get_row_count}
                 
                 
 
@@ -5153,12 +5152,14 @@ async def deletenotification(db:Session=Depends(deps.get_db),token:str=Form(None
     
 # 49. Read Notification
 @router.post("/readnotification")
-async def readnotification(db:Session=Depends(deps.get_db),token:str=Form(None),notification_id:str=Form(None),mark_all_as_read:str=Form(default=0)):
+async def readnotification(db:Session=Depends(deps.get_db),token:str=Form(None),notification_id:str=Form(None),mark_all_as_read:str=Form(default=0),notification_type:str=Form(None)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    if notification_type and not notification_type.isnumeric():
+        return {"status":0,"msg":"Invalid notification type"}
         
     else:
-        
+        notification_type=notification_type if notification_type else None
         access_token=checkToken(db,token)
         
         if access_token == False:
@@ -5172,8 +5173,11 @@ async def readnotification(db:Session=Depends(deps.get_db),token:str=Form(None),
                 read_notify=db.query(Notification).filter(Notification.user_id == 88,Notification.id == notification_id).update({"is_read":1,"read_datetime":datetime.datetime.utcnow()})
             
             if mark_all_as_read:
-                read_notify=db.query(Notification).filter_by(Notification.user_id == login_user_id).update({"is_read":1,"read_datetime":datetime.datetime.utcnow()})
+                read_notify=db.query(Notification).filter(Notification.user_id == login_user_id).update({"is_read":1,"read_datetime":datetime.datetime.utcnow()})
             
+            if notification_type:
+                read_notify=db.query(Notification).filter(Notification.user_id == login_user_id,Notification.notification_type == notification_type).update({"is_read":1,"read_datetime":datetime.datetime.utcnow()})
+                
             db.commit()
             return {"status":1,"msg":"Success"}
     
@@ -5280,7 +5284,7 @@ async def getothersprofile(db:Session=Depends(deps.get_db),token:str=Form(None),
                         
                         
                         result_list={
-                                        "user_id":int(user_id),
+                                        "user_id":user_id,
                                         "user_ref_id":get_user['User'].user_ref_id if get_user['User'].user_ref_id else "",
                                         "name":get_user["User"].display_name if get_user["User"].display_name else "",
                                         "email_id":get_user["User"].email_id if get_user["User"].email_id else "",
@@ -7634,6 +7638,7 @@ async def socialmedialogin(db:Session=Depends(deps.get_db),signin_type:str=Form(
         last_name=last_name.strip() if last_name else None
         display_name=f"{first_name.strip()} {last_name.strip()}" if last_name else first_name.strip()
         profile_img=defaultimage('profile_img')
+        cover_image=defaultimage('cover_img')
         geo_location=geo_location.strip() if geo_location and geo_location.strip() != '' else None
         latitude=latitude.strip() if latitude and latitude.strip() != '' else None
         longitude=longitude.strip() if longitude and longitude.strip() != '' else None
@@ -7719,7 +7724,7 @@ async def socialmedialogin(db:Session=Depends(deps.get_db),signin_type:str=Form(
                         
                 password=''
                 model=User(email_id=email_id,is_email_id_verified=1,first_name=first_name,last_name=last_name,display_name=display_name,gender=gender,
-                              dob=dob,country_code=country_code,mobile_no=mobile_no,is_mobile_no_verified=0,country_id=country_id,user_code=None,
+                              dob=dob,country_code=country_code,mobile_no=mobile_no,is_mobile_no_verified=0,country_id=country_id,user_code=None,cover_image=cover_image,
                               signup_type=1,signup_social_ref_id=signup_social_ref_id,profile_img=profile_img,geo_location=geo_location,latitude=latitude,
                               longitude=longitude,created_at=datetime.datetime.utcnow(),status=1)
                 db.add(model)

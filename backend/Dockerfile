@@ -1,14 +1,17 @@
-FROM tiangolo/uvicorn-gunicorn-fastapi:python3.7
+FROM tiangolo/uvicorn-gunicorn-fastapi:python3.10
 
-WORKDIR /app/
+# WORKDIR /app/
+WORKDIR /app/app/
 
 # Install Poetry
-RUN curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | POETRY_HOME=/opt/poetry python && \
+RUN curl -sSL https://install.python-poetry.org | POETRY_HOME=/opt/poetry python && \
     cd /usr/local/bin && \
     ln -s /opt/poetry/bin/poetry && \
     poetry config virtualenvs.create false
 
-# Copy poetry.lock* in case it doesn't exist in the repo
+# Copy poetry.lock*  # in case it doesn't exist in the repo
+# Copy poetry.lock*  
+
 COPY ./app/pyproject.toml ./app/poetry.lock* /app/
 
 # Allow installing dev dependencies to run tests
@@ -23,27 +26,24 @@ RUN bash -c "if [ $INSTALL_JUPYTER == 'true' ] ; then pip install jupyterlab ; f
 
 RUN bash -c "pip3 install python-jose[cryptography]"
 
-RUN bash -c "pip install pymysql"
-RUN bash -c "pip install fastapi-pagination==0.8.3"
+RUN bash -c "pip3 install pymysql"
+RUN bash -c "pip3 install fastapi"
+
+RUN bash -c "pip3 install fastapi-pagination==0.8.3"
 RUN bash -c "pip3 install fastapi-mail"
 RUN bash -c "pip3 install pyfcm"
 RUN bash -c "pip3 install twilio"
 RUN bash -c "pip3 install crc16"
 RUN bash -c "pip3 install moviepy"
-RUN bash -c "pip3 install AST"
+#RUN bash -c "pip3 install AST"
 RUN bash -c "pip3 install boto3"
 RUN bash -c "pip3 install pytz"
 RUN bash -c "pip3 install pybase64"
 RUN bash -c "pip3 install regex"
-RUN bash -c "pip3 install urlparse4"
+RUN bash -c "pip3 install --force-reinstall httpcore==0.15"
+#RUN bash -c "pip3 install urlparse4"
 
 
-
-
-
-
-RUN apt-get -y update && apt-get -y install wkhtmltopdf
-
-
+# COPY ./app /app
 COPY ./app /app
 ENV PYTHONPATH=/app

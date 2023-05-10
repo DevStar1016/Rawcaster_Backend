@@ -5,7 +5,7 @@ from app.utils import *
 from app.api import deps
 from sqlalchemy.orm import Session
 from datetime import datetime,date
-
+from typing import List
 
 router = APIRouter() 
     
@@ -177,7 +177,7 @@ async def listunclaimaccount(db:Session=Depends(deps.get_db),token:str=Form(None
 
 # 87  Influencer Chat
 @router.post("/influencerchat")
-async def influencerchat(db:Session=Depends(deps.get_db),token:str=Form(None),type:str=Form(None,description="1-text,2-image,3-audio,4-video"),message:str=Form(None),attachment:UploadFile=File(None)):
+async def influencerchat(db:Session=Depends(deps.get_db),token:str=Form(None),type:str=Form(None,description="1-text,2-image,3-audio,4-video"),message:str=Form(None),attachment:List[UploadFile]=File(None)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     
@@ -211,22 +211,23 @@ async def influencerchat(db:Session=Depends(deps.get_db),token:str=Form(None),ty
                 return {"status":0,"msg":"Check Group"}
             else:
                 file_type=[2,3,4,5]
-                content=''
+                content=[]
                 if type == 1:
-                    content=None
+                    content.append(message)
                     
                 elif type in file_type:
                     if type == 2 or type == 5:
-                        file_ext = os.path.splitext(attachment.filename)[1]
-                        
-                        uploaded_file_path=file_upload(attachment,compress=1)
-                        s3_file_path=f'Image_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}{file_ext}'
-                        
-                        result=upload_to_s3(uploaded_file_path,s3_file_path)
-                        if result['status'] and result['status'] == 1:
-                            content=result['url']
-                        else:
-                            return result
+                        for attachment in attachment:
+                            file_ext = os.path.splitext(attachment.filename)[1]
+                            
+                            uploaded_file_path=file_upload(attachment,compress=1)
+                            s3_file_path=f'Image_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}{file_ext}'
+                            
+                            result=upload_to_s3(uploaded_file_path,s3_file_path)
+                            if result['status'] and result['status'] == 1:
+                                content.append(result['url'])
+                            else:
+                                return result
                         
                     if type == 4: # Video
                         readed_file=await attachment.read()
@@ -235,7 +236,7 @@ async def influencerchat(db:Session=Depends(deps.get_db),token:str=Form(None),ty
                         
                         result=upload_to_s3(save_file_path,segment_filename)
                         if result['status'] and result['status'] == 1:
-                            content=result['url']
+                            content.append(result['url'])
                         else:
                             return result
                         
@@ -246,16 +247,17 @@ async def influencerchat(db:Session=Depends(deps.get_db),token:str=Form(None),ty
                         
                         result=upload_to_s3(save_file_path,segment_filename)
                         if result['status'] and result['status'] == 1:
-                            content=result['url']
+                            content.append(result['url'])
                         else:
                             return result
-
-                # Add Group Chat
-                add_group_chat=GroupChat(group_id=get_friend_group.id,sender_id = login_user_id,message=message,path=content,type=type,sent_datetime=datetime.utcnow(),status=1)          
-                db.add(add_group_chat)
-                db.commit()
-                db.refresh(add_group_chat)
-                
+                        
+                for msg in content:
+                    # Add Group Chat
+                    add_group_chat=GroupChat(group_id=get_friend_group.id,sender_id = login_user_id,message=message if type == 1 else None,path=msg if type != 1 else None,type=type,sent_datetime=datetime.utcnow(),status=1)          
+                    db.add(add_group_chat)
+                    db.commit()
+                    db.refresh(add_group_chat)
+                    
                 return {"status":1,"msg":"Success"}
             
             

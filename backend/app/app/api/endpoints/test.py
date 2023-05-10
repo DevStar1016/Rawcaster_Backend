@@ -14,6 +14,8 @@ from playsound import playsound
 from moviepy.video.io.VideoFileClip import VideoFileClip
 import boto3    
 import shutil
+from moviepy.editor import *
+
 import os
 import subprocess
 router = APIRouter() 
@@ -54,38 +56,36 @@ async def send_test_mail():
 
 
 @router.post("/upload_audio/")
-async def upload_audio(audio: UploadFile = File(...)):
-    uploads_file_name=audio.filename
-    
-    base_dir = f"{st.BASE_DIR}/rawcaster"
-    try:
-        os.makedirs(base_dir, mode=0o777, exist_ok=True)
-    except OSError as e:
-        sys.exit("Can't create {dir}: {err}".format(
-            dir=base_dir, err=e))
+async def upload_audio():
+    # Importing the module
+    # uploading the video we want to edit
+    video = VideoFileClip('clip1.mp4')
 
-    output_dir = base_dir + "/"
-    
-    characters = string.ascii_letters + string.digits
-    # Generate the random string
-    
-    ext = os.path.splitext(uploads_file_name)[-1].lower()
-    filename=f"audio_{random.randint(1111,9999)}{datetime.now().timestamp()}{ext}"    
-   
-    save_full_path=f'{output_dir}{filename}'  
-    
-    filename = audio.filename
-    input_path = os.path.abspath(audio.filename)
-    
-    output_path = f"{filename}.mp3"
-   
 
-    with open(save_full_path, "wb") as buffer: 
-        buffer.write(await audio.read())
+    # getting width and height of video 1
+    width_of_video1 = video.w
+    height_of_video1 = video.h
 
-    subprocess.run(["ffmpeg", "-i", save_full_path, "-ab", "32k", "-y", output_path])
+    print("Width and Height of original video : ", end = " ")
+    print(str(width_of_video1) + " x ", str(height_of_video1))
 
-    os.remove(save_full_path)
+    print("#################################")
+
+    # compressing
+    video_resized = video.resize(0.2)
+
+    # getting width and height of video 2 which is resized
+    width_of_video2 = video_resized.w
+    height_of_video2 = video_resized.h
+
+    print("Width and Height of resized video : ", end = " ")
+    print(str(width_of_video2) + " x ", str(width_of_video2))
+
+    print("###################################")
+
+
+    # displaying final clip
+ 
 
 
 @router.post("/upload-video/")
@@ -173,6 +173,7 @@ async def video_split(db:Session=Depends(deps.get_db),video_file:UploadFile=File
     duration = video.duration
     url=[]
     total_duration = video.duration
+    
     if duration < 3000:
         num_segments = math.ceil(total_duration / segment_duration)
         for i in range(num_segments):

@@ -3,6 +3,9 @@ from starlette.middleware.cors import CORSMiddleware
 
 import sys
 sys.path.append('../')
+# sys.path.append('app/app/')
+# sys.path.append("/app/")
+
 from app.api.api import api_router
 from app.core.config import settings
 
