@@ -5170,7 +5170,7 @@ async def readnotification(db:Session=Depends(deps.get_db),token:str=Form(None),
             login_user_id=get_token_details.user_id 
 
             if notification_id:
-                read_notify=db.query(Notification).filter(Notification.user_id == 88,Notification.id == notification_id).update({"is_read":1,"read_datetime":datetime.datetime.utcnow()})
+                read_notify=db.query(Notification).filter(Notification.user_id == login_user_id,Notification.id == notification_id).update({"is_read":1,"read_datetime":datetime.datetime.utcnow()})
             
             if mark_all_as_read:
                 read_notify=db.query(Notification).filter(Notification.user_id == login_user_id).update({"is_read":1,"read_datetime":datetime.datetime.utcnow()})
