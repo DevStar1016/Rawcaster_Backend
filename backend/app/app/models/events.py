@@ -39,5 +39,5 @@ class Events(Base):
     event_melody=relationship("EventMelody",back_populates="events")
     event_update_log=relationship("EventUpdateLog",back_populates="events")
     online_payment_details=relationship("OnlinePaymentDetails",back_populates="events")
-    event_abuse_report=relationship("EventAbsueReport",back_populates="events")
+    event_abuse_report=relationship("EventAbuseReport",back_populates="events")
     

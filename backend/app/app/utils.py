@@ -1209,7 +1209,7 @@ def get_event_detail(db,event_id,login_user_id):
                         "start_date_time":common_date(event_details.start_date_time) if event_details.start_date_time else "",
                         "start_date":common_date(((event_details.start_date_time).date()),without_time=1) if event_details.start_date_time else "",
                         "start_time":(event_details.start_date_time).time(),
-                        "is_host":1 if event_details.created_by else 0,
+                        "is_host":1 if event_details.created_by == login_user_id else 0,
                         "banner_image":event_details.cover_img if event_details.cover_img else "",
                         "created_at":common_date(event_details.created_at) if event_details.created_at else "",
                         "original_user_name":event_details.user.display_name if event_details.created_by else "",
@@ -1260,13 +1260,13 @@ def defaultimage(flag):
         url="https://rawcaster.s3.us-west-2.amazonaws.com/chat/attachment_91971683678695.jpg",
                
     elif flag == 'event_banner':
-        url='https://rawcaster.s3.us-west-2.amazonaws.com/chat/attachment_61041683698967.jpg'
+        url='https://rawcaster.s3.us-west-2.amazonaws.com/chat/attachment_86991683760798.jpg'
         
     elif flag == 'talkshow':
-        url='https://rawcaster.s3.us-west-2.amazonaws.com/chat/attachment_87681683699905.jpg'
+        url='https://rawcaster.s3.us-west-2.amazonaws.com/chat/attachment_81511683760885.jpg'
        
     elif flag == 'live':
-        url='https://rawcaster.s3.us-west-2.amazonaws.com/chat/attachment_61611683699058.jpg'
+        url='https://rawcaster.s3.us-west-2.amazonaws.com/chat/attachment_92661683760850.jpg'
         
     return url
 
@@ -1387,21 +1387,16 @@ async def SendOtp(db,user_id,signup_type):
 
 
 def ProfilePreference(db,myid,otherid,field,value):
-    
     settings=db.query(UserSettings).filter(UserSettings.user_id == otherid).first()
-    
     if hasattr(settings, field):
-        print('1')
+        
         if getattr(settings, field) == 0:
             return ""
         
         elif getattr(settings, field) == 1:
-            print('2')
-            
             return value
         
         elif getattr(settings, field) == 2:
-            print('3')
             
             if FriendsandGroupPermission(db,myid,otherid,1):
                 return value
@@ -1415,9 +1410,7 @@ def ProfilePreference(db,myid,otherid,field,value):
                 for group_list in online_group_list:
                     lists.append(group_list)
             if len(lists)>0:
-                if FriendsandGroupPermission(db,myid,lists,2):
-                    print('4')
-                    
+                if FriendsandGroupPermission(db,myid,lists,2): 
                     return value
                 else:
                     return ""
@@ -1425,7 +1418,6 @@ def ProfilePreference(db,myid,otherid,field,value):
                 return ""
         
     else:
-        print(value)
         return value
     
 def FriendsandGroupPermission(db,myid,friendid,flag=1):
@@ -1550,7 +1542,7 @@ async def logins(db,username, password, device_type, device_id, push_id,login_fr
         db.commit()
         db.refresh(add_token)   
          
-        return {"status" : 1,"acc_verify_status":0,"alt_token_id":add_token.id,"otp_ref_id":send_otp, "msg" : "Verification Pending, Redirect to OTP Verify Page","first_time":0,"email_id":username,"signup_type":get_user.signup_type,"remaining_seconds":90}
+        return {"status" : 1,"acc_verify_status":0,"alt_token_id":add_token.id,"otp_ref_id":send_otp, "msg" : "Verification Pending, Redirect to OTP Verify Page","first_time":first_time,"email_id":username,"signup_type":get_user.signup_type,"remaining_seconds":90}
                         
     elif get_user.password != password and socual != 1: #  Invalid password!
         if get_user.status == 2:
@@ -1653,7 +1645,7 @@ async def logins(db,username, password, device_type, device_id, push_id,login_fr
                 if dt >= get_user.referral_expiry_date:
                     update_user=db.query(User).filter(User.id == get_user.id).update({'user_status_id':1,'referral_expiry_date':None})
                     db.commit()
-            return {"status":1,"msg":"Success","salt_token":salt_token,"token":token_text,"email":username,"expirytime":common_date(exptime),"profile_image":profile_image,"name":name,"user_id":user_id,"authcode":new_auth_code,"acc_verify_status":get_user.is_email_id_verified,"first_time":0}
+            return {"status":1,"msg":"Success","salt_token":salt_token,"token":token_text,"email":username,"expirytime":common_date(exptime),"profile_image":profile_image,"name":name,"user_id":user_id,"authcode":new_auth_code,"acc_verify_status":get_user.is_email_id_verified,"first_time":first_time}
         else:
             return {"status":0,"msg" : "Failed to Generate Access Token. try again"}
             

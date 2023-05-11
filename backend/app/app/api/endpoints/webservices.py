@@ -1226,7 +1226,8 @@ async def searchrawcasterusers(db:Session=Depends(deps.get_db),token:str=Form(No
                                             "follow":True if get_follow_user else False,                                            
                                             "location":user.geo_location if user.geo_location else "",
                                             "mutual_friends":mutual_friends,
-                                            "bio":user.bio_data if user.bio_data else ""
+                                            "bio_data":ProfilePreference(db,login_user_id,user.id,'bio_display_status',user.bio_data)
+                                           
                                         })
                     return {"status":1,"msg":"Success","total_pages":total_pages,"current_page_no":current_page_no,"users_list":user_list}
                     
@@ -1730,19 +1731,26 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
                 
                 friendid=0
                 request_frnds=[]
-              
+                
                 for friend_requests in get_my_friends:
                     get_follow_user_id=db.query(FollowUser).filter(or_(FollowUser.following_userid == friend_requests.sender_id,FollowUser.following_userid == friend_requests.receiver_id),FollowUser.follower_userid == login_user_id).first()
                     
                     get_last_msg=db.query(FriendsChat).filter(FriendsChat.sent_type == 1,or_(and_(FriendsChat.sender_id == friend_requests.sender_id,FriendsChat.receiver_id == friend_requests.receiver_id),and_(FriendsChat.sender_id == friend_requests.receiver_id,FriendsChat.receiver_id == friend_requests.sender_id)),or_(and_(FriendsChat.sender_id == login_user_id,FriendsChat.sender_delete == None),and_(FriendsChat.receiver_id == login_user_id,FriendsChat.receiver_delete == None))).order_by(FriendsChat.sent_datetime.desc()).first()
                     # Check Is User is Frnd or Not
                     
-                    get_friend_request=db.query(MyFriends).filter(MyFriends.status == 1,or_(MyFriends.sender_id == get_token_details.user_id,MyFriends.sender_id == friend_requests.receiver_id),or_(MyFriends.receiver_id == get_token_details.user_id,MyFriends.receiver_id == friend_requests.receiver_id)).order_by(MyFriends.id.desc()).first()
+                    get_friend_request=db.query(MyFriends).filter(MyFriends.status == 1,or_(MyFriends.sender_id == get_token_details.user_id,MyFriends.sender_id == friend_requests.receiver_id),or_(MyFriends.receiver_id == get_token_details.user_id,MyFriends.receiver_id == friend_requests.receiver_id)).first()
                                             
                     if friend_requests.sender_id == login_user_id:
                         friendid=friend_requests.receiver_id
                         
-                        online= 1 if friend_requests.user2.app_online == 1 or friend_requests.user2.web_online == 1 else 0
+                        print(friendid)
+                        check_user=db.query(User).filter(User.id == friendid).first()
+                        online=0
+                        if check_user:
+                            app_online=friend_requests.user2.app_online
+                            web_online=friend_requests.user2.web_online
+                
+                            online = 1 if web_online or app_online  else 0
                         
                         status_type="online_status"
                         request_frnds.append({
@@ -1756,7 +1764,7 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
                                                 "gender":friend_requests.user2.gender if friend_requests.receiver_id else "",
                                                 "profile_img":friend_requests.user2.profile_img if friend_requests.receiver_id else "",
                                                 "online":ProfilePreference(db,login_user_id,friend_requests.receiver_id,status_type,online),
-                                                "last_seen":common_date(friend_requests.user2.last_seen) if friend_requests.receiver_id else "",
+                                                "last_seen":(common_date(friend_requests.user2.last_seen) if friend_requests.user2.last_seen else "") if friend_requests.receiver_id else "",
                                                 "typing":0,
                                                 "unreadmsg":0,
                                                 "follow":True if get_follow_user_id else False,
@@ -1791,7 +1799,7 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
                                                 "login_from":friend_login_from,  #  1 - WEB, 2 - APP
                                                 "login_from_app":friend_requests.user1.app_online if friend_requests.sender_id else "",  # 1 - true, 0 - False
                                                 "login_from_web":friend_requests.user1.web_online if friend_requests.sender_id else "",   # 1 - true, 0 - False
-                                                "request_status":get_friend_request.request_status if get_friend_request else None
+                                                "request_status":get_friend_request.request_status if get_friend_request else 0
                                             })
                         
                         
@@ -1802,6 +1810,7 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
                             
                         if chat > 0:
                             request_frnds.append({"unreadmsg":chat})
+            
                 return {"status":1,"msg":"Success","friends_count":get_my_friends_count,"total_pages":0,"current_page_no":0,"friends_list":request_frnds}
                                
                                          
@@ -2561,7 +2570,7 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
                     get_nuggets=get_nuggets.filter(Nuggets.nuggets_id ==NuggetsAttachment.nugget_id,NuggetsAttachment.media_type == 'video')
                     
                 elif nugget_type == 2:  # Audio and Image
-                    get_nuggets=get_nuggets.filter(Nuggets.nuggets_id ==NuggetsAttachment.nugget_id,NuggetsAttachment.media_type != 'video')
+                    get_nuggets=get_nuggets.outerjoin(NuggetsAttachment,Nuggets.nuggets_id == NuggetsAttachment.nugget_id).filter(or_(NuggetsAttachment.media_type == None,NuggetsAttachment.media_type == 'image',NuggetsAttachment.media_type == 'audio'))
                     
                 if filter_type == 1:
                     my_followers=[]  # my_followers
@@ -3289,7 +3298,7 @@ async def nuggetandcommentlikeeduserlist(db:Session=Depends(deps.get_db),token:s
 
 # 35. Edit Nugget
 @router.post("/editnugget")
-async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:str=Form(None),share_type:str=Form(None),metadata:str=Form(None),content:str=Form(None),delete_media_id:str=Form(None,description="[1,2,3]"),nuggets_media:UploadFile=File(None),share_with:str=Form(None,description=' {"friends":[1,2,3],"groups":[1,2,3]} ')):
+async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:str=Form(None),share_type:str=Form(None),metadata:str=Form(None),content:str=Form(None),delete_media_id:str=Form(None,description="[1,2,3]"),nuggets_media:List[UploadFile]=File(None),share_with:str=Form(None,description=' {"friends":[1,2,3],"groups":[1,2,3]} ')):
     if token== None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif nugget_id == None or not nugget_id.isnumeric() :
@@ -3389,7 +3398,7 @@ async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugg
                             # Nuggets Media
                             if nuggets_media:
                                 for nugget_media in nuggets_media:
-                                    file_name=nugget_media.filename
+                                    # file_name=nugget_media.filename
                                     file_temp=nugget_media.content_type
                                     read_file=await nugget_media.read()
                                     file_size=len(read_file)
@@ -3401,8 +3410,8 @@ async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugg
                                         type='audio'
                                     
                                     add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=check_nuggets.nuggets_id,
-                                                                            media_type=type,media_file_type=file_ext,file_size=file_size,
-                                                                            created_date=datetime.datetime.utcnow(),status =1)
+                                                                            media_type=type,media_file_type=file_ext,file_size=file_size,path=None,
+                                                                            created_date=datetime.datetime.utcnow(),status =0)
                                     db.add(add_nugget_attachment)
                                     db.commit()
                                     db.refresh(add_nugget_attachment)
@@ -3410,30 +3419,34 @@ async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugg
                                         if file_size > 1000000 and type == 'image' and file_ext != '.gif':
                                             uploaded_file_path=file_upload(read_file,file_ext,compress=1)
                                             s3_file_path=f'nuggets/Image_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}'
-
                                             result=upload_to_s3(uploaded_file_path,s3_file_path)
+                                            
                                             if result['status'] == 1:
                                                 add_nugget_attachment.path = result['url']
+                                                add_nugget_attachment.status = 1
                                                 db.commit()
                                             else:
                                                 return result
                                         
                                         else:
-                                            s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                                            uploaded_file_path=None
                                             
+                                            s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
+                                            uploaded_file_path=None          
                                             if type == 'video':
                                                 s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
-                                                uploaded_file_path=video_file_upload(nugget_media,compress=1)
+                                                uploaded_file_path=video_file_upload(read_file,compress=1)
                                             
                                             elif type == 'audio':
                                                 s3_file_path=f"nuggets/audio_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp3"
-                                                uploaded_file_path=await audio_file_upload(nugget_media,compress=1)
-                                                
+                                                uploaded_file_path=await audio_file_upload(read_file,compress=1)
+                                            else:
+                                                uploaded_file_path=file_upload(read_file,file_ext,compress=1)
                                             
                                             result=upload_to_s3(uploaded_file_path,s3_file_path)
                                             if result['status'] == 1:
                                                 add_nugget_attachment.path = result['url']
+                                                add_nugget_attachment.status = 1
+                                                
                                                 db.commit()
                                             else:
                                                 return result
@@ -4473,37 +4486,35 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
     
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    elif event_id == None or not event_id.isnumeric():
+    elif not event_id or not event_id.isnumeric():
         return {"status":0, "msg":"Event id is missing"}
-    elif not event_id.isnumeric():
-        return {"status":0, "msg":"Invalid Event id "}
-    if event_title == None or event_title.strip() == "":
+    if not event_title or event_title.strip() == "":
         return {"status":0,"msg":"Event title cant be blank."}
-    elif event_type == None or not event_type.isnumeric():
+    elif not event_type or not event_type.isnumeric():
         return {"status":0,"msg":"Event type cant be blank."}
-    elif event_start_date == None:
+    elif not event_start_date:
         return {"status":0,"msg":"Event start date cant be blank."}
-    elif event_start_time == None:
+    elif not event_start_time:
         return {"status":0,"msg":"Event start time cant be blank."}
-    elif event_participants == None:
+    elif not event_participants:
         return {"status":0,"msg":"Event participants cant be blank."}
     
-    elif event_duration:
+    elif event_melody_id and not event_melody_id.isnumeric():
+        return {"status":0,"msg":"Invalid event melody id"}
+    
+    elif not event_duration:
         return {"status":0,"msg":"Event duration cant be blank."}
-    elif event_duration > 10:
-        return {"status":0,"msg":"Event duration invalid"}
-    elif event_layout == None:
+    
+    elif not event_layout:
         return {"status":0,"msg":"Event layout cant be blank."}
-    elif event_host_audio == None:
+    elif not event_host_audio:
         return {"status":0,"msg":"Event host audio settings cant be blank."}
-    elif  event_host_video == None:
+    elif  not event_host_video:
         return {"status":0,"msg":"Event host video settings cant be blank."}
-    elif event_guest_audio == None:
+    elif not event_guest_audio:
         return {"status":0,"msg":"Event guest audio settings cant be blank."}
-    elif event_guest_video == None:
+    elif not event_guest_video:
         return {"status":0,"msg":"Event guest video settings cant be blank."}
-    elif event_melody == None:
-        return {"status":0,"msg":"Event melody cant be blank."}
     elif event_start_date and is_date(event_start_date) == False:
         return {"status":0,"msg":"Invalid Date"}
     elif event_start_time and isTimeFormat(event_start_time) == False:
@@ -4512,6 +4523,10 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
     elif event_duration and isTimeFormat(event_duration) == False:
         return {"status":0,"msg":"Invalid Time format"}
     else:
+        minimum_duration_time=time.strptime("00:10", '%H:%M')
+        if minimum_duration_time > time.strptime(event_duration, '%H:%M'):
+            return {"status":0,"msg":"Event duration invalid"}
+        
         event_type=int(event_type) if event_type else None
         access_token=checkToken(db,token)
         
@@ -4533,14 +4548,10 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
             delete_invite_groups=json.loads(delete_invite_groups) if delete_invite_groups else None
             delete_invite_friends=json.loads(delete_invite_friends) if delete_invite_friends else None
             
-            event_exist=db.query(Events).filter_by(id=event_id,created_by=login_user_id).count()
+            event_exist=db.query(Events).filter_by(id=event_id,created_by=login_user_id).first()
             
-            if event_exist == 0:
+            if not event_exist:
                 return {"status":0,"msg":"Invalid Event ID."}
-            
-         
-            elif not event_melody:
-                return {"status":0,"mgs":"Event melody cant be blank."}
             
             else:
                 # Delete Invites
@@ -4635,7 +4646,7 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                                 return result
                     else:
                         temp=int(event_melody_id) if event_melody_id else None
-                        edit_event.event_melody_id = temp if temp > 0 else 1
+                        edit_event.event_melody_id = temp if temp and temp > 0 else 1
                         db.commit()
                         
                     
@@ -4698,8 +4709,8 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                     
                     
                     else:
-                        temp=event_melody_id if event_melody_id else 1
-                        edit_event.event_melody_id =temp if temp > 0 else 1
+                        temp= int(event_melody_id) if event_melody_id else 1
+                        edit_event.event_melody_id = temp if temp > 0 else 1
                         db.commit()
                     
                     if is_event_changed == 1:
@@ -4717,7 +4728,9 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                                 totalfriends.append(invite_frnds)
                     
                     if event_invite_groups:
-                        for invite_frnds in event_invite_friends:
+                        event_invite_groups = ast.literal_eval(event_invite_groups) if event_invite_groups else None
+                        
+                        for invite_frnds in event_invite_groups:
                             invite_friends=EventInvitations(type=2,event_id=event_id,user_id=invite_frnds,invite_sent=0,created_at=datetime.datetime.utcnow(),created_by=login_user_id)
                             db.add(invite_friends)
                             db.commit()
@@ -4740,6 +4753,8 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                     
                     body=event_mail_template(content)
                     if event_invite_mails:
+                        event_invite_mails = ast.literal_eval(event_invite_mails) if event_invite_mails else None
+                        
                         for invite_mail in event_invite_mails:
                             invite_friends=EventInvitations(type =3,event_id=event_id,invite_mail=invite_mail,
                                                             invite_sent=0,created_at=datetime.datetime.utcnow(),created_by=login_user_id)
@@ -5300,9 +5315,10 @@ async def getothersprofile(db:Session=Depends(deps.get_db),token:str=Form(None),
                         
                         get_friend_request=db.query(MyFriends).filter(MyFriends.status == 1,or_(MyFriends.sender_id == login_user_id,MyFriends.sender_id == user_id),or_(MyFriends.receiver_id == user_id,MyFriends.receiver_id == login_user_id)).order_by(MyFriends.id.desc()).first()
                         # Check Claim Influence Or Not
-                        # check_claim=db.query(ClaimAccounts).filter(ClaimAccounts.user_id == login_user_id,ClaimAccounts.influencer_id == user_id,ClaimAccounts.admin_status == 1).first()
                         get_unclaimed_account=db.query(User).join(UserStatusMaster,User.user_status_id == UserStatusMaster.id,isouter=True).filter(User.created_by == 1,UserStatusMaster.type == 2,User.id == user_id).first()
-                        
+                        # Check Account Claimed Or Not From Admin Side
+                        check_claim_account=db.query(ClaimAccounts).filter(ClaimAccounts.user_id == login_user_id,ClaimAccounts.influencer_id == user_id).first()
+                           
                         result_list={
                                         "user_id":user_id,
                                         "user_ref_id":get_user.user_ref_id if get_user.user_ref_id else "",
@@ -5341,7 +5357,7 @@ async def getothersprofile(db:Session=Depends(deps.get_db),token:str=Form(None),
                                         "lock_fans":(settings.lock_fans if settings.lock_fans else 0) if settings else "",
                                         "lock_my_connection":(settings.lock_my_connection if settings.lock_my_connection else 0) if settings else "",
                                         "lock_my_influencer":(settings.lock_my_influencer if settings.lock_my_influencer else 0) if settings else "",
-                                        "unclaimed_status":0 if get_unclaimed_account else 1
+                                        "unclaimed_status":(1 if check_claim_account else 0) if get_unclaimed_account else 1
                                 }
                     
                         return {"status":1,"msg":"Success","profile":result_list}
@@ -7107,14 +7123,14 @@ async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),even
             event_start_time=event_start_time if event_start_time else None
 
             event_invite_custom=event_invite_mails if event_invite_mails and event_invite_mails.strip() != '' else None
-            
+            print(event_invite_custom)
             if event_invite_custom:
-                event_invite_custom=[int(i) for i in event_invite_custom.split(",")]
-            
+                event_invite_custom = ast.literal_eval(event_invite_custom) if event_invite_custom else None
+                            
             event_invite_groups=event_invite_groups if event_invite_groups and event_invite_groups.strip() != '' else None
             if event_invite_groups:
-                event_invite_groups=[int(i) for i in event_invite_groups.split(",")]
-            
+                event_invite_groups = ast.literal_eval(event_invite_groups) if event_invite_groups else None
+                            
             event_invite_friends=event_invite_friends if event_invite_friends and event_invite_friends.strip() != '' else None
             if event_invite_friends:
                 event_invite_friends=json.loads(event_invite_friends) if event_invite_friends else []
@@ -7281,20 +7297,21 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif event_title == None or event_title.strip()=="":
         return {"status":0,"msg":"Event Title cant be blank"}
-    elif event_start_date == None:
+    elif not event_start_date:
         return {"status":0,"msg":"Event start date is missing"}
-    elif event_start_time == None:
+    elif not event_start_time:
         return {"status":0,"msg":"Event start time is missing"}
-    elif event_id == None:
+    elif not event_id:
         return {"status":0,"msg":"Event ID cant be blank"}
     elif not event_id.isnumeric():
         return {"status":0, "msg":"Invalid Event id "}
-    elif event_banner == None:
-        return {"status":0,"msg":"Event Banner is missing"}
     elif event_start_date and is_date(event_start_date) == False:
         return {"status":0,"msg":"Invalid Date"}
     elif event_start_time and isTimeFormat(event_start_time) == False:
         return {"status":0,"msg":"Invalid Time format"}
+    elif event_type and not event_type.isnumeric():
+        return {"status":0,"msg":"Invalid Event Type"}
+        
     
     else:
         access_token=checkToken(db,token)
@@ -7310,27 +7327,26 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
             if IsAccountVerified(db,login_user_id) == False:
                 return {"status":0,"msg":"You need to complete your account validation before you can do this"}
             
-
-            event_id=event_id if event_id>0 else None
+            event_id=int(event_id) if event_id else None
             event_title=event_title if event_title and event_title.strip() !="" or event_title != None else None
-            event_type=event_type if event_type and event_type > 0 else None
+            event_type=int(event_type) if event_type else None
             event_start_date=event_start_date if event_start_date else None
             event_start_time=event_start_time  if event_start_time else None
-
-            event_invite_custom=event_invite_mails.split(",") if event_invite_mails else ''
+            
+            event_invite_custom = ast.literal_eval(event_invite_mails) if event_invite_mails else None
             
             event_invite_groups=json.loads(event_invite_groups) if event_invite_groups else []
             
             event_invite_friends=json.loads(event_invite_friends) if event_invite_friends else []
-
-            delete_invite_custom=delete_invite_mails.split(",") if delete_invite_mails else ''
+            
+            delete_invite_custom = ast.literal_eval(delete_invite_mails) if delete_invite_mails else None
           
             delete_invite_groups=json.loads(delete_invite_groups) if delete_invite_groups else []
             
             delete_invite_friends=json.loads(delete_invite_friends) if delete_invite_friends else []
           
             event_exist=db.query(Events).filter(Events.id==event_id,Events.created_by==login_user_id).count()
-            if event_exist==0:
+            if event_exist == 0:
                 return {"status":0,"msg":"Invalid Event ID."}
             elif event_title.strip()=="" or event_title==None:
                 return {"status":0,"msg":"Event title cant be blank."}
@@ -7367,7 +7383,8 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
 
                 if event_type==1:
                     totalfriends=get_friend_requests(db,login_user_id,requested_by=None,request_status=1,response_type=1)
-                    totalfriend.append(totalfriends["accepted"])
+                    totalfriend = totalfriend + totalfriends["accepted"]
+                
                 if old_start_datetime !=edit_event.start_date_time:
                     is_event_changed=1
                 
@@ -7460,9 +7477,10 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
 
                 event=get_event_detail(db,event_id,login_user_id)
                 message_detail=[]
-                if totalfriend and len(totalfriend)>0:
+                if totalfriend and totalfriend != []:
                     for users in totalfriend:
-                        Insertnotification(db,users,login_user_id,10,edit_event.id)
+                        add_notitication=Insertnotification(db,users,login_user_id,10,edit_event.id)
+                        
                     message_detail={'message':"Updated the Event","data":{"refer_id":edit_event.id,"type":"edit_event"},"type":"events"}
                     pushNotify(db,totalfriend,message_detail,login_user_id)
 
@@ -7784,7 +7802,7 @@ async def socialmedialogin(db:Session=Depends(deps.get_db),signin_type:str=Form(
                             if referred_user:
                                 referred_id=referred_user.id
                                 
-                                db.query(User).filter_by(id=model.id).update({'referrer_id': referred_user.id, 'invited_date': datetime.strptime(referrer_ref_id[1], '%Y-%m-%d %H:%M:%S')})
+                                update_user=db.query(User).filter_by(id=model.id).update({'referrer_id': referred_user.id, 'invited_date': datetime.strptime(referrer_ref_id[1], '%Y-%m-%d %H:%M:%S')})
 
                                 db.commit()
                                 ref_friend=MyFriends(sender_id=referred_user.id,receiver_id=model.id,request_date=datetime.datetime.utcnow(),request_status=1,status_date=None,status=1)

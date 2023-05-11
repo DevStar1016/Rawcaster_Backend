@@ -54,7 +54,7 @@ from .nuggets_comments_likes import NuggetsCommentsLikes
 from .nuggets_likes import NuggetsLikes
 
 # New
-from .event_abuse_report import EventAbsueReport
+from .event_abuse_report import EventAbuseReport
 from .claim_accounts import ClaimAccounts
 from .influencer_chat import InfluencerChat
 

@@ -81,6 +81,6 @@ class User(Base):
     user_status_master=relationship("UserStatusMaster",back_populates="user")
     user_type_master=relationship("UserTypeMaster",back_populates="user")
     country=relationship("Country",back_populates="user")
-    event_abuse_report=relationship("EventAbsueReport",back_populates="user")
+    event_abuse_report=relationship("EventAbuseReport",back_populates="user")
     
     

@@ -3,7 +3,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.mysql import TINYINT
 from app.db.base_class import Base
 
-class EventAbsueReport(Base):
+class EventAbuseReport(Base):
     __tablename__="event_abuse_report"
     id=Column(Integer,primary_key=True)
     event_id=Column(Integer,ForeignKey("events.id"))
