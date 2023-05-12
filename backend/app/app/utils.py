@@ -1542,7 +1542,7 @@ async def logins(db,username, password, device_type, device_id, push_id,login_fr
         db.commit()
         db.refresh(add_token)   
          
-        return {"status" : 1,"acc_verify_status":0,"alt_token_id":add_token.id,"otp_ref_id":send_otp, "msg" : "Verification Pending, Redirect to OTP Verify Page","first_time":first_time,"email_id":username,"signup_type":get_user.signup_type,"remaining_seconds":90}
+        return {"status" : 1,"acc_verify_status":0,"alt_token_id":add_token.id,"otp_ref_id":send_otp, "msg" : "Verification Pending, Redirect to OTP Verify Page","first_time":1,"email_id":username,"signup_type":get_user.signup_type,"remaining_seconds":90}
                         
     elif get_user.password != password and socual != 1: #  Invalid password!
         if get_user.status == 2:
