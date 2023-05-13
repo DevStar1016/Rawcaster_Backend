@@ -1208,7 +1208,7 @@ async def searchrawcasterusers(db:Session=Depends(deps.get_db),token:str=Form(No
                     user_list=[]
                     for user in get_user:
                         
-                        get_my_friends=db.query(MyFriends).filter(or_(MyFriends.sender_id == user.id,MyFriends.receiver_id == user.id),or_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == login_user_id)).first()
+                        get_my_friends=db.query(MyFriends).filter(or_(MyFriends.sender_id == user.id,MyFriends.receiver_id == user.id),or_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == login_user_id),MyFriends.status == 1).first()
                         
                         get_follow_user= db.query(FollowUser).filter(FollowUser.following_userid == user.id,FollowUser.follower_userid == login_user_id).first()
                         
@@ -1510,9 +1510,9 @@ async def respondtofriendrequests(db:Session=Depends(deps.get_db),token:str=Form
                 else:
                     return {"status":0,"msg":"Failed to update. please try again"}
                     
+
+
                         
-                    
-                    
 # 18 List all Friend Groups
 @router.post("/listallfriendgroups")
 async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(None),search_key:str=Form(None),page_number:str=Form(default=1),flag:str=Form(None)):
@@ -1561,17 +1561,23 @@ async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(Non
                     grouptype=1
                     groupname=res.group_name
                     
+                    group_category=None
                     if groupname == "My Fans":
                         grouptype=2
-                    
+                        group_category=1
                     if groupname == "My Fans" and res.created_by != login_user_id:
+                        grouptype=1
+                        group_category=2
                         groupname=f"Influencer: {(res.user.display_name if res.user.display_name else '') if res.created_by else ''}"
-
+                    
+                    if res.created_by == login_user_id and  groupname != "My Fans":
+                        group_category=3
+                        
                     get_group_chat=db.query(GroupChat).filter(GroupChat.status == 1,GroupChat.group_id == res.id).order_by(GroupChat.id.desc()).first()
                                         
                     memberlist=[]
                     members=[]
-                    membercount=0
+                    
                     if grouptype == 1:
                         members.append(res.created_by)
                         memberlist.append({
@@ -1608,11 +1614,12 @@ async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(Non
                                         "group_id":res.id,
                                         "group_name":groupname,
                                         "group_icon":res.group_icon if res.group_icon else defaultimage('group_icon'),
-                                        "group_member_count":gte_frnd_group_count + 1 if gte_frnd_group_count else 0,
+                                        "group_member_count":(gte_frnd_group_count + 1 if grouptype == 1 else gte_frnd_group_count)  if gte_frnd_group_count else 0,
                                         "group_owner":res.created_by if res.created_by else 0,
                                         "typing":0,
                                         "chat_enabled":res.chat_enabled,
                                         "group_type":grouptype,
+                                        "group_category":group_category if group_category else 3,
                                         "last_msg":get_group_chat.message if get_group_chat else "",
                                         "last_msg_datetime":(common_date(get_group_chat.sent_datetime) if get_group_chat.sent_datetime else "") if get_group_chat else "",
                                         "result_list":3,
@@ -1622,7 +1629,8 @@ async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(Non
                         
                 return {"status":1,"msg":"Success","group_count":get_row_count,"total_pages":total_pages,"current_page_no":current_page_no,"friend_group_list":result_list}
             
-            
+                       
+                    
            
 # 19 List all Friends
 @router.post("/listallfriends")
@@ -1670,6 +1678,7 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
             get_follow_user=db.query(FollowUser).filter(or_(FollowUser.follower_userid == login_user_id,FollowUser.following_userid == login_user_id),FollowUser.status == 1).all()
             
             followers={ user.id for user in get_follow_user}
+            
             get_my_friends=db.query(MyFriends).filter(or_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == login_user_id)).filter(MyFriends.status == 1,MyFriends.request_status == 1)
             # get_my_friends=db.query(MyFriends).filter(or_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == login_user_id,MyFriends.sender_id.in_(followers),MyFriends.receiver_id.in_(followers))).filter(MyFriends.status == 1,MyFriends.request_status == 1)
             
@@ -2079,7 +2088,7 @@ async def addfriendstogroup(db:Session=Depends(deps.get_db),token:str=Form(None)
                     notify_members=group_details['group_member_ids']
                     
                     if get_group.created_by in notify_members:
-                        notify_members.pop(get_group.created_by)
+                        notify_members.remove(get_group.created_by)
                     
                     send_push_notification=pushNotify(db,notify_members,message_detail,login_user_id)
                     
@@ -5710,11 +5719,18 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
            lock_my_connection:str=Form(None,description="1-Yes,0-No"),
            lock_my_influencer:str=Form(None,description="1-Yes,0-No"),
            live_event_banner:UploadFile=File(None),
-           talkshow_event_banner:UploadFile=File(None)
+           talkshow_event_banner:UploadFile=File(None),
+           profile_field_name:str=Form(None),
+           groupid:str=Form(None,description="example [1,2,3]"),
+           group_update_type:str=Form(None)
            ):
     
     if token== None or token.strip()=="":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    elif not profile_field_name and groupid:
+        return {"status":0,"msg":"Profile field name required"}
+    elif profile_field_name and not groupid:
+        return {"status":0,"msg":"Group id required"}
         
     else:
         access_token=checkToken(db,token.strip())
@@ -5981,8 +5997,8 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                     settings.time_zone=time_zone if time_zone else settings.time_zone
                     settings.date_format=date_format if date_format!="" and date_format != None else settings.date_format
                     settings.mobile_default_page =mobile_default_page  if mobile_default_page != None and 0<= mobile_default_page <= 3 else settings.mobile_default_page 
-                    settings.public_nugget_display=public_nugget_display if public_nugget_display != None and 0<= public_nugget_display <= 1 else settings.public_nugget_display
-                    settings.public_event_display=public_event_display if public_event_display != None and 0<= public_event_display <=1 else settings.public_event_display
+                    settings.public_nugget_display=public_nugget_display if public_nugget_display != None else settings.public_nugget_display
+                    settings.public_event_display=public_event_display if public_event_display != None else settings.public_event_display
                     settings.manual_acc_active_inactive=manual_acc_active_inactive  if manual_acc_active_inactive != None else settings.manual_acc_active_inactive
                     settings.default_event_type=event_type if event_type != None else settings.default_event_type
                     settings.lock_nugget=lock_nugget
@@ -5992,6 +6008,35 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                     settings.live_event_banner=live_banner
                     settings.talkshow_event_banner =talkshow_banner
                     db.commit()
+                    if groupid and profile_field_name:
+                        groupid = ast.literal_eval(groupid) if groupid else None
+                        
+                        if len(groupid) > 1:
+                            delete_group=db.query(UserProfileDisplayGroup).filter(and_(UserProfileDisplayGroup.profile_id==profile_field_name,UserProfileDisplayGroup.user_id==login_user_id)).delete()
+                            gcount=len(groupid)
+                            listtype=type if group_update_type else 3
+                            success=0
+                            for gid in groupid:
+                                new_profile=UserProfileDisplayGroup(user_id=login_user_id,profile_id=profile_field_name,groupid=gid,created_date=datetime.datetime.utcnow())
+                                db.add(new_profile)
+                                db.commit()
+                                db.refresh(new_profile)
+                                if new_profile :
+                                    success += 1
+                          
+                            if gcount == success:
+                                update=db.query(UserSettings).filter(UserSettings.user_id == login_user_id)
+                                setattr(update, profile_field_name, listtype)
+                                db.commit()
+                                # return {"status":1,"msg":"Success"}
+                                pass
+                            else:
+                                db.query(UserProfileDisplayGroup).filter_by(profile_id=profile_field_name, user_id=login_user_id).delete()
+                                db.commit()
+                                return {"status":0,"msg":"Failed to update group list"}
+                        else:
+                            return {"status":0,"msg":"Invalid group list"}
+                    
 
                     return {"status":1,"msg":"Success","url":meeting_header_image,"default_melody":default_melody if default_melody else None}
                 
@@ -6631,10 +6676,9 @@ async def grouplistupdate(db:Session=Depends(deps.get_db),token:str=Form(None),p
         login_user_id=0
         get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
         login_user_id=get_token_details.user_id
-        parameter_id=profile_field_name
-        
-        groupid=json.loads(groupid) if groupid else []
-    
+        parameter_id=profile_field_name.strip()
+        groupid = ast.literal_eval(groupid) if groupid else None
+            
         if len(groupid) > 1:
             db.query(UserProfileDisplayGroup).filter(and_(UserProfileDisplayGroup.profile_id==parameter_id,UserProfileDisplayGroup.user_id==login_user_id)).delete()
             gcount=len(groupid)
@@ -6644,11 +6688,15 @@ async def grouplistupdate(db:Session=Depends(deps.get_db),token:str=Form(None),p
                 new_profile=UserProfileDisplayGroup(user_id=login_user_id,profile_id=parameter_id,groupid=gid,created_date=datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
                
                 db.add(new_profile)
-                success+=1
-            db.commit()
-            db.execute(new_profile)
+                db.commit()
+                if new_profile:
+                    success+=1
+            
             if gcount == success:
-                update=db.query(UserSettings).filter(user_id=login_user_id).update(**{parameter_id: listtype})
+                
+                update=db.query(UserSettings).filter(UserSettings.user_id == login_user_id)
+                setattr(update, parameter_id, listtype)
+                db.commit()
                 return {"status":1,"msg":"Success"}
             else:
                 db.query(UserProfileDisplayGroup).filter_by(profile_id=parameter_id, user_id=login_user_id).delete()
