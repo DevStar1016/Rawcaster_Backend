@@ -12,7 +12,7 @@ class GroupReport(Base):
     reported_date=Column(DateTime)
     report_status=Column(TINYINT,default=0)
 
-    status=Column(TINYINT,comment="0-inactive,1-active ")
+    status=Column(TINYINT,comment="0-inactive,1-active ",default=1)
     
     user=relationship("User",back_populates="group_report")
     friend_groups=relationship("FriendGroups",back_populates="group_report")

@@ -1273,7 +1273,7 @@ def defaultimage(flag):
 
 
 
-def GetGroupDetails(db,id):
+def GetGroupDetails(db,user_id,id):
     members=[]
     memberlist=[]
     
@@ -1285,6 +1285,15 @@ def GetGroupDetails(db,id):
         friend_group_count=friendGroupMember.count()
         
         members.append(friendGroup.created_by)
+        # Group_category
+        group_category=None
+        if friendGroup.group_name == "My Fans":
+            group_category=1
+        if friendGroup.group_name == "My Fans" and friendGroup.created_by != user_id:
+            group_category=2
+        
+        if friendGroup.created_by == user_id and  friendGroup.group_name != "My Fans":
+            group_category=3
         
         memberlist.append({
                             "user_id":friendGroup.created_by if friendGroup.created_by else "",
@@ -1322,6 +1331,7 @@ def GetGroupDetails(db,id):
                         "group_owner":friendGroup.created_by,
                         "chat_enabled":friendGroup.chat_enabled,
                         "group_type":1,
+                        "group_category":group_category if group_category else 3,
                         "group_member_ids":members,
                         "group_members_list":memberlist,
                         "typing":0,
