@@ -1257,7 +1257,7 @@ def defaultimage(flag):
         url="https://rawcaster.s3.us-west-2.amazonaws.com/profileimage/Image_81501682594590.png"
        
     elif flag == 'group_icon':
-        url="https://rawcaster.s3.us-west-2.amazonaws.com/chat/attachment_91971683678695.jpg",
+        url="https://rawcaster.s3.us-west-2.amazonaws.com/chat/attachment_91971683678695.jpg"
                
     elif flag == 'event_banner':
         url='https://rawcaster.s3.us-west-2.amazonaws.com/chat/attachment_86991683760798.jpg'
@@ -1383,9 +1383,9 @@ async def SendOtp(db,user_id,signup_type):
     to_mail=get_user.email_id
     subject=f"One Time Password - {otp}"
     message=f"{otp} is your One Time Password"
+    
     if int(signup_type) == 1:
-        
-        await send_email(db,to_mail,subject,message)
+        mail_send=await send_email(db,to_mail,subject,message)
         
     elif int(signup_type) == 2:
         mobile_no=f"{get_user.country_code}{get_user.mobile_no}"
@@ -1501,8 +1501,8 @@ async def logins(db,username, password, device_type, device_id, push_id,login_fr
    
     get_user = db.query(User).filter(
             or_(
-                getattr(User, 'email_id').like(username + '%'),
-                getattr(User, 'mobile_no').like(username + '%')
+                getattr(User, 'email_id').like(username),
+                getattr(User, 'mobile_no').like(username)
             ),
             or_(
                 getattr(User, 'email_id') != None,

@@ -8,7 +8,7 @@ class Notification(Base):
     id=Column(Integer,primary_key=True)
     user_id=Column(Integer,ForeignKey("user.id"),comment="  user table ref id - who receive this notification  ")
     notification_origin_id=Column(Integer,ForeignKey("user.id"),comment="  user table ref id - who send this notification  ")
-    notification_type=Column(TINYINT,comment=" 1-nugget create, 2-Nugget Edit, 3-Nugget Comment, 4-nugget Reply, 5-Nugget Like, 6-nugget comment like, 7-Nugget reply like,8-Nugget share, 9-event create, 10-event edit, 11-friend request, 12-friend request approved,13-Invite Event,14-Group,15-Fans Follow/Unfollow")
+    notification_type=Column(TINYINT,comment=" 1-nugget create, 2-Nugget Edit, 3-Nugget Comment, 4-nugget Reply, 5-Nugget Like, 6-nugget comment like, 7-Nugget reply like,8-Nugget share, 9-event create, 10-event edit, 11-friend request, 12-friend request approved,13-Invite Event,14-Live Event,15-Fans Follow/Unfollow,16-Poll Results,17-Group")
     ref_id=Column(BigInteger)
     is_read=Column(TINYINT,default=0)
     read_datetime=Column(DateTime)
