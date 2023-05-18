@@ -7414,9 +7414,11 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
             
             event_invite_custom = ast.literal_eval(event_invite_mails) if event_invite_mails else None
             
-            event_invite_groups=json.loads(event_invite_groups) if event_invite_groups else []
+            event_invite_groups = ast.literal_eval(event_invite_groups) if event_invite_groups else None
             
-            event_invite_friends=json.loads(event_invite_friends) if event_invite_friends else []
+            event_invite_friends = ast.literal_eval(event_invite_friends) if event_invite_friends else None           
+            # event_invite_friends=json.loads(event_invite_friends) if event_invite_friends else []
+            
             
             delete_invite_custom = ast.literal_eval(delete_invite_mails) if delete_invite_mails else None
           
