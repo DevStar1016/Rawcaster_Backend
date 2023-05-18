@@ -7425,7 +7425,7 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
             event_start_time=event_start_time  if event_start_time else None
             
             event_invite_custom = ast.literal_eval(event_invite_mails) if event_invite_mails else None
-            
+           
             event_invite_groups=json.loads(event_invite_groups) if event_invite_groups else []
             
             event_invite_friends=json.loads(event_invite_friends) if event_invite_friends else []
@@ -7520,7 +7520,7 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
                 if is_event_changed==1:
                     db.query(EventInvitations).filter(EventInvitations.event_id == event_id).update({"is_changed":1})
                     db.commit()
-                if event_invite_friends and len(event_invite_friends)>0 :
+                if event_invite_friends and len(event_invite_friends) > 0 :
                     for value in event_invite_friends:
                         invite_friends = EventInvitations(type = 1,event_id = event_id,user_id = int(value),invite_sent = 0,
                                                         created_at = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),created_by = login_user_id)
@@ -7531,7 +7531,7 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
                             
                 if len(event_invite_groups)>0 :
                     for value in event_invite_groups:
-                        invite_friends = EventInvitations(type = 2,event_id = event_id,user_id = int(value),invite_sent = 0,
+                        invite_friends = EventInvitations(type = 2,event_id = event_id,group_id = int(value),invite_sent = 0,
                                                             created_at = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),created_by = login_user_id)
                         db.add(invite_friends)
                         db.commit()
