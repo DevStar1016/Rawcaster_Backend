@@ -7411,6 +7411,7 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
         else:
             status=0
             msg="Invalid nugget id"
+            
             get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
             login_user_id=get_token_details.user_id
 
