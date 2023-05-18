@@ -4362,10 +4362,10 @@ async def listevents(db:Session=Depends(deps.get_db),token:str=Form(None),user_i
                         settings=db.query(UserSettings).filter_by(user_id = event.created_by).first()
                         
                         if settings:
-                            waiting_room=settings.waiting_room
-                            join_before_host=settings.join_before_host
-                            sound_notify=settings.participant_join_sound
-                            user_screenshare=settings.screen_share_status
+                            waiting_room=settings.waiting_room if settings.waiting_room != None else 0
+                            join_before_host=settings.join_before_host if settings.join_before_host != None else 0
+                            sound_notify=settings.participant_join_sound if settings.participant_join_sound != None else 0
+                            user_screenshare=settings.screen_share_status if settings.screen_share_status != None else 0
                         
                         
                         default_melody=db.query(EventMelody).filter_by(id = event.event_melody_id).first()
@@ -4622,10 +4622,10 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                 edit_event.no_of_participants=event_participants
                 edit_event.duration=event_duration
                 edit_event.start_date_time=str(event_start_date) +" "+ str(event_start_time)
-                edit_event.waiting_room=waiting_room
-                edit_event.join_before_host=join_before_host
-                edit_event.sound_notify=sound_notify
-                edit_event.user_screenshare=user_screenshare
+                edit_event.waiting_room=waiting_room if waiting_room != None else edit_event.waiting_room
+                edit_event.join_before_host=join_before_host if join_before_host != None else edit_event.join_before_host
+                edit_event.sound_notify=sound_notify if sound_notify != None else edit_event.sound_notify
+                edit_event.user_screenshare=user_screenshare if user_screenshare != None else edit_event.user_screenshare
                 db.commit()
                 if edit_event:
                     totalfriends=[]
@@ -5275,11 +5275,11 @@ async def unfriend(db:Session=Depends(deps.get_db),token:str=Form(None),user_id:
             
             login_user_id=get_token_details.user_id 
             
-            get_user=db.query(User).filter_by(user_ref_id = user_id).first()
+            get_user=db.query(User).filter_by(id = user_id).first()
             
             if get_user:
                 
-                friends_rm=db.query(MyFriends).filter(MyFriends.status == 1,MyFriends.request_status == 1 ,or_(and_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == user_id),and_(MyFriends.sender_id == user_id,MyFriends.receiver_id == login_user_id))).update({"status":0})
+                friends_rm=db.query(MyFriends).filter(MyFriends.status == 1,MyFriends.request_status == 1 ,or_(MyFriends.sender_id == login_user_id,MyFriends.sender_id == user_id),or_(MyFriends.receiver_id == user_id,MyFriends.receiver_id == login_user_id)).update({"status":0})
                 db.commit()
                 
                 if friends_rm:               
@@ -6948,7 +6948,7 @@ async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),use
     elif not str(page_number).isnumeric():
         return {"status":0,"msg":"Invalid page Number"}
     else:
-        type=int(type)
+        type=int(type) if type else None
         access_token=checkToken(db,token)
         
         if access_token == False:
@@ -6983,15 +6983,23 @@ async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),use
             if location:
                 get_user=db.query(User).filter(User.geo_location.ilike(location+"%")).all()
                 user_location_ids={usr.id for usr in get_user}
-                
-                get_follow_user=get_follow_user.filter(or_(or_(FollowUser.following_userid.in_(user_location_ids),FollowUser.follower_userid.in_(user_location_ids)),FollowUser.following_userid.in_(user_location_ids),FollowUser.follower_userid.in_(user_location_ids)))
+                if type == 1:
+                    get_follow_user=get_follow_user.filter(FollowUser.following_userid.in_(user_location_ids))
+                if type == 2:
+                    get_follow_user=get_follow_user.filter(FollowUser.follower_userid.in_(user_location_ids))
+                    
+                # get_follow_user=get_follow_user.filter(or_(or_(FollowUser.following_userid.in_(user_location_ids),FollowUser.follower_userid.in_(user_location_ids)),FollowUser.following_userid.in_(user_location_ids),FollowUser.follower_userid.in_(user_location_ids)))
             
             if gender:
-                get_user_gender=db.query(User).filter(User.gender == gender).all()
+                gender=int(gender) if gender else None
+                get_user_gender=db.query(User).filter(User.gender == gender,User.gender != None).all()
                 get_user_ids=[usr.id for usr in get_user_gender]
-                
-                get_follow_user=get_follow_user.filter(or_(or_(FollowUser.following_userid.in_(get_user_ids),FollowUser.follower_userid.in_(get_user_ids)),FollowUser.following_userid.in_(get_user_ids),FollowUser.follower_userid.in_(get_user_ids)))
-               
+
+                if type == 1:
+                    get_follow_user=get_follow_user.filter(FollowUser.following_userid.in_(get_user_ids))
+                if type == 2:
+                    get_follow_user=get_follow_user.filter(FollowUser.follower_userid.in_(get_user_ids))
+                    
             if age:
                 if not age.isnumeric():
                     return {"status":0,"msg":"Invalid Age"}
@@ -7000,8 +7008,13 @@ async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),use
                     current_year = datetime.datetime.utcnow().year
                     get_user=db.query(User).filter(current_year - extract('year',User.dob) == age ).all()
                     user_ages={usr.id for usr in get_user}
+                    
+                    if type == 1:
+                        get_follow_user=get_follow_user.filter(FollowUser.following_userid.in_(user_ages))
+                    if type == 2:
+                        get_follow_user=get_follow_user.filter(FollowUser.follower_userid.in_(user_ages))
                 
-                    get_follow_user=get_follow_user.filter(or_(or_(FollowUser.following_userid.in_(user_ages),FollowUser.follower_userid.in_(user_ages)),FollowUser.following_userid.in_(user_ages),FollowUser.follower_userid.in_(user_ages)))               
+                    # get_follow_user=get_follow_user.filter(or_(or_(FollowUser.following_userid.in_(user_ages),FollowUser.follower_userid.in_(user_ages)),FollowUser.following_userid.in_(user_ages),FollowUser.follower_userid.in_(user_ages)))               
 
             get_row_count = get_follow_user.count()
             
@@ -7018,7 +7031,6 @@ async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),use
                 for follow in get_result:
                     
                     if type == 1:
-                        
                         followback=db.query(FollowUser).filter(FollowUser.follower_userid == login_user_id, FollowUser.following_userid == follow.following_userid).first()
                         
                         friend_details = {

@@ -1210,16 +1210,16 @@ def get_event_detail(db,event_id,login_user_id):
                         "start_date":common_date(((event_details.start_date_time).date()),without_time=1) if event_details.start_date_time else "",
                         "start_time":(event_details.start_date_time).time(),
                         "is_host":1 if event_details.created_by == login_user_id else 0,
-                        "banner_image":event_details.cover_img if event_details.cover_img else "",
+                        "banner_image":event_details.cover_img if event_details.cover_img else defaultimage('cover_img'),
                         "created_at":common_date(event_details.created_at) if event_details.created_at else "",
                         "original_user_name":event_details.user.display_name if event_details.created_by else "",
                         "original_user_id":event_details.user.id if event_details.created_by else "",
                         "original_user_image":event_details.user.profile_img if event_details.created_by else "",
                         "event_melody_id":event_details.event_melody_id if event_details.event_melody_id else "",
-                        "waiting_room":event_details.waiting_room if event_details.waiting_room else "",
-                        "join_before_host":event_details.join_before_host if event_details.join_before_host else "",
-                        "sound_notify":event_details.sound_notify if event_details.sound_notify else "",
-                        "user_screenshare":event_details.user_screenshare,
+                        "waiting_room":event_details.waiting_room if event_details.waiting_room != None else 0,
+                        "join_before_host":event_details.join_before_host if event_details.join_before_host != None else 0,
+                        "sound_notify":event_details.sound_notify if event_details.sound_notify != None else 0,
+                        "user_screenshare":event_details.user_screenshare if event_details.user_screenshare != None else 0,
                         "melodies":{"path":default_melody.path if default_melody.path else None,"type":default_melody.type if default_melody.type else None,"is_default":default_melody.event_id if default_melody.event_id else None}
                     })
         
