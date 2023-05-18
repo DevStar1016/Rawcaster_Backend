@@ -1881,7 +1881,7 @@ async def addfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),gr
                                 db.commit()
                                 
                                 # add Notification
-                                add_group_noty=Insertnotification(db,login_user_id,member,17,add_member.id)
+                                add_group_noty=Insertnotification(db,member,login_user_id,17,add_member.id)
                                 
                     # Profile Image
                     if group_icon:
@@ -5041,6 +5041,7 @@ async def listnotifications(db:Session=Depends(deps.get_db),token:str=Form(None)
                 get_notification=get_notification.filter(Notification.notification_type.in_(filters))
             
             if notification_type == 4: # Group
+                
                 get_notification=get_notification.filter(Notification.notification_type == 17)
 
             if notification_type == 5: # Fans

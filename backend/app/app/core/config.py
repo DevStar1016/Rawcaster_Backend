@@ -20,7 +20,7 @@ base_url =""
 base_dir="/var/www/html"
 base_domain_url = ""
 
-base_url_segment = ""
+base_url_segment = "/rawcaster"
 base_upload_folder = "local_uploads"
 
 # CBE

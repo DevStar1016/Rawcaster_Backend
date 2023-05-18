@@ -26,6 +26,26 @@ access_secret="Os6IsUAOPbJybMYxAdqUAAUL58xCIUlaD08Tsgj2"
 
 
 
+
+@router.post("/chime")
+async def chime():
+
+    # Create a Chime client
+    chime = boto3.client('chime',aws_access_key_id='AKIAYFYE6EFYGNPCA32D',aws_secret_access_key='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') # Connect to AWS Chime
+    
+    # Create a Chime meeting
+    response = chime.create_meeting(
+        ClientRequestToken='sadasdasdadadasdaddasd',
+        MediaRegion='us-east-1'  # Specify the desired AWS region
+    )
+    return response
+    # Retrieve meeting details
+    meeting_id = response['Meeting']['MeetingId']
+    join_token = response['Meeting']['JoinToken']
+
+    return meeting_id, join_token
+
+
 @router.post("/send_test_mail")
 async def send_test_mail():
 
