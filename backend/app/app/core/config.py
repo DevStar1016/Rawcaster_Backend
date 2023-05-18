@@ -31,7 +31,8 @@ base_upload_folder = "local_uploads"
 
 # 108 DB
 # data_base = "mysql+pymysql://maemysqluser:MaeNewMysql2@2@@192.168.1.109/rawcaster"
-data_base ='mysql+pymysql://maemysqluser:%s@cbe.themaestro.in/rawcaster' % quote('MaeNewMysql2@2@')
+# data_base ='mysql+pymysql://maemysqluser:%s@cbe.themaestro.in/rawcaster' % quote('MaeNewMysql2@2@')
+data_base ='mysql+pymysql://Admin:%s@http://rawcasterdev.c3xecvdvxfvf.us-east-1.rds.amazonaws.com/rawcasterdev' % quote('Rawcaster2240422')
 
 
 
