@@ -61,7 +61,7 @@ def EncryptandDecrypt(otp,flag=1):
 
 def file_upload(file_name,ext,compress):
         
-    base_dir = f"{st.BASE_DIR}/rawcaster"
+    base_dir = f"{st.BASE_DIR}/rawcaster_uploads"
     try:
         os.makedirs(base_dir, mode=0o777, exist_ok=True)
     except OSError as e:
@@ -84,10 +84,14 @@ def file_upload(file_name,ext,compress):
 
 
 
+# def video_file_upload(upload_file,compress,file_ext):    
+#     with open("destination.png", "wb") as buffer:
+#         shutil.copyfileobj(file.file, buffer)
+#     return {"filename": file.filename}
     
 
-def video_file_upload(upload_file,compress):    
-    base_dir = f"{st.BASE_DIR}/rawcaster"
+def video_file_upload(upload_file,compress,file_ext):    
+    base_dir = f"{st.BASE_DIR}/rawcaster_uploads"
     try:
         os.makedirs(base_dir, mode=0o777, exist_ok=True)
     except OSError as e:
@@ -99,7 +103,7 @@ def video_file_upload(upload_file,compress):
     characters = string.ascii_letters + string.digits
     # Generate the random string
     random_string = ''.join(random.choice(characters) for i in range(18))
-    filename=f"video_{random_string}.mp4"    
+    filename=f"video_{random_string}{file_ext}"    
    
     save_full_path=f'{output_dir}{filename}'  
       
@@ -114,7 +118,7 @@ def video_file_upload(upload_file,compress):
     
 
 async def audio_file_upload(upload_file,compress):
-    base_dir = f"{st.BASE_DIR}/rawcaster"
+    base_dir = f"{st.BASE_DIR}/rawcaster_uploads"
     try:
         os.makedirs(base_dir, mode=0o777, exist_ok=True)
     except OSError as e:
@@ -148,7 +152,7 @@ def upload_to_s3(local_file_pth,s3_bucket_path):
         with open(local_file_pth, 'rb') as data:  # Upload File To S3
             upload=client_s3.upload_fileobj(data, bucket_name, s3_bucket_path,ExtraArgs={'ACL': 'public-read'})
         
-        os.remove(local_file_pth)
+        # os.remove(local_file_pth)
         
         url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
         url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{s3_bucket_path}'

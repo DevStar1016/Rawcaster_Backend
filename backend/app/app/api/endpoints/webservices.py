@@ -2293,10 +2293,9 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),conten
                     if nuggets_media:
                         
                         for nugget_media in nuggets_media:
-                            
                             file_name=nugget_media.filename
                             file_temp=nugget_media.content_type
-                            
+                           
                             read_file=await nugget_media.read()
 
                             file_size=len(read_file)
@@ -2333,58 +2332,74 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),conten
                                 
                                 if type == 'video':
                                     
-                                    save_file_path=video_file_upload(read_file,compress=None)
+                                    save_file_path=video_file_upload(read_file,compress=None,file_ext=file_ext)
+                                    s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.{file_ext}"
                                     
-                                    segment_duration = 5 * 60
+                                    # result=upload_to_s3(save_file_path,s3_file_path)
+                                    
+                                    # if result['status'] == 1:
+                                    #     add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,
+                                    #                                 media_type=type,media_file_type=file_ext,file_size=file_size,path=result['url'],
+                                    #                                 created_date=datetime.datetime.utcnow(),status =1)
+                                    #     db.add(add_nugget_attachment)
+                                    #     db.commit()
+                                    #     db.refresh(add_nugget_attachment)
+                                    # else:
+                                    #     return result
+                                    try:
+                                    
+                                        segment_duration = 5 * 60
 
-                                    video = VideoFileClip(save_file_path)   # Video Split ( 5 Minutes)
-                                    duration = video.duration
-                                    splited_video_url=[]
-                                    total_duration = video.duration
-                                    
-                                    # if duration < 3000:
-                                    num_segments = math.ceil(total_duration / segment_duration)
-                                    for i in range(num_segments):
-                                    
-                                        start_time = i * segment_duration
-                                        end_time = min((i+1) * segment_duration, total_duration)
+                                        video = VideoFileClip(save_file_path)   # Video Split ( 5 Minutes)
+                                        duration = video.duration
+                                        splited_video_url=[]
+                                        total_duration = video.duration
                                         
-                                        segment = video.subclip(start_time, end_time)
+                                        # if duration < 3000:
+                                        num_segments = math.ceil(total_duration / segment_duration)
+                                        for i in range(num_segments):
                                         
-                                        # Save the segment as a new file
-                                        
-                                        segment_filename = f"video_clip_{random.randint(1111,9999)}{int(datetime.datetime.now().timestamp())}.mp4"
-                                        segment.write_videofile(segment_filename, codec="libx264")
-                                        
-                                        splited_video_url.append(segment_filename)
-                                        
-                                        bucket_name='rawcaster'
-
-                                        access_key="AKIAYFYE6EFYGNPCA32D"
-                                        access_secret="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"
-                                        # try:
-                                        client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
-                                        s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
-                                        
-                                        with open(segment_filename, 'rb') as data:  # Upload File To S3
-                                            upload=client_s3.upload_fileobj(data, bucket_name, s3_file_path,ExtraArgs={'ACL': 'public-read'})
-                                        
-                                        os.remove(segment_filename)
-                                        
-                                        url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
-                                        url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{s3_file_path}'
-                                        if url:
-                                            add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,
-                                                                media_type=type,media_file_type=file_ext,file_size=file_size,path=url,
-                                                                created_date=datetime.datetime.utcnow(),status =1)
-                                            db.add(add_nugget_attachment)
-                                            db.commit()
-                                            db.refresh(add_nugget_attachment)
+                                            start_time = i * segment_duration
+                                            end_time = min((i+1) * segment_duration, total_duration)
                                             
-                                            # return {"status":1,"url":url}
-                                        else:
-                                            return "Failed to Upload"
-                                        
+                                            segment = video.subclip(start_time, end_time)
+                                            
+                                            # Save the segment as a new file
+                                            
+                                            segment_filename = f"video_clip_{random.randint(1111,9999)}{int(datetime.datetime.now().timestamp())}.mp4"
+                                            segment.write_videofile(segment_filename, audio_codec="aac")
+                                            
+                                            splited_video_url.append(segment_filename)
+                                            
+                                            bucket_name='rawcaster'
+
+                                            access_key="AKIAYFYE6EFYGNPCA32D"
+                                            access_secret="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"
+                                            # try:
+                                            client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
+                                            s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
+                                            
+                                            with open(segment_filename, 'rb') as data:  # Upload File To S3
+                                                upload=client_s3.upload_fileobj(data, bucket_name, s3_file_path,ExtraArgs={'ACL': 'public-read'})
+                                            
+                                            os.remove(segment_filename)
+                                            
+                                            url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
+                                            url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{s3_file_path}'
+                                            if url:
+                                                add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,
+                                                                    media_type=type,media_file_type=file_ext,file_size=file_size,path=url,
+                                                                    created_date=datetime.datetime.utcnow(),status =1)
+                                                db.add(add_nugget_attachment)
+                                                db.commit()
+                                                db.refresh(add_nugget_attachment)
+                                                
+                                                # return {"status":1,"url":url}
+                                            else:
+                                                return "Failed to Upload"
+                                    except:
+                                        return "Something went wrong"
+                                          
                                                                       
                                 elif type == 'audio':
                                     s3_file_path=f"nuggets/audio_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp3"
@@ -3468,7 +3483,7 @@ async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugg
                                             uploaded_file_path=None          
                                             if type == 'video':
                                                 s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
-                                                uploaded_file_path=video_file_upload(read_file,compress=None)
+                                                uploaded_file_path=video_file_upload(read_file,compress=None,file_ext=file_ext)
                                             
                                             elif type == 'audio':
                                                 s3_file_path=f"nuggets/audio_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp3"
@@ -4008,7 +4023,7 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                             
                             if type == 'video' and file_ext != '.mp4':
                                 s3_file_path=f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{new_event.id}{int(datetime.datetime.utcnow().timestamp())}.mp4"
-                                upload_file_path=video_file_upload(event_melody,compress=1)
+                                upload_file_path=video_file_upload(event_melody,compress=1,file_ext=file_ext)
                                                         
                             result=upload_to_s3(upload_file_path,s3_file_path)
                            
@@ -4728,7 +4743,7 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                             
                             if type == 'video' and file_ext != '.mp4':
                                 s3_file_path=f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{edit_event.id}{int(datetime.datetime.utcnow().timestamp())}.mp4"
-                                upload_file_path=video_file_upload(event_melody,compress=1)
+                                upload_file_path=video_file_upload(event_melody,compress=1,file_ext=file_ext)
                                                         
                             result=upload_to_s3(upload_file_path,s3_file_path)
                            
@@ -5831,7 +5846,7 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                                     
                                     default_melody_list.update({"title":edit_melody.title})
                                 else:
-                                    new_melody=EventMelody(title='Your default',is_default=1,path=url,type=media_type,
+                                    new_melody=EventMelody(title='Your default',is_default=1,path=result['url'],type=media_type,
                                                         created_at=datetime.datetime.utcnow(),created_by=login_user_id)
                                     db.add(new_melody)
                                     db.commit()
@@ -5847,7 +5862,7 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                             s3_file_path=f"eventsmelody/eventsmelody_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                             if type == 'video' and file_ext != '.mp4':
                                 s3_file_path=f"eventsmelody/eventsmelody_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
-                                uploaded_file_path=video_file_upload(default_melody,compress=1)
+                                uploaded_file_path=video_file_upload(default_melody,compress=1,file_ext=file_ext)
                                 
                             result=upload_to_s3(uploaded_file_path,s3_file_path)
                             
@@ -6173,7 +6188,7 @@ async def globalsearchevents(db:Session=Depends(deps.get_db),token:str=Form(None
 
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    elif search_key == None:
+    elif not search_key or search_key.strip() == '':
         return {"status":0,"msg":"Search Key missing"}
     elif not str(page_number).isnumeric():
         return {"status":0,"msg":"Invalid page Number"}
@@ -6190,22 +6205,29 @@ async def globalsearchevents(db:Session=Depends(deps.get_db),token:str=Form(None
             search_key=search_key.strip()
 
             current_page_no=int(page_number)
+            
+            criteria = db.query(Events).join(User).filter(
+                Events.status == 1,
+                Events.event_status == 1,
+                Events.event_type_id == 1,
+                or_(
+                    Events.title.ilike(f"%{search_key}%"),
+                    User.display_name.ilike(f"%{search_key}%"),
+                    User.first_name.ilike(f"%{search_key}%"),
+                    User.last_name.ilike(f"%{search_key}%"),
+                    User.first_name + ' ' + User.last_name.ilike(f"%{search_key}%")
+                ),
+                Events.start_date_time > datetime.datetime.utcnow()
+            )
 
-            criteria = db.query(Events).join(User, User.id == Events.created_by).filter(and_(Events.status == 1, Events.event_status == 1)) \
-            .filter(Events.event_type_id == 1).filter(or_(Events.title.ilike(search_key+'%'),
-                        User.display_name.ilike(search_key+'%'),
-                        User.first_name.ilike(search_key+'%'),
-                        User.last_name.ilike(search_key+'%')
-                        )) \
-            .filter(Events.start_date_time > datetime.datetime.utcnow()) \
-            .filter(and_(Events.status == 1, Events.event_status == 1))
+            # Execute the query
+            get_row_count = criteria.count()
 
-            get_row_count=criteria.count()
             if get_row_count<1:
                 return {"status":1,"msg":"No Result found","events_count":0,"total_pages":1,"current_page_no":1,"events_list":[]}
             else:
                 default_page_size=10
-                total_pages,offset,limit=get_pagination(get_row_count,current_page_no,default_page_size)
+                limit,offset,total_pages=get_pagination(get_row_count,current_page_no,default_page_size)
                 criteria.limit(limit)
                 criteria.offset(offset)
                 criteria.order_by(Events.start_date_time.asc())
@@ -6344,11 +6366,12 @@ async def globalsearchnuggets(db:Session=Depends(deps.get_db),token:str=Form(Non
                 return {"status":0,"msg":"No Result found"}
             else:
                 default_page_size=10
-                total_pages,offset,limit=get_pagination(get_row_count,current_page_no,default_page_size)
+                limit,offset,total_pages=get_pagination(get_row_count,current_page_no,default_page_size)
                 criteria=criteria.limit(limit)
                 criteria=criteria.offset(offset)
                 get_result=criteria.all()
                 result_list=[]
+                
                 count=0
                 for nuggets in get_result:
                     attachments=[]

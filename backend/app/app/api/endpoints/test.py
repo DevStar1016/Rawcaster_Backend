@@ -15,7 +15,7 @@ from moviepy.video.io.VideoFileClip import VideoFileClip
 import boto3    
 import shutil
 from moviepy.editor import *
-
+import base64
 import os
 import subprocess
 router = APIRouter() 
@@ -27,23 +27,135 @@ access_secret="Os6IsUAOPbJybMYxAdqUAAUL58xCIUlaD08Tsgj2"
 
 
 
+
 @router.post("/chime")
 async def chime():
 
-    # Create a Chime client
-    chime = boto3.client('chime',aws_access_key_id='AKIAYFYE6EFYGNPCA32D',aws_secret_access_key='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') # Connect to AWS Chime
-    
-    # Create a Chime meeting
-    response = chime.create_meeting(
-        ClientRequestToken='sadasdasdadadasdaddasd',
-        MediaRegion='us-east-1'  # Specify the desired AWS region
-    )
-    return response
-    # Retrieve meeting details
-    meeting_id = response['Meeting']['MeetingId']
-    join_token = response['Meeting']['JoinToken']
+    import boto3
 
-    return meeting_id, join_token
+    chime = boto3.client('chime',aws_access_key_id=access_key,aws_secret_access_key=access_secret,region_name='us-east-1')  # Replace 'us-east-1' with your desired AWS region
+
+    response = chime.create_meeting(
+        ClientRequestToken='12',
+        MediaRegion='us-east-1',
+        MeetingHostId='123',
+        ExternalMeetingId='12',
+       
+        )
+
+    return response
+
+
+
+@router.post("/meeting_join_url")
+async def meeting_join_url():
+
+    import boto3
+
+
+    chime = boto3.client('chime',aws_access_key_id=access_key,aws_secret_access_key=access_secret, region_name='us-east-1')  # Replace 'us-east-1' with your desired AWS region
+    
+    meeting_url = "e6481e2b-1142-4a9b-9749-23e7df40bb35:34ff7a2b-b620-4bc5-a547-50da974663de"
+    # Extract the meeting ID and attendee details from the meeting URL
+    meeting_id = meeting_url.split('/')[-1]
+    attendee_id = meeting_url.split('=')[-1]
+
+    # Join the Chime meeting
+    response = chime.create_attendee(
+        MeetingId=meeting_id,
+        ExternalUserId=attendee_id,
+    )
+
+    # Extract the join token from the response
+    join_token = response['Attendee']['JoinToken']
+
+    # Return the join token
+    return join_token
+
+
+import subprocess
+import os
+
+@router.post("/video_upload")
+async def video_upload(file:UploadFile=File(None)):
+    file_name=file.filename
+    file_ext = os.path.splitext(file.filename)[1]
+    
+    with open(file_name, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    
+    segment_duration = 5 * 60
+
+    video = VideoFileClip(file_name)   # Video Split ( 5 Minutes)
+    duration = video.duration
+    splited_video_url=[]
+    total_duration = video.duration
+    
+    # if duration < 3000:
+    num_segments = math.ceil(total_duration / segment_duration)
+    for i in range(num_segments):
+    
+        start_time = i * segment_duration
+        end_time = min((i+1) * segment_duration, total_duration)
+        
+        segment = video.subclip(start_time, end_time)
+        
+        # Save the segment as a new file
+        
+        segment_filename = f"video_clip_{random.randint(1111,9999)}{int(datetime.datetime.now().timestamp())}.mp4"
+        segment.write_videofile(segment_filename, audio_codec="aac")
+        
+        splited_video_url.append(segment_filename)
+        
+        bucket_name='rawcaster'
+
+        access_key="AKIAYFYE6EFYGNPCA32D"
+        access_secret="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"
+        # try:
+        client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
+        s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
+        
+        with open(segment_filename, 'rb') as data:  # Upload File To S3
+            upload=client_s3.upload_fileobj(data, bucket_name, s3_file_path,ExtraArgs={'ACL': 'public-read'})
+        
+        os.remove(segment_filename)
+        
+        url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
+        url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{s3_file_path}'
+        if url:
+            add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,
+                                media_type=type,media_file_type=file_ext,file_size=file_size,path=url,
+                                created_date=datetime.datetime.utcnow(),status =1)
+            db.add(add_nugget_attachment)
+            db.commit()
+            db.refresh(add_nugget_attachment)
+            
+            # return {"status":1,"url":url}
+        else:
+            return "Failed to Upload"
+
+
+       
+
+       
+    
+
+    
+
+
+
+    # # Create a Chime meeting
+    # response = chime.create_meeting(
+    #     ClientRequestToken='sadasdasdadadasdaddasd',
+    #     MediaRegion='us-east-1'  # Specify the desired AWS region
+    # )
+    # return response
+    # # Retrieve meeting details
+    # meeting_id = response['Meeting']['MeetingId']
+    # join_token = response['Meeting']['JoinToken']
+
+    # return meeting_id, join_token
+ 
 
 
 @router.post("/send_test_mail")
