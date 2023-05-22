@@ -4,6 +4,7 @@ from app.core.security import *
 from app.utils import *
 from app.api import deps
 from sqlalchemy.orm import Session
+from sqlalchemy import extract
 from datetime import datetime,date
 from typing import List
 
@@ -144,12 +145,13 @@ async def add_claim_account(db:Session=Depends(deps.get_db),token:str=Form(None)
 
 # 86  List UnClaim Account
 @router.post("/listunclaimaccount")
-async def listunclaimaccount(db:Session=Depends(deps.get_db),token:str=Form(None)):
+async def listunclaimaccount(db:Session=Depends(deps.get_db),token:str=Form(None),location:str=Form(None),gender:str=Form(None),age:str=Form(None)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    
+    if gender and not gender.isnumeric():
+        return {"status":0,"msg":"Invalid Gender type"}
+        
     else:
-      
         access_token=checkToken(db,token)
         
         if access_token == False:
@@ -158,10 +160,21 @@ async def listunclaimaccount(db:Session=Depends(deps.get_db),token:str=Form(None
             get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
             login_user_id = get_token_details.user_id if get_token_details else None
             
-            get_unclaimed_account=db.query(User).join(UserStatusMaster,User.user_status_id == UserStatusMaster.id,isouter=True).filter(User.created_by == 1,UserStatusMaster.type == 2).all()
-            
-            
+            get_unclaimed_account=db.query(User).join(UserStatusMaster,User.user_status_id == UserStatusMaster.id,isouter=True).filter(User.created_by == 1,UserStatusMaster.type == 2)
+            if location:
+                get_unclaimed_account=get_unclaimed_account.filter(User.geo_location.ilike("%"+location+"%"))
+            if gender:
+                get_unclaimed_account=get_unclaimed_account.filter(User.geo_location == gender)
+            if age:
+                if not age.isnumeric():
+                    return {"status":0,"msg":"Invalid Age"}
+                else:
+                    current_year = datetime.utcnow().year
+                    get_unclaimed_account=get_unclaimed_account.filter(current_year - extract('year',User.dob) == age )
+                    
             unclaimed_accounts=[]
+            get_unclaimed_account=get_unclaimed_account.all()
+            
             for unclaim in get_unclaimed_account:
 
                 check_claim_account=db.query(ClaimAccounts).filter(ClaimAccounts.user_id == login_user_id,ClaimAccounts.influencer_id == unclaim.id).first()

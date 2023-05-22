@@ -296,7 +296,7 @@ def event_mail_template(content):
 
 def welcome_mail():
     
-    html_message='''<div style=" width:100%;">
+    html_message=f'''<div style=" width:100%;">
             <div style="width:100%; background:#fff; padding:0; max-width:700px; margin:auto; ">
 
 
@@ -308,7 +308,7 @@ def welcome_mail():
                             <div class="banner" style="padding:0px 5px 0; ">
                                 <a id="link" style="color:#000; text-decoration:none;" href="#">
                                     <img width="100%" class="deviceWidth"
-                                        src="<?php echo Url::to(Yii::getAlias('@web').'/web/images/welcomeImg.png',true); ?>"
+                                        src="https://rawcaster.s3.us-west-2.amazonaws.com/nuggets/video_47351684738486.png"
                                         alt="logo" border="0" /></a>
                             </div>
 
@@ -319,12 +319,12 @@ def welcome_mail():
                                         style="font-size:16px; color:#000; margin:10px 0px; font-family:Verdana, Geneva, Tahoma, sans-serif; text-align:left; line-height:25px;">
 
                                         <p style="margin:10px 0px;">
-                                            Use this <a href="<?php echo Utility::inviteBaseurl().'firststep'; ?>">
+                                            Use this <a href="{utils.inviteBaseurl()}firststep">
                                                 link</a>
                                             to read first steps to customize your profile :
                                         </p>
                                         <p style="margin:10px 0px;"><a
-                                                        href="<?php echo Utility::inviteBaseurl().'firststep'; ?>"><?php echo Utility::inviteBaseurl().'firststep'; ?></a>
+                                                        href="{utils.inviteBaseurl()}firststep">{utils.inviteBaseurl()}firststep</a>
                                                 </p>
 
                                         <p style="margin:10px 0px;"> You can also watch this <a
@@ -349,17 +349,7 @@ def welcome_mail():
     return html_message
 
 
-def invite_mail(content):
-    html_code='''<!doctype html>
-            <html xmlns="http://www.w3.org/1999/xhtml">
-
-            <head>
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-                <title>Rawcater-Newsletter</title>
-                <link href='http://fonts.googleapis.com/css?family=Pacifico' rel='stylesheet' type='text/css'>
-
-                <style type="text/css">
+invite_mail_style='''<style type="text/css">
                     body {
                         width: 100%;
                         margin: 0;
@@ -382,7 +372,18 @@ def invite_mail(content):
                             padding: 0;
                         }
                     }
-                </style>
+                </style>'''
+
+def invite_mail(invite_content):
+    html_code=f'''<!doctype html>
+            <html xmlns="http://www.w3.org/1999/xhtml">
+
+            <head>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+                <title>Rawcater-Newsletter</title>
+                <link href='http://fonts.googleapis.com/css?family=Pacifico' rel='stylesheet' type='text/css'>
+                {invite_mail_style}
             </head>
 
             <body leftmargin="0" topmargin="0" marginwidth="0" marginheight="0" yahoo="fix"
@@ -402,14 +403,14 @@ def invite_mail(content):
                                         <tr>
                                             <td>
                                                 <div
-                                                        style="text-align: center; padding: 40px 0px; background: url('<?php echo Url::to(Yii::getAlias('@web').'/web/images/background.jpg',true); ?>');
+                                                        style="text-align: center; padding: 40px 0px; background: url('https://rawcaster.s3.us-west-2.amazonaws.com/nuggets/video_47651684737724.jpg');
                                                         background-size: cover;">
                                                     <div>
-                                                        <img src="<?php echo Url::to(Yii::getAlias('@web').'/web/images/logo-white.png',true); ?>" alt="logo"
+                                                        <img src="https://rawcaster.s3.us-west-2.amazonaws.com/nuggets/video_84071684737613.png" alt="logo"
                                                             style="max-width: 230px; margin:0 auto 10px auto;">
                                                         <p align="center"
                                                         style="color: #fff; text-align: center; max-width: 740px; font-size: 16px;  line-height: 25px;padding: 0 15px; font-weight:300; margin: auto;">
-                                                            Hi, I have joined Rawcaster. A one-stop platform for all social media needs. I am asking all my friends and special people to join this platform to make it easier to reach everyone with content, personalized messages, Nuggets, and invitations to participate in my special events. I expect to see you there soon. <a href={content} style="text-transform: uppercase; text-decoration: underline; font-size: 19px; color: #fff; font-weight:500;">Try it free</a></p>
+                                                            Hi, I have joined Rawcaster. A one-stop platform for all social media needs. I am asking all my friends and special people to join this platform to make it easier to reach everyone with content, personalized messages, Nuggets, and invitations to participate in my special events. I expect to see you there soon. <a href={invite_content} style="text-transform: uppercase; text-decoration: underline; font-size: 19px; color: #fff; font-weight:500;">Try it free</a></p>
                                                     </div>
                                                 </div>
                                             </td>
@@ -424,7 +425,7 @@ def invite_mail(content):
 
                             <tr align="center">
                                 <td align="left" style="padding:0 25px;">
-                                    <div style="border: 1px solid #E8EAEE; border-radius: 22px; width: 100%; float: left; position: relative;  margin: 40px 0 0 0; background: url('<?php echo Url::to(Yii::getAlias('@web').'/web/images/style-bg.png',true); ?>'); background-repeat: no-repeat;
+                                    <div style="border: 1px solid #E8EAEE; border-radius: 22px; width: 100%; float: left; position: relative;  margin: 40px 0 0 0; background: url('https://rawcaster.s3.us-west-2.amazonaws.com/nuggets/video_64721684737786.png'); background-repeat: no-repeat;
                                         background-position: right top;background-size: 40px;">
 
                                         <table width="100%" border="0" cellpadding="0" cellspacing="0" align="center"
@@ -438,7 +439,7 @@ def invite_mail(content):
                                                         <tr>
                                                             <td align="left" style="line-height: 0;">
                                                                 <a href="#">
-                                                                    <img src="<?php echo Url::to(Yii::getAlias('@web').'/web/images/bg-1.png',true); ?>" width="100%" border="0"
+                                                                    <img src="https://rawcaster.s3.us-west-2.amazonaws.com/nuggets/video_89491684737931.png" width="100%" border="0"
                                                                         class="deviceWidth" />
                                                                 </a>
                                                             </td>
@@ -498,7 +499,7 @@ def invite_mail(content):
                             <tr>
                                 <td align="left" style="padding:0 25px;">
                                     <div style="border: 1px solid #E8EAEE; border-radius: 22px; width: 100%; float: left; position: relative;   margin: 40px 0 0 0;
-                                        background: url('<?php echo Url::to(Yii::getAlias('@web').'/web/images/style-bg.png',true); ?>');
+                                        background: url('https://rawcaster.s3.us-west-2.amazonaws.com/nuggets/video_64721684737786.png');
                                         background-repeat: no-repeat;
                                         background-position: left top;background-size: 40px;">
 
@@ -512,7 +513,7 @@ def invite_mail(content):
                                                         <tr>
                                                             <td align="left" style="line-height: 0;">
                                                                 <a href="#">
-                                                                    <img src="<?php echo Url::to(Yii::getAlias('@web').'/web/images/bg-2.png',true); ?>" width="100%" border="0"
+                                                                    <img src="https://rawcaster.s3.us-west-2.amazonaws.com/nuggets/video_63251684738098.png" width="100%" border="0"
                                                                         class="deviceWidth" />
                                                                 </a>
                                                             </td>
@@ -563,7 +564,7 @@ def invite_mail(content):
                             </tr>
                             <tr>
                                 <td align="left" style="padding:0 25px;">
-                                    <div style="border: 1px solid #E8EAEE; border-radius: 22px; width: 100%; float: left; position: relative;  margin: 40px 0 0 0; background: url('<?php echo Url::to(Yii::getAlias('@web').'/web/images/style-bg.png',true); ?>'); background-repeat: no-repeat;background-repeat: no-repeat;
+                                    <div style="border: 1px solid #E8EAEE; border-radius: 22px; width: 100%; float: left; position: relative;  margin: 40px 0 0 0; background: url('https://rawcaster.s3.us-west-2.amazonaws.com/nuggets/video_64721684737786.png'); background-repeat: no-repeat;background-repeat: no-repeat;
                                         background-position: right top;background-size: 40px;">
 
                                         <table width="100%" border="0" cellpadding="0" cellspacing="0" align="center"
@@ -577,7 +578,7 @@ def invite_mail(content):
                                                         <tr>
                                                             <td align="left" style="line-height: 0;">
                                                                 <a href="#">
-                                                                    <img src="<?php echo Url::to(Yii::getAlias('@web').'/web/images/bg-3.png',true); ?>" width="100%" border="0"
+                                                                    <img src="https://rawcaster.s3.us-west-2.amazonaws.com/nuggets/video_77291684738252.png" width="100%" border="0"
                                                                         class="deviceWidth" />
                                                                 </a>
                                                             </td>
@@ -644,7 +645,7 @@ def invite_mail(content):
                             </tr>
                             <tr>
                                 <td align="left" style="padding:0 25px;">
-                                    <div style="border: 1px solid #E8EAEE; border-radius: 22px; width: 100%; float: left; position: relative;  margin: 40px 0 0 0; background: url('<?php echo Url::to(Yii::getAlias('@web').'/web/images/style-bg.png',true); ?>'); background-repeat: no-repeat;background-repeat: no-repeat;
+                                    <div style="border: 1px solid #E8EAEE; border-radius: 22px; width: 100%; float: left; position: relative;  margin: 40px 0 0 0; background: url('https://rawcaster.s3.us-west-2.amazonaws.com/nuggets/video_64721684737786.png'); background-repeat: no-repeat;background-repeat: no-repeat;
                                         background-position: left top;background-size: 40px;">
 
                                         <table width="100%" border="0" cellpadding="0" cellspacing="0" align="center"
@@ -658,7 +659,7 @@ def invite_mail(content):
                                                         <tr>
                                                             <td align="left" style="line-height: 0;">
                                                                 <a href="#">
-                                                                    <img src="<?php echo Url::to(Yii::getAlias('@web').'/web/images/bg-4.png',true); ?>" width="100%" border="0"
+                                                                    <img src="https://rawcaster.s3.us-west-2.amazonaws.com/nuggets/video_45881684738343.png" width="100%" border="0"
                                                                         class="deviceWidth" />
                                                                 </a>
                                                             </td>
@@ -719,7 +720,7 @@ def invite_mail(content):
                             </tr>
                             <tr>
                                 <td align="left" style="padding:0 25px;">
-                                    <div style="border: 1px solid #E8EAEE; border-radius: 22px; width: 100%; float: left; position: relative;  margin: 40px 0; background: url('<?php echo Url::to(Yii::getAlias('@web').'/web/images/style-bg.png',true); ?>'); background-repeat: no-repeat;background-repeat: no-repeat;
+                                    <div style="border: 1px solid #E8EAEE; border-radius: 22px; width: 100%; float: left; position: relative;  margin: 40px 0; background: url('https://rawcaster.s3.us-west-2.amazonaws.com/nuggets/video_64721684737786.png'); background-repeat: no-repeat;background-repeat: no-repeat;
                                         background-position: right top;background-size: 40px;">
 
                                         <table width="100%" border="0" cellpadding="0" cellspacing="0" align="center"
@@ -733,7 +734,7 @@ def invite_mail(content):
                                                         <tr>
                                                             <td align="left" style="line-height: 0;">
                                                                 <a href="#">
-                                                                    <img src="<?php echo Url::to(Yii::getAlias('@web').'/web/images/bg-5.png',true); ?>" width="100%" border="0"
+                                                                    <img src="https://rawcaster.s3.us-west-2.amazonaws.com/nuggets/video_60581684738435.png" width="100%" border="0"
                                                                         class="deviceWidth" />
                                                                 </a>
                                                             </td>
@@ -787,14 +788,13 @@ def invite_mail(content):
                             <tr>
                                 <td>
                                     <center style="width: 100%; float: left;">
-                                        <a href="<?php echo $join_link; ?>"
-                                                style="background: #E26386;border-radius: 12px; padding:21px 23px; color: #fff; font-size: 18px;  border: none; display: block; max-width: 200px; text-decoration: none;">Get
-                                            Started for Free</a> </center>
+                                        <a href={invite_content} style="background: #E26386;border-radius: 12px; padding:21px 23px; color: #fff; font-size: 18px;  border: none; display: block; max-width: 200px; text-decoration: none;">Get Started for Free </a> 
+                                    </center>
                                     <p
-                                            style="font-size: 16px;margin: 30px auto; text-align: center; opacity: 0.6; color: #1D1C1C; line-height: 22px; width: 100%; float: left;">
-                                        If you’d rather not receive future emails of this sort from Rawcaster, <br>
-                                        please let us know by email at <a style="color: #000; font-weight: 500;" href="mailto:info@rawcaster.com">info@rawcaster.com</a> <br>
-                                        @2021 Rawcaster.com LLC</p>
+                                        style="font-size: 16px;margin: 30px auto; text-align: center; opacity: 0.6; color: #1D1C1C; line-height: 22px; width: 100%; float: left;">
+                                    If you’d rather not receive future emails of this sort from Rawcaster, <br>
+                                    please let us know by email at <a style="color: #000; font-weight: 500;" href="mailto:info@rawcaster.com">info@rawcaster.com</a> <br>
+                                    @2021 Rawcaster.com LLC</p>
                                 </td>
                             </tr>
                         </table>

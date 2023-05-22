@@ -26,8 +26,6 @@ access_secret="Os6IsUAOPbJybMYxAdqUAAUL58xCIUlaD08Tsgj2"
 
 
 
-
-
 @router.post("/chime")
 async def chime():
 

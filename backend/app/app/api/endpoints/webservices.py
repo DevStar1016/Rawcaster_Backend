@@ -28,7 +28,7 @@ access_secret="2xf3IXK0x9s5KX4da01OM5Lhl+vV17ttloRMeXVk"
     
 # 1 Signup User
 @router.post("/signup")
-async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(defaul=1,description="1-Email,2-Phone Number"),first_name:str=Form(None,max_length=100),
+async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(1,description="1-Email,2-Phone Number"),first_name:str=Form(None,max_length=100),
                     last_name:str=Form(None,max_length=100),display_name:str=Form(None,max_length=100),gender:str=Form(None,description="1-male,2-female"),
                     dob:Any=Form(None),email_id:str=Form(None,max_length=100,description="email or mobile number"),country_code:str=Form(None),country_id:str=Form(None),
                     mobile_no:str=Form(None),password:str=Form(None),geo_location:str=Form(None),
@@ -203,8 +203,9 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(defaul=1,d
                     referred_id=0
                     # Add Friend Automatically From Referral
                     
-                    if ref_id != None:
-                        friend_ref_code=base64.b64decode(ref_id)
+                    if ref_id:
+                        friend_ref_code=base64.b64decode(ref_id).decode()
+                        print(friend_ref_code)
                         referrer_ref_id=friend_ref_code.split('//')
                         if len(referrer_ref_id) == 2:
                             referred_user=db.query(User).filter(User.user_ref_id == referrer_ref_id[0],User.status == 1).first()
@@ -1285,18 +1286,20 @@ async def invitetorawcaster(db:Session=Depends(deps.get_db),token:str=Form(None)
                                 failed += 1
                             
                             else:
-                                
-                                # Invites Sents Only for New User (Not a Rawcaster)
+                                # Invites Sents to Only for New User (Not a Rawcaster)
                                 get_user=db.query(User).filter(User.id == login_user_id).first()
                                 
-                                token_text = base64.b64encode(f"{get_user.user_ref_id}//{datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}".encode()).decode()
+                                token_text = base64.b64encode(f"{get_user.user_ref_id}//{datetime.datetime.utcnow()}".encode()).decode()
                                 invite_link=inviteBaseurl()
                                 join_link=f"{invite_link}signup?ref={token_text}&mail={mail}"
-                
-                                subject=f"Rawcaster - Invite from '.{login_user_name}"
+                                
+                                subject=f"Rawcaster - Invite from {login_user_name}"
                                 body=invite_mail(join_link)
                                 email_detail={"email":mail,"subject":subject,"mail_message":body,"sms_message":""}
                                 user=[]
+                                # Send Mail (before remove the production)
+                                send_mail=await send_email(db,mail,subject,body)
+                                
                                 add_notification_email=addNotificationSmsEmail(db,user,email_detail,login_user_id)
                                 success += success
                     
@@ -2012,9 +2015,11 @@ async def editfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),g
                                 return result
                     
                     if group_members:
+                        group_members = ast.literal_eval(group_members) if group_members else None
+                        
                         for member in group_members:
                             if member == get_group.created_by:
-                                pass
+                                continue
                             get_user=db.query(User).filter(User.id == member).first()
                             
                             if get_user:
@@ -7084,13 +7089,13 @@ async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),use
     
 # 72. Add nuggets view count
 @router.post("/addnuggetview")
-async def addnuggetview(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:str=Form(None)):
+async def addnuggetview(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:str=Form(None,description="[1,2,3]")):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    if nugget_id == None:
+    if not nugget_id:
         return {"status":0,"msg":"Nugget id is missing"}
-    elif not nugget_id.isnumeric():
-        return {"status":0,"msg":"Invalid Nugget id type"}
+    # elif not nugget_id.isnumeric():
+    #     return {"status":0,"msg":"Invalid Nugget id type"}
         
     else:
         access_token=checkToken(db,token)
@@ -7101,23 +7106,26 @@ async def addnuggetview(db:Session=Depends(deps.get_db),token:str=Form(None),nug
             get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).all()
             for res in get_token_details:
                 login_user_id=res.user_id
+            
+            
+            nugget_ids = ast.literal_eval(nugget_id) if nugget_id else None
+            for nugget_id in nugget_ids:
+                nugget_id=int(nugget_id) if int(nugget_id) > 0 else ""
                 
-            nugget_id=int(nugget_id) if int(nugget_id) > 0 else ""
-            
-            access_check=NuggetAccessCheck(db,login_user_id,nugget_id)
-            if not access_check:
-                return {"status":0,"msg":"Unauthorized access"}
-            
-            model = NuggetView(user_id=login_user_id,nugget_id = nugget_id,created_date = datetime.datetime.utcnow())
-            db.add(model)
-            db.commit()
-            nuggets=db.query(Nuggets).filter(Nuggets.id==nugget_id).first()
-            if nuggets:
-                nuggets.total_view_count=nuggets.total_view_count + 1
+                access_check=NuggetAccessCheck(db,login_user_id,nugget_id)
+                if not access_check:
+                    return {"status":0,"msg":"Unauthorized access"}
+                
+                model = NuggetView(user_id=login_user_id,nugget_id = nugget_id,created_date = datetime.datetime.utcnow())
+                db.add(model)
                 db.commit()
-                return {"status":1,"msg":"Success"}
-            else:
-                return {"status":0,"msg":"Invalid nugget "}
+                nuggets=db.query(Nuggets).filter(Nuggets.id==nugget_id).first()
+                if nuggets:
+                    nuggets.total_view_count=nuggets.total_view_count + 1
+                    db.commit()
+                    return {"status":1,"msg":"Success"}
+                else:
+                    return {"status":0,"msg":"Invalid nugget"}
                 
 
 
@@ -8294,62 +8302,60 @@ async def saveandunsavenugget(db:Session=Depends(deps.get_db),token:str=Form(Non
         return {"status":0,"msg":"Save flag is invalid"}
     
     else:
-            
-        if checkAuthCode(db,token) == False:
-            return {"status":0,"msg":"Authentication failed!"}
+        save=int(save) if save else None
+      
+        access_token=checkToken(db,token)
+        
+        if access_token == False:
+            return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
-            access_token=checkToken(db,token)
+            get_token_details=db.query(ApiTokens).filter_by(token = access_token).first()
             
-            if access_token == False:
-                return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-            else:
-                get_token_details=db.query(ApiTokens).filter_by(token = access_token).first()
-                
-                login_user_id=get_token_details.user_id
-                if IsAccountVerified(db,login_user_id) == False:
-                    return {"status":0,"msg":"You need to complete your account validation before you can do this"}
-                
-                access_check=NuggetAccessCheck(db,login_user_id,nugget_id)
-                
-                if access_check:
-                    return {"status":0,"msg":"Unauthorized access"}
+            login_user_id=get_token_details.user_id
+            if IsAccountVerified(db,login_user_id) == False:
+                return {"status":0,"msg":"You need to complete your account validation before you can do this"}
             
-                check_nuggets=db.query(Nuggets).filter(Nuggets.id == nugget_id ).first()
-                if check_nuggets:
-                    if save == 1:  # Save
-                        checkprevioussave=db.query(NuggetsSave).filter(NuggetsSave.nugget_id == nugget_id,NuggetsSave.user_id == login_user_id).first()
-                        if not checkprevioussave:
-                            nuggetsave=NuggetsSave(user_id=login_user_id,nugget_id=nugget_id,created_date=datetime.datetime.utcnow())
-                            db.add(nuggetsave)
-                            db.commit()
-                            
-                            if nuggetsave:
-                                ref_id=5
-                                Insertnotification(db,check_nuggets.user_id,login_user_id,ref_id,nugget_id)
-                                return {"status":1,"msg":"Success"}
-                            else:
-                                return {"status":1,"msg":"failed to save"}
-                        else:
-                            return {"status":1,"msg":"Your already saved this nugget"}
-                                 
-                    elif save == 2:  # Unsave
-                        checkprevioussave=db.query(NuggetsSave).filter(NuggetsSave.nugget_id == nugget_id,NuggetsSave.user_id == login_user_id).first()
+            access_check=NuggetAccessCheck(db,login_user_id,nugget_id)
+            
+            if access_check == False:
+                return {"status":0,"msg":"Unauthorized access"}
+        
+            check_nuggets=db.query(Nuggets).filter(Nuggets.id == nugget_id ).first()
+            if check_nuggets:
+                if save == 1:  # Save
+                    checkprevioussave=db.query(NuggetsSave).filter(NuggetsSave.nugget_id == nugget_id,NuggetsSave.user_id == login_user_id).first()
+                    if not checkprevioussave:
+                        nuggetsave=NuggetsSave(user_id=login_user_id,nugget_id=nugget_id,created_date=datetime.datetime.utcnow())
+                        db.add(nuggetsave)
+                        db.commit()
                         
-                        if checkprevioussave:
-                            deleteresult=db.query(NuggetsSave).filter(NuggetsSave.id == checkprevioussave.id).delete()
-                            db.commit()
-
-                            if deleteresult:
-                                return {"status":1,"msg":"Success"}
-
-                            else:
-                                return {"status":0,"msg":"failed to unsave"}
-                                
+                        if nuggetsave:
+                            ref_id=5
+                            Insertnotification(db,check_nuggets.user_id,login_user_id,ref_id,nugget_id)
+                            return {"status":1,"msg":"Success"}
                         else:
-                            return {"status":0,"msg":"you not yet saved this nugget"}
-                                 
-                else:
-                    return {"status":0,"msg":"Invalid nugget"}
+                            return {"status":1,"msg":"failed to save"}
+                    else:
+                        return {"status":1,"msg":"Your already saved this nugget"}
+                                
+                elif save == 2:  # Unsave
+                    checkprevioussave=db.query(NuggetsSave).filter(NuggetsSave.nugget_id == nugget_id,NuggetsSave.user_id == login_user_id).first()
+                    
+                    if checkprevioussave:
+                        deleteresult=db.query(NuggetsSave).filter(NuggetsSave.id == checkprevioussave.id).delete()
+                        db.commit()
+
+                        if deleteresult:
+                            return {"status":1,"msg":"Success"}
+
+                        else:
+                            return {"status":0,"msg":"failed to unsave"}
+                            
+                    else:
+                        return {"status":0,"msg":"you not yet saved this nugget"}
+                                
+            else:
+                return {"status":0,"msg":"Invalid nugget"}
                                   
                             
 # 88 Exit from group

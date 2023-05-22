@@ -399,8 +399,7 @@ def addNotificationSmsEmail(db,user,email_detail,login_user_id):
     mobile_nos = ""
     if user:
         
-        get_user =db.query(User.id,User.country_code,User.email_id,User.mobile_no,UserSettings.nuggets,UserSettings.events,UserSettings.friend_request)
-        get_user=get_user.filter(UserSettings.user_id == User.id,User.status == 1,User.id.in_(user)).all()
+        get_user =db.query(User.id,User.country_code,User.email_id,User.mobile_no,UserSettings.nuggets,UserSettings.events,UserSettings.friend_request).filter(UserSettings.user_id == User.id,User.status == 1,User.id.in_(user)).all()
         
         for user in get_user:
             permission_arr = list(user[type])
@@ -850,7 +849,8 @@ def CheckMobileNumber(db,mobile_no,geo_location):
 
 
 def inviteBaseurl():
-    return 'https://rawcaster.com/'
+    return 'https://dev.rawcaster.com/'
+    # return 'https://rawcaster.com/'
 
 
 def OTPverificationtype(db,get_user):
@@ -1682,7 +1682,7 @@ def ChangeReferralExpiryDate(db,referrerid):
         if referrer.user_status_id == 1:
             user_status=db.query(UserStatusMaster).filter(UserStatusMaster.id == 3).first()
             if user_status:
-                total_referral_point=int(referrer.total_referral_point)+ 1
+                total_referral_point= int(referrer.total_referral_point)+ 1
                 if user_status.referral_needed <= total_referral_point:
                     expiry_date=datetime.datetime.utcnow()
                     if referrer.referral_expiry_date != None:
@@ -1693,7 +1693,7 @@ def ChangeReferralExpiryDate(db,referrerid):
                     user_status_id=3
             
         else:
-            total_referral_point=referrer+total_referral_point + 1
+            total_referral_point=referrer.total_referral_point + 1
         
         update_user=db.query(User).filter(User.id == referrer.id).update({"user_status_id":user_status_id,"referral_expiry_date":expiry_date,"total_referral_point":total_referral_point})
         db.commit()
