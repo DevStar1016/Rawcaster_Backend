@@ -57,4 +57,5 @@ from .nuggets_likes import NuggetsLikes
 from .event_abuse_report import EventAbuseReport
 from .claim_accounts import ClaimAccounts
 from .influencer_chat import InfluencerChat
+from .verify_accounts import VerifyAccounts
 

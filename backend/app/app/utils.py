@@ -1,4 +1,4 @@
-from sqlalchemy import or_,and_,func
+from sqlalchemy import or_,and_
 import math
 from app.core.config import settings as st
 from datetime import datetime,timedelta
@@ -6,7 +6,6 @@ import datetime
 from app.models import *
 import random,string
 import hashlib
-from email_validator import EmailNotValidError
 import re
 import math
 import requests
@@ -15,18 +14,20 @@ from dateutil.relativedelta import relativedelta
 from jose import jwt
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 import base64
-from operator import itemgetter
-from urllib.parse import urlparse, urlunparse
 from PIL import Image
 import os,boto3
 import sys
 from PIL import Image
 import time
-from dateutil.parser import parse
 import subprocess
 from mail_templates.mail_template import *
-import shutil
 from cryptography.fernet import Fernet
+from app.core import config
+
+
+access_key=config.access_key
+access_secret=config.access_secret
+bucket_name=config.bucket_name
 
 def is_date(string, fuzzy=False):
 
@@ -143,9 +144,7 @@ async def audio_file_upload(upload_file,compress):
 
 
 def upload_to_s3(local_file_pth,s3_bucket_path):
-    bucket_name='rawcaster'
-    access_key="AKIAYFYE6EFYGNPCA32D"
-    access_secret="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"
+   
     try:
         client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
         
@@ -408,12 +407,12 @@ def addNotificationSmsEmail(db,user,email_detail,login_user_id):
             
             elif len(permission_arr) > 2 and permission_arr[2] == "1" and user["mobile_no"]:
                 mobile_nos += user["country_code"] + str(user["mobile_no"]) + ","
-
+    # Type 1- Phone number 2- Email
     if email:
         
         add_notification = NotificationSmsEmail(
             user_id=login_user_id,
-            type=2,
+            type=2, 
             mobile_no_email_id=email,
             subject=subject,
             message=mail_message,
@@ -715,13 +714,10 @@ def NuggetAccessCheck(db,login_user_id,nugget_id):
     request_status=3
     response_type=1
     
-    
     get_all_blocked_users=get_friend_requests(db,login_user_id,requested_by,request_status,response_type)
-    
-        
+      
     blocked_users=get_all_blocked_users['blocked']
-    
-
+   
     if blocked_users:
         criteria = criteria.filter(Nuggets.user_id.notin_(blocked_users))
    
