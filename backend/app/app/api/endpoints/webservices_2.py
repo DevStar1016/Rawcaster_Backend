@@ -90,6 +90,76 @@ async def add_event_abuse_report(db:Session=Depends(deps.get_db),token:str=Form(
                 
 
 
+# Testing
+@router.post("/testaddeventabusereport")
+async def testaddeventabusereport(db:Session=Depends(deps.get_db),token:str=Form(None),event_id:str=Form(None),message:str=Form(None),attachment:UploadFile=File(None)):
+    if token == None or token.strip() == "":
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    
+    elif event_id == None or not event_id.isnumeric():
+        return {"status":0,"msg":"Event id is missing"}
+   
+    elif message == None:
+        return {"status":0,"msg":"Message Cant be Blank"}
+    
+    else:
+      
+        access_token=checkToken(db,token)
+        
+        if access_token == False:
+            return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+        else:
+            event_id=int(event_id)
+            get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+            login_user_id = get_token_details.user_id if get_token_details else None
+            
+            # Add Abuse Report
+            check_event=db.query(Events).filter(Events.id == event_id,Events.status == 1).first()
+            
+            if check_event:
+                add_abuse_report=EventAbuseReport(event_id=event_id,user_id=login_user_id,message=message,created_at=datetime.utcnow(),status = 0)
+                db.add(add_abuse_report)
+                db.commit()
+                db.refresh(add_abuse_report)
+                
+                if attachment:
+                    file_name=attachment.filename
+                    # file_temp=attachment.content_type
+                    # file_size=len(await attachment.read())
+                    file_ext = os.path.splitext(attachment.filename)[1]   
+                    file_extensions=['.jpg','.png','.jpeg']
+                                   
+                    if file_ext in file_extensions:
+                        try:
+                            s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.utcnow().timestamp())}{file_ext}"
+                            uploaded_file_path=file_upload(attachment,compress=None)
+                            
+                            result=upload_to_s3(uploaded_file_path,s3_path)
+                            # Upload to S3
+                            if result['status'] == 1:
+                                add_abuse_report.attachment = result['url']
+                                add_abuse_report.status = 1
+                                
+                                db.commit()
+                                return {"status":1,"msg":"Success"}
+                            else:
+                                return result
+                        except:
+                            return {"status":0,"msg":"Unable to Upload File"}
+                            
+                    else:
+                        return {"status":0,"msg":"Accepted only jpg,png,jpeg"}
+                
+                # Update Event Absue Report
+                
+                add_abuse_report.status = 1
+                db.commit()
+                return {"status":1,"msg":"Success"}
+            else:
+                return {"status":0,"msg":"Invalid Event ID"}
+                
+
+
 # CRON
 @router.post("/croninfluencemember")
 async def croninfluencemember(db:Session=Depends(deps.get_db),user_id:int=Form(None)):
@@ -147,7 +217,7 @@ async def add_claim_account(db:Session=Depends(deps.get_db),token:str=Form(None)
                                         telephone=telephone,email_id=email_id,claim_date=datetime.utcnow(),created_at=datetime.utcnow(),status=1,admin_status=0)
                 db.add(add_clain)
                 db.commit()
-                return {"status":1,"msg":"You have placed a claim on a predefined influencer profile; We will contact you to validate your claim. Please contact us at info@rawcaster.com if you have any questions."}
+                return {"status":1,"msg":"You have placed a claim on a predefined influencer profile, We will contact you to validate your claim. Please contact us at info@rawcaster.com if you have any questions."}
             else:
                 return {"status":0,"msg":"Already sent"}
     
@@ -295,8 +365,8 @@ async def influencerchat(db:Session=Depends(deps.get_db),token:str=Form(None),ty
 
 
 # 88  Verify Accounts Only Diamond Members
-@router.post("/addverifyaccounts")
-async def add_verify_accounts(db:Session=Depends(deps.get_db),token:str=Form(None),first_name:str=Form(None),
+@router.post("/verifyaccount")
+async def add_verify_account(db:Session=Depends(deps.get_db),token:str=Form(None),first_name:str=Form(None),
                             last_name:str=Form(None),telephone:str=Form(None),email_id:str=Form(None),dob:str=Form(None),location:str=Form(None),
                             ):
     if token == None or token.strip() == "":
@@ -327,7 +397,7 @@ async def add_verify_accounts(db:Session=Depends(deps.get_db),token:str=Form(Non
             if not get_accounts:
                 
                 add_clain=VerifyAccounts(user_id=login_user_id,first_name=first_name.strip(),dob=dob,last_name=last_name,location=location,
-                                        telephone=telephone,email_id=email_id,verify_date=datetime.utcnow(),created_at=datetime.utcnow(),status=1,admin_status=0)
+                                        telephone=telephone,email_id=email_id,verify_date=datetime.utcnow(),created_at=datetime.utcnow(),status=1,verify_status=0)
                 db.add(add_clain)
                 db.commit()
                 return {"status":1,"msg":"We will contact you to validate your account verify. Please contact us at info@rawcaster.com if you have any questions."}

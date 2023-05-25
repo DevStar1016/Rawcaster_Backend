@@ -1,4 +1,4 @@
-from fastapi import APIRouter,Depends,Form,File,UploadFile
+from fastapi import APIRouter,Depends,Form,File,UploadFile,BackgroundTasks
 from app.models import *
 from app.core import config
 from app.core.security import *
@@ -1109,7 +1109,7 @@ async def updatemyprofile(db:Session=Depends(deps.get_db),token:str=Form(None),n
                             return {"status":0,"msg":"Profile Image format does not support"}                        
                         
                         # Upload File to Server
-                        uploaded_file_path=file_upload(readed_file,file_ext,compress=None)
+                        uploaded_file_path= await read_file_upload(readed_file,file_ext,compress=None)
                         s3_file_path=f"profileimage/Image_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                         
                         result=upload_to_s3(uploaded_file_path,s3_file_path)
@@ -1132,7 +1132,7 @@ async def updatemyprofile(db:Session=Depends(deps.get_db),token:str=Form(None),n
                             return {"status":0,"msg":'Profile Image format does not support'}                        
                         
                         # Upload File to Server
-                        output_dir=file_upload(read_file,file_ext,compress=None)
+                        output_dir=await read_file_upload(read_file,file_ext,compress=None)
 
                         s3_file_path=f"coverimage/coverimage_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}"  
                         
@@ -1909,7 +1909,7 @@ async def addfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),gr
                         
                         s3_file_path=f'groupicon/groupicon_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}'
                         if file_size > 400 :
-                            uploaded_file_path=file_upload(read_file,file_ext,compress=1)
+                            uploaded_file_path=await read_file_upload(read_file,file_ext,compress=1)
 
                             result=upload_to_s3(uploaded_file_path,s3_file_path)
                             if result['status'] == 1:
@@ -1919,7 +1919,7 @@ async def addfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),gr
                             else:
                                 return result
                         else:
-                            uploaded_file_path=file_upload(read_file,file_ext,compress=None)
+                            uploaded_file_path=await read_file_upload(read_file,file_ext,compress=None)
                             if result['status'] == 1:
                                 add_friend_group.group_icon = result['url']
                                 db.commit()
@@ -2002,7 +2002,7 @@ async def editfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),g
                         
                         s3_file_path=f'groupicon/groupicon_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}'
                         if file_size > 400 :
-                            uploaded_file_path=file_upload(file_read,file_ext,compress=1)
+                            uploaded_file_path=await read_file_upload(file_read,file_ext,compress=1)
 
                             result=upload_to_s3(uploaded_file_path,s3_file_path)
                             if result['status'] == 1:
@@ -2013,7 +2013,7 @@ async def editfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),g
                             else:
                                 return result
                         else:
-                            uploaded_file_path=file_upload(file_read,file_ext,compress=None)
+                            uploaded_file_path=await read_file_upload(file_read,file_ext,compress=None)
                             if result['status'] == 1:
                                 get_group.group_icon = result['url']
                                 db.commit()
@@ -2215,11 +2215,152 @@ async def deletefriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None)
 # 5 -> Both Group & Individual
 # 6 -> All My Friends
 # 7-> Only fans
+from celery import Celery
+import asyncio
+import os
+celery_app = Celery("tasks", broker="redis://localhost:8000")
+
+@celery_app.task
+def process_data(db,uploaded_file_path,login_user_id,master_id,share_type,share_with):
+    
+    segment_duration = 5 * 60
+    video = VideoFileClip(uploaded_file_path)   # Video Split ( 5 Minutes)
+    duration = video.duration
+    splited_video_url=[]
+    total_duration = video.duration
+    
+    # if duration < 3000:
+    num_segments = math.ceil(total_duration / segment_duration)
+    for i in range(num_segments):
+    
+        start_time = i * segment_duration
+        end_time = min((i+1) * segment_duration, total_duration)
+        
+        segment = video.subclip(start_time, end_time)
+        
+        # Save the segment as a new file
+        
+        segment_filename = f"video_clip_{random.randint(1111,9999)}{int(datetime.datetime.now().timestamp())}.mp4"
+        segment.write_videofile(segment_filename, audio_codec="aac")
+        
+        splited_video_url.append(segment_filename)
+        
+
+        # try:
+        client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
+        s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
+        
+        with open(segment_filename, 'rb') as data:  # Upload File To S3
+            upload=client_s3.upload_fileobj(data, bucket_name, s3_file_path,ExtraArgs={'ACL': 'public-read'})
+        
+        file_stat = os.stat(segment_filename)
+        file_size=file_stat.st_size
+    
+        os.remove(segment_filename)
+        
+        url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
+        url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{s3_file_path}'
+        if url:
+            add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=master_id,
+                                media_type='video',media_file_type='mp4',file_size=file_size,path=url,
+                                created_date=datetime.datetime.utcnow(),status =1)
+            db.add(add_nugget_attachment)
+            db.commit()
+            db.refresh(add_nugget_attachment)
+            
+        else:
+            return {"status":0,"msg":"Failed to Upload"}
+                
+    add_nuggets=Nuggets(nuggets_id=master_id,user_id=login_user_id,type=1,share_type=share_type,created_date=datetime.datetime.utcnow())
+    db.add(add_nuggets)
+    db.commit()
+    db.refresh(add_nuggets)
+    
+    if add_nuggets:
+        
+        nuggets=StoreHashTags(db,add_nuggets.id)
+        
+        totalmembers=[]
+        
+        if share_type == 6 or share_type == 1:
+            requested_by=None
+            request_status=1
+            response_type=1
+            search_key=None
+            get_member=get_friend_requests(db,login_user_id,requested_by,request_status,response_type)
+
+            totalmembers=totalmembers+get_member['accepted']
+        
+        if share_type == 7:
+            get_members=getFollowers(db,login_user_id)
+
+        # If share type is Group or Individual
+        if share_type == 3 or share_type == 4 or share_type == 5:
+            if share_type == 4:
+                share_with['groups'] =''
+            if share_type == 3:
+                share_with['friends'] =''
+            
+            if share_with:
+                
+                for key,val in share_with.items():
+                    if val:
+                        for shareid in val:
+                            type= 2 if key == 'friends' else 1
+                            add_NuggetsShareWith=NuggetsShareWith(nuggets_id=add_nuggets.id,type =type,share_with=shareid)
+                            db.add(add_NuggetsShareWith)
+                            db.commit()
+                            
+                            if add_NuggetsShareWith:
+                                if key == 'friends':
+                                    totalmembers.append(shareid)
+                                else:
+                                    getgroupmember=db.query(FriendGroupMembers).filter_by(group_id =shareid).all()
+                                    
+                                    for member in getgroupmember:
+                                        if member.user_id not in totalmembers:
+                                            totalmembers.append(member.user_id)
+                                
+        if totalmembers:
+            
+            for users in totalmembers:
+                notification_type=1
+                add_notification=Insertnotification(db,users,login_user_id,notification_type,add_nuggets.id)
+                    
+                get_user=db.query(User).filter(User.id == login_user_id).first()
+                user_name=''
+                if get_user:
+                    user_name=get_user.display_name
+                
+                message_detail={
+                        "message":"Posted new Nugget",
+                        "data":{"refer_id":add_nuggets.id,"type":"add_nugget"},
+                        "type":"nuggets"
+                    }
+                send_push_notification=pushNotify(db,totalmembers,message_detail,login_user_id)
+                body=''
+                sms_message=''
+                
+                if add_nuggets.id and add_nuggets.id != '':                                    
+                    sms_message,body=nuggetNotifcationEmail(db,add_nuggets.id)  # Pending
+                    
+                subject='Rawcaster - Notification'
+                email_detail={"subject":subject,"mail_message":body,"sms_message":sms_message,"type":"nuggets"}
+                add_notification_sms_email= addNotificationSmsEmail(db,totalmembers,email_detail,login_user_id)
+
+        nugget_detail=get_nugget_detail(db,add_nuggets.id,login_user_id)  # Pending
+        
+        # Update Nugget Master
+        update_nuggets_master=db.query(NuggetsMaster).filter_by(id = master_id).update({"status":1})
+        db.commit()
+        
+        return {"status":1,"msg":"Nuggets created successfully!","nugget_detail":nugget_detail}
+
 
 
 # 25. Add Nuggets
 @router.post("/addnuggets")
-async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),content:str=Form(None),share_type:str=Form(None),share_with:str=Form(None,description='friends":[1,2,3],"groups":[1,2,3]}'),
+async def addnuggets(background_tasks: BackgroundTasks,db:Session=Depends(deps.get_db),token:str=Form(None),content:str=Form(None),share_type:str=Form(None),share_with:str=Form(None,description='friends":[1,2,3],"groups":[1,2,3]}'),
                      nuggets_media:List[UploadFile]=File(None),poll_option:str=Form(None),poll_duration:str=Form(None),metadata:str=Form(None)):
                
     if token == None or token.strip() == "":
@@ -2304,16 +2445,19 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),conten
                     
                     # Nuggets Media
                     if nuggets_media:
+                        master_id=add_nuggets_master.id
                         
                         for nugget_media in nuggets_media:
                             file_name=nugget_media.filename
                             file_temp=nugget_media.content_type
-                           
-                            read_file=await nugget_media.read()
-
-                            file_size=len(read_file)
                             
+                            # File Upload
                             file_ext = os.path.splitext(nugget_media.filename)[1]
+                            
+                            uploaded_file_path=await file_upload(nugget_media,file_ext,compress=1)
+                            file_stat = os.stat(uploaded_file_path)
+                            file_size= file_stat.st_size
+                            
                             type='image'
                             path="/uploads/nuggets"
                             
@@ -2323,7 +2467,7 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),conten
                                 type='audio'
                             
                             if file_size > 1000000 and type == 'image' and file_ext != '.gif':
-                                uploaded_file_path=file_upload(read_file,file_ext,compress=1)
+                                # uploaded_file_path=await file_upload(read_file,file_ext,compress=1)
                                 s3_file_path=f'nuggets/Image_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}'
                                 
                                 result=upload_to_s3(uploaded_file_path,s3_file_path)
@@ -2341,79 +2485,16 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),conten
                             else:
                                 
                                 s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                                uploaded_file_path=None
-                                
+                            
                                 if type == 'video':
                                     
-                                    save_file_path=video_file_upload(read_file,compress=None,file_ext=file_ext)
-                                    s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.{file_ext}"
+                                    background_tasks.add_task(process_data,db,uploaded_file_path,login_user_id,master_id,share_type,share_with)
+                                    return {"status":1,"msg":"Success","nugget_status":0}
                                     
-                                    # result=upload_to_s3(save_file_path,s3_file_path)
-                                    
-                                    # if result['status'] == 1:
-                                    #     add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,
-                                    #                                 media_type=type,media_file_type=file_ext,file_size=file_size,path=result['url'],
-                                    #                                 created_date=datetime.datetime.utcnow(),status =1)
-                                    #     db.add(add_nugget_attachment)
-                                    #     db.commit()
-                                    #     db.refresh(add_nugget_attachment)
-                                    # else:
-                                    #     return result
-                                    try:
-                                    
-                                        segment_duration = 5 * 60
-
-                                        video = VideoFileClip(save_file_path)   # Video Split ( 5 Minutes)
-                                        duration = video.duration
-                                        splited_video_url=[]
-                                        total_duration = video.duration
-                                        
-                                        # if duration < 3000:
-                                        num_segments = math.ceil(total_duration / segment_duration)
-                                        for i in range(num_segments):
-                                        
-                                            start_time = i * segment_duration
-                                            end_time = min((i+1) * segment_duration, total_duration)
-                                            
-                                            segment = video.subclip(start_time, end_time)
-                                            
-                                            # Save the segment as a new file
-                                            
-                                            segment_filename = f"video_clip_{random.randint(1111,9999)}{int(datetime.datetime.now().timestamp())}.mp4"
-                                            segment.write_videofile(segment_filename, audio_codec="aac")
-                                            
-                                            splited_video_url.append(segment_filename)
-                                            
-
-                                            # try:
-                                            client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
-                                            s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
-                                            
-                                            with open(segment_filename, 'rb') as data:  # Upload File To S3
-                                                upload=client_s3.upload_fileobj(data, bucket_name, s3_file_path,ExtraArgs={'ACL': 'public-read'})
-                                            
-                                            os.remove(segment_filename)
-                                            
-                                            url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
-                                            url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{s3_file_path}'
-                                            if url:
-                                                add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,
-                                                                    media_type=type,media_file_type=file_ext,file_size=file_size,path=url,
-                                                                    created_date=datetime.datetime.utcnow(),status =1)
-                                                db.add(add_nugget_attachment)
-                                                db.commit()
-                                                db.refresh(add_nugget_attachment)
-                                                
-                                                # return {"status":1,"url":url}
-                                            else:
-                                                return "Failed to Upload"
-                                    except:
-                                        return "Something went wrong"
-                                          
-                                                                      
+                              
                                 elif type == 'audio':
                                     s3_file_path=f"nuggets/audio_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp3"
-                                    uploaded_file_path=await audio_file_upload(read_file,compress=None)
+                                    # uploaded_file_path=audio_file_upload(read_file,compress=None)
                                     
                                     result=upload_to_s3(uploaded_file_path,s3_file_path)
                                     if result['status'] == 1:
@@ -2424,11 +2505,10 @@ async def addnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),conten
                                         db.commit()
                                         db.refresh(add_nugget_attachment)
                                     else:
-                                        return result
-                                        
+                                        return result   
                                 
                                 else:
-                                    uploaded_file_path=file_upload(read_file,file_ext,compress=0)
+                                    # uploaded_file_path=await file_upload(read_file,file_ext,compress=0)
                                 
                                 
                                     result=upload_to_s3(uploaded_file_path,s3_file_path)
@@ -3360,7 +3440,7 @@ async def nuggetandcommentlikeeduserlist(db:Session=Depends(deps.get_db),token:s
 
 # 35. Edit Nugget
 @router.post("/editnugget")
-async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:str=Form(None),share_type:str=Form(None),metadata:str=Form(None),content:str=Form(None),delete_media_id:str=Form(None,description="[1,2,3]"),nuggets_media:List[UploadFile]=File(None),share_with:str=Form(None,description=' {"friends":[1,2,3],"groups":[1,2,3]} ')):
+async def editnugget(*,background_tasks: BackgroundTasks,db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:str=Form(None),share_type:str=Form(None),metadata:str=Form(None),content:str=Form(None),delete_media_id:str=Form(None,description="[1,2,3]"),nuggets_media:List[UploadFile]=File(None),share_with:str=Form(None,description=' {"friends":[1,2,3],"groups":[1,2,3]} ')):
     if token== None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     elif nugget_id == None or not nugget_id.isnumeric() :
@@ -3459,14 +3539,19 @@ async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugg
                             
                             # Nuggets Media
                             if nuggets_media:
+                                master_id=check_nuggets.nuggets_id
+                        
                                 for nugget_media in nuggets_media:
+                                    file_name=nugget_media.filename
                                     file_temp=nugget_media.content_type
-                           
-                                    read_file=await nugget_media.read()
-
-                                    file_size=len(read_file)
                                     
+                                    # File Upload
                                     file_ext = os.path.splitext(nugget_media.filename)[1]
+                                    
+                                    uploaded_file_path=await file_upload(nugget_media,file_ext,compress=1)
+                                    file_stat = os.stat(uploaded_file_path)
+                                    file_size= file_stat.st_size
+                                    
                                     type='image'
                                     path="/uploads/nuggets"
                                     
@@ -3476,7 +3561,7 @@ async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugg
                                         type='audio'
                                     
                                     if file_size > 1000000 and type == 'image' and file_ext != '.gif':
-                                        uploaded_file_path=file_upload(read_file,file_ext,compress=1)
+                                        # uploaded_file_path=await file_upload(read_file,file_ext,compress=1)
                                         s3_file_path=f'nuggets/Image_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}'
                                         
                                         result=upload_to_s3(uploaded_file_path,s3_file_path)
@@ -3494,78 +3579,16 @@ async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugg
                                     else:
                                         
                                         s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                                        uploaded_file_path=None
-                                        
+                                    
                                         if type == 'video':
                                             
-                                            save_file_path=video_file_upload(read_file,compress=None,file_ext=file_ext)
-                                            s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.{file_ext}"
+                                            background_tasks.add_task(process_data,db,uploaded_file_path,login_user_id,master_id,share_type,share_with)
+                                            return {"status":1,"msg":"Success","nugget_status":0}
                                             
-                                            # result=upload_to_s3(save_file_path,s3_file_path)
-                                            
-                                            # if result['status'] == 1:
-                                            #     add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,
-                                            #                                 media_type=type,media_file_type=file_ext,file_size=file_size,path=result['url'],
-                                            #                                 created_date=datetime.datetime.utcnow(),status =1)
-                                            #     db.add(add_nugget_attachment)
-                                            #     db.commit()
-                                            #     db.refresh(add_nugget_attachment)
-                                            # else:
-                                            #     return result
-                                            try:
-                                            
-                                                segment_duration = 5 * 60
-
-                                                video = VideoFileClip(save_file_path)   # Video Split ( 5 Minutes)
-                                                duration = video.duration
-                                                splited_video_url=[]
-                                                total_duration = video.duration
-                                                
-                                                num_segments = math.ceil(total_duration / segment_duration)
-                                                for i in range(num_segments):
-                                                
-                                                    start_time = i * segment_duration
-                                                    end_time = min((i+1) * segment_duration, total_duration)
-                                                    
-                                                    segment = video.subclip(start_time, end_time)
-                                                    
-                                                    # Save the segment as a new file
-                                                    
-                                                    segment_filename = f"video_clip_{random.randint(1111,9999)}{int(datetime.datetime.now().timestamp())}.mp4"
-                                                    segment.write_videofile(segment_filename, audio_codec="aac")
-                                                    
-                                                    splited_video_url.append(segment_filename)
-                                                    
-
-                                                    # try:
-                                                    client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
-                                                    s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
-                                                    
-                                                    with open(segment_filename, 'rb') as data:  # Upload File To S3
-                                                        upload=client_s3.upload_fileobj(data, bucket_name, s3_file_path,ExtraArgs={'ACL': 'public-read'})
-                                                    
-                                                    os.remove(segment_filename)
-                                                    
-                                                    url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
-                                                    url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{s3_file_path}'
-                                                    if url:
-                                                        add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=check_nuggets.nuggets_id,
-                                                                            media_type=type,media_file_type=file_ext,file_size=file_size,path=url,
-                                                                            created_date=datetime.datetime.utcnow(),status =1)
-                                                        db.add(add_nugget_attachment)
-                                                        db.commit()
-                                                        db.refresh(add_nugget_attachment)
-                                                        
-                                                        # return {"status":1,"url":url}
-                                                    else:
-                                                        return "Failed to Upload"
-                                            except:
-                                                return "Something went wrong"
-                                                
-                                                                            
+                                    
                                         elif type == 'audio':
                                             s3_file_path=f"nuggets/audio_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp3"
-                                            uploaded_file_path=await audio_file_upload(read_file,compress=None)
+                                            # uploaded_file_path=audio_file_upload(read_file,compress=None)
                                             
                                             result=upload_to_s3(uploaded_file_path,s3_file_path)
                                             if result['status'] == 1:
@@ -3576,11 +3599,10 @@ async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugg
                                                 db.commit()
                                                 db.refresh(add_nugget_attachment)
                                             else:
-                                                return result
-                                                
+                                                return result   
                                         
                                         else:
-                                            uploaded_file_path=file_upload(read_file,file_ext,compress=0)
+                                            # uploaded_file_path=await file_upload(read_file,file_ext,compress=0)
                                         
                                         
                                             result=upload_to_s3(uploaded_file_path,s3_file_path)
@@ -3594,63 +3616,6 @@ async def editnugget(*,db:Session=Depends(deps.get_db),token:str=Form(None),nugg
                                                 db.refresh(add_nugget_attachment)
                                             else:
                                                 return result
-                                    
-                                    
-                                    # ------------------------ Old ----------------------------------
-                                    # file_name=nugget_media.filename
-                                    # file_temp=nugget_media.content_type
-                                    # read_file=await nugget_media.read()
-                                    # file_size=len(read_file)
-                                    # file_ext = os.path.splitext(nugget_media.filename)[1]
-                                    # type='image'
-                                    # if 'video' in file_temp:
-                                    #     type='video'
-                                    # elif 'audio' in file_temp:
-                                    #     type='audio'
-                                    
-                                    # add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=check_nuggets.nuggets_id,
-                                    #                                         media_type=type,media_file_type=file_ext,file_size=file_size,path=None,
-                                    #                                         created_date=datetime.datetime.utcnow(),status =0)
-                                    # db.add(add_nugget_attachment)
-                                    # db.commit()
-                                    # db.refresh(add_nugget_attachment)
-                                    # if add_nugget_attachment:
-                                    #     if file_size > 1000000 and type == 'image' and file_ext != '.gif':
-                                    #         uploaded_file_path=file_upload(read_file,file_ext,compress=1)
-                                    #         s3_file_path=f'nuggets/Image_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}'
-                                    #         result=upload_to_s3(uploaded_file_path,s3_file_path)
-                                            
-                                    #         if result['status'] == 1:
-                                    #             add_nugget_attachment.path = result['url']
-                                    #             add_nugget_attachment.status = 1
-                                    #             db.commit()
-                                    #         else:
-                                    #             return result
-                                        
-                                    #     else:
-                                            
-                                    #         s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                                    #         uploaded_file_path=None          
-                                    #         if type == 'video':
-                                    #             s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
-                                    #             uploaded_file_path=video_file_upload(read_file,compress=None,file_ext=file_ext)
-                                            
-                                    #         elif type == 'audio':
-                                    #             s3_file_path=f"nuggets/audio_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp3"
-                                    #             uploaded_file_path=await audio_file_upload(read_file,compress=1)
-                                    #         else:
-                                    #             uploaded_file_path=file_upload(read_file,file_ext,compress=1)
-                                            
-                                    #         result=upload_to_s3(uploaded_file_path,s3_file_path)
-                                    #         if result['status'] == 1:
-                                    #             add_nugget_attachment.path = result['url']
-                                    #             add_nugget_attachment.status = 1
-                                                
-                                    #             db.commit()
-                                    #         else:
-                                    #             return result
-                                    # else:
-                                    #     return {"status":0,"msg":"Unable to Upload"}    
                                 
                             # Delete Share with
                             del_share_nuggets=db.query(NuggetsShareWith).filter(NuggetsShareWith.nuggets_id == check_nuggets.id).delete()
@@ -4096,11 +4061,17 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                     
                     # Banner Image
                     if event_banner:
-                        # file_name=event_banner.filename
-                        file_temp=event_banner.content_type
-                        read_file=await event_banner.read()
-                        file_size=len(read_file)
                         file_ext = os.path.splitext(event_banner.filename)[1]
+                        
+                        uploaded_file_path=await file_upload(event_banner,file_ext,compress=None)
+                        
+                        file_stat = os.stat(uploaded_file_path)
+                        file_size= file_stat.st_size
+                        file_temp=event_banner.content_type
+                        
+                        # file_name=event_banner.filename
+                        # read_file=await event_banner.read()
+                        # file_size=len(read_file)
                                                 
                         type='image'
                         if 'video' in file_temp:
@@ -4109,8 +4080,8 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                         if file_size > 1024 and type == 'image' and file_ext != '.gif':
                             
                             s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                            uploaded_file_path=file_upload(read_file,file_ext,compress=1)
-                            
+                            # uploaded_file_path=await file_upload(event_banner,file_ext,compress=1)
+                            uploaded_file_path=uploaded_file_path
                             result=upload_to_s3(uploaded_file_path,s3_path)
                             if result['status'] == 1:
                                 new_event.cover_img = result['url']
@@ -4120,8 +4091,8 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                                 return result
                         else:
                             s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                            uploaded_file_path=file_upload(read_file,file_ext,compress=None)
-                            
+                            # uploaded_file_path=await file_upload(read_file,file_ext,compress=None)
+                            uploaded_file_path=uploaded_file_path
                             result=upload_to_s3(uploaded_file_path,s3_path)
                             # Upload to S3
                             if result['status'] == 1:
@@ -4135,9 +4106,14 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                     if event_melody:
                         # file_name=event_melody.filename
                         file_temp=event_melody.content_type
-                        read_file=await event_melody.read()
-                        file_size=len(read_file)
+                        # read_file=await event_melody.read()
+                        # file_size=len(read_file)
                         file_ext = os.path.splitext(event_melody.filename)[1]
+                        
+                        uploaded_file_path=await file_upload(event_melody,file_ext,compress=None)
+                        file_stat = os.stat(uploaded_file_path)
+                        file_size= file_stat.st_size
+                        
                         media_type=1
                         if file_ext == '.png' or file_ext == '.jpeg' or file_ext == 'jpg':
                             type='image'
@@ -4151,8 +4127,8 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                         
                         if file_size > 1000000 and type == 'image' and file_ext != '.gif':
                             s3_file_path=f"eventsmelody/eventsmelody{random.randint(11111,99999)}{new_event.id}{int(datetime.datetime.utcnow().timestamp())}"
-                            upload_file_path=file_upload(read_file,file_ext,compress=1)
-                            
+                            # upload_file_path=await file_upload(read_file,file_ext,compress=1)
+                            upload_file_path=upload_file_path
                             result=upload_to_s3(upload_file_path,s3_file_path)
                             
                             if result and result['status'] == 1:
@@ -4169,7 +4145,8 @@ async def addevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_ti
                                         
                         else:
                             s3_file_path=f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{new_event.id}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                            upload_file_path=file_upload(read_file,file_ext,compress=None)
+                            # upload_file_path=await file_upload(read_file,file_ext,compress=None)
+                            upload_file_path=upload_file_path
                             
                             if type == 'video' and file_ext != '.mp4':
                                 s3_file_path=f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{new_event.id}{int(datetime.datetime.utcnow().timestamp())}.mp4"
@@ -4812,11 +4789,17 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                     
                     # Banner Image
                     if event_banner:
-                        # file_name=event_banner.filename
-                        file_temp=event_banner.content_type
-                        read_file=await event_banner.read()
-                        file_size=len(read_file)
                         file_ext = os.path.splitext(event_banner.filename)[1]
+                        
+                        uploaded_file_path=await file_upload(event_banner,file_ext,compress=None)
+                        
+                        file_stat = os.stat(uploaded_file_path)
+                        file_size= file_stat.st_size
+                        file_temp=event_banner.content_type
+                        
+                        # file_name=event_banner.filename
+                        # read_file=await event_banner.read()
+                        # file_size=len(read_file)
                                                 
                         type='image'
                         if 'video' in file_temp:
@@ -4825,8 +4808,8 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                         if file_size > 1024 and type == 'image' and file_ext != '.gif':
                             
                             s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                            uploaded_file_path=file_upload(read_file,file_ext,compress=1)
-                            
+                            # uploaded_file_path=await file_upload(event_banner,file_ext,compress=1)
+                            uploaded_file_path=uploaded_file_path
                             result=upload_to_s3(uploaded_file_path,s3_path)
                             if result['status'] == 1:
                                 edit_event.cover_img = result['url']
@@ -4836,8 +4819,8 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                                 return result
                         else:
                             s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                            uploaded_file_path=file_upload(read_file,file_ext,compress=None)
-                            
+                            # uploaded_file_path=await file_upload(read_file,file_ext,compress=None)
+                            uploaded_file_path=uploaded_file_path
                             result=upload_to_s3(uploaded_file_path,s3_path)
                             # Upload to S3
                             if result['status'] == 1:
@@ -4853,11 +4836,16 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                     
                     # Event Melody
                     if event_melody:
-                        file_name=event_melody.filename
+                        # file_name=event_melody.filename
                         file_temp=event_melody.content_type
-                        file_read=await event_melody.read()
-                        file_size=len(file_read)
+                        # read_file=await event_melody.read()
+                        # file_size=len(read_file)
                         file_ext = os.path.splitext(event_melody.filename)[1]
+                        
+                        uploaded_file_path=await file_upload(event_melody,file_ext,compress=None)
+                        file_stat = os.stat(uploaded_file_path)
+                        file_size= file_stat.st_size
+                        
                         media_type=1
                         if file_ext == '.png' or file_ext == '.jpeg' or file_ext == 'jpg':
                             type='image'
@@ -4871,8 +4859,8 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                         
                         if file_size > 1000000 and type == 'image' and file_ext != '.gif':
                             s3_file_path=f"eventsmelody/eventsmelody{random.randint(11111,99999)}{edit_event.id}{int(datetime.datetime.utcnow().timestamp())}"
-                            upload_file_path=file_upload(file_read,file_ext,compress=1)
-                            
+                            # upload_file_path=await file_upload(read_file,file_ext,compress=1)
+                            upload_file_path=upload_file_path
                             result=upload_to_s3(upload_file_path,s3_file_path)
                             
                             if result and result['status'] == 1:
@@ -4889,7 +4877,8 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                                         
                         else:
                             s3_file_path=f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{edit_event.id}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                            upload_file_path=file_upload(file_read,file_ext,compress=None)
+                            # upload_file_path=await file_upload(read_file,file_ext,compress=None)
+                            upload_file_path=upload_file_path
                             
                             if type == 'video' and file_ext != '.mp4':
                                 s3_file_path=f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{edit_event.id}{int(datetime.datetime.utcnow().timestamp())}.mp4"
@@ -4902,11 +4891,11 @@ async def editevent(db:Session=Depends(deps.get_db),token:str=Form(None),event_i
                                                         created_at=datetime.datetime.utcnow(),created_by=login_user_id)
                                 
                                 if add_new_melody:
-                                    edit_event.event_melody_id = new_melody.id
+                                    edit_event.event_melody_id = add_new_melody.id
                                     db.commit()
                             
                             else:
-                                return {"status":0,"msg":'Not able to upload'}
+                                return {"status":0,"msg":'Not able to upload'}  
                     
                     
                     else:
@@ -5107,7 +5096,7 @@ async def uploadchatattachment(db:Session=Depends(deps.get_db),token:str=Form(No
                     return {"status":0, "msg":"Max 100MB allowed"}
                     
                 else:
-                    uploaded_file_path=file_upload(readed_file,file_ext,compress=None)
+                    uploaded_file_path=await read_file_upload(readed_file,file_ext,compress=None)
                     s3_file_path=f"chat/attachment_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                     
                     result=upload_to_s3(uploaded_file_path,s3_file_path)
@@ -5524,7 +5513,9 @@ async def getothersprofile(db:Session=Depends(deps.get_db),token:str=Form(None),
                         get_unclaimed_account=db.query(User).join(UserStatusMaster,User.user_status_id == UserStatusMaster.id,isouter=True).filter(User.created_by == 1,UserStatusMaster.type == 2,User.id == user_id).first()
                         # Check Account Claimed Or Not From Admin Side
                         check_claim_account=db.query(ClaimAccounts).filter(ClaimAccounts.user_id == login_user_id,ClaimAccounts.influencer_id == user_id).first()
-                           
+                        # check Account Verified
+                        account_verify_status=db.query(VerifyAccounts).filter(VerifyAccounts.user_id == user_id).first()
+                        
                         result_list={
                                         "user_id":user_id,
                                         "user_ref_id":get_user.user_ref_id if get_user.user_ref_id else "",
@@ -5563,7 +5554,8 @@ async def getothersprofile(db:Session=Depends(deps.get_db),token:str=Form(None),
                                         "lock_fans":(settings.lock_fans if settings.lock_fans else 0) if settings else "",
                                         "lock_my_connection":(settings.lock_my_connection if settings.lock_my_connection else 0) if settings else "",
                                         "lock_my_influencer":(settings.lock_my_influencer if settings.lock_my_influencer else 0) if settings else "",
-                                        "unclaimed_status":(1 if check_claim_account else 0) if get_unclaimed_account else 1
+                                        "unclaimed_status":(1 if check_claim_account else 0) if get_unclaimed_account else 1,
+                                        "account_verify_type":(2 if account_verify_status.verify_status == 1 else 1) if account_verify_status else 0
                                 }
                     
                         return {"status":1,"msg":"Success","profile":result_list}
@@ -5980,7 +5972,7 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                         
                         if file_size > 1000000 and type == 'image' and file_ext != '.gif':
                             compress=1
-                            uploaded_file_path=file_upload(file_read,file_ext,compress)
+                            uploaded_file_path=await read_file_upload(file_read,file_ext,compress)
                             
                             s3_file_path=f"eventsmelody/eventsmelody_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                             
@@ -6006,7 +5998,7 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                                 
                         else:
                             compress=None
-                            uploaded_file_path=file_upload(file_read,file_ext,compress)
+                            uploaded_file_path=await read_file_upload(file_read,file_ext,compress)
                             
                             s3_file_path=f"eventsmelody/eventsmelody_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                             if type == 'video' and file_ext != '.mp4':
@@ -6052,10 +6044,10 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                         
                         else:
                             if file_size > 1024:
-                                local_file_upload=file_upload(file_read,file_ext,compress=1)
+                                local_file_upload=await read_file_upload(file_read,file_ext,compress=1)
                                 header_image=local_file_upload
                             else:
-                                local_file_upload=file_upload(file_read,file_ext,compress=None)
+                                local_file_upload=await read_file_upload(file_read,file_ext,compress=None)
                                 header_image=local_file_upload
                         
                         if header_image:
@@ -6085,10 +6077,10 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                         
                         else:
                             if file_size > 1024:
-                                local_file_upload=file_upload(file_read,file_ext,compress=1)
+                                local_file_upload=await read_file_upload(file_read,file_ext,compress=1)
                                 live_banner=local_file_upload
                             else:
-                                local_file_upload=file_upload(file_read,file_ext,compress=None)
+                                local_file_upload=await read_file_upload(file_read,file_ext,compress=None)
                                 live_banner=local_file_upload
                         
                         if live_banner:
@@ -6118,10 +6110,10 @@ async def updateusersettings(db:Session=Depends(deps.get_db),token:str=Form(None
                         
                         else:
                             if file_size > 1024:
-                                local_file_upload=file_upload(file_read,file_ext,compress=1)
+                                local_file_upload=await read_file_upload(file_read,file_ext,compress=1)
                                 talkshow_banner=local_file_upload
                             else:
-                                local_file_upload=file_upload(file_read,file_ext,compress=None)
+                                local_file_upload=await read_file_upload(file_read,file_ext,compress=None)
                                 talkshow_banner=local_file_upload
                         
                         if talkshow_banner:
@@ -7450,7 +7442,7 @@ async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),even
                         if file_size > 1024 and type == 'image' and file_ext != '.gif':
                             
                             s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                            uploaded_file_path=file_upload(file_read,file_ext,compress=1)
+                            uploaded_file_path=await read_file_upload(file_read,file_ext,compress=1)
                             
                             result=upload_to_s3(uploaded_file_path,s3_path)
                             if result['status'] == 1:
@@ -7461,7 +7453,7 @@ async def addliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),even
                                 return result
                         else:
                             s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                            uploaded_file_path=file_upload(file_read,file_ext,compress=None)
+                            uploaded_file_path=await read_file_upload(file_read,file_ext,compress=None)
                             
                             result=upload_to_s3(uploaded_file_path,s3_path)
                             # Upload to S3
@@ -7659,7 +7651,7 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
                     if file_size > 1024 and type == 'image' and file_ext != '.gif':
                         # Compress Image
                         compress=1
-                        uploaded_file_path=file_upload(file_read,file_ext,compress)
+                        uploaded_file_path=await read_file_upload(file_read,file_ext,compress)
                     
                         s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                         # Upload to S3
@@ -7672,7 +7664,7 @@ async def editliveevent(db:Session=Depends(deps.get_db),token:str=Form(None),eve
                             return result
                     else:
                         compress=None
-                        uploaded_file_path=file_upload(file_read,file_ext,compress)
+                        uploaded_file_path= await read_file_upload(file_read,file_ext,compress)
                         
                         s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                         result=upload_to_s3(uploaded_file_path,s3_path)

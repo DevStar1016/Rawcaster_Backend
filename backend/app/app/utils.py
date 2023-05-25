@@ -23,11 +23,64 @@ import subprocess
 from mail_templates.mail_template import *
 from cryptography.fernet import Fernet
 from app.core import config
+from celery import Celery
+from moviepy.video.io.VideoFileClip import VideoFileClip
+import shutil
+
+celery_app = Celery("tasks", broker="redis://localhost:8000")
 
 
 access_key=config.access_key
 access_secret=config.access_secret
 bucket_name=config.bucket_name
+
+
+
+
+@celery_app.task
+def process_file(filename):
+    segment_duration = 5 * 60
+
+    video = VideoFileClip(filename)   # Video Split ( 5 Minutes)
+    duration = video.duration
+    splited_video_url=[]
+    total_duration = video.duration
+    
+    # if duration < 3000:
+    num_segments = math.ceil(total_duration / segment_duration)
+    for i in range(num_segments):
+    
+        start_time = i * segment_duration
+        end_time = min((i+1) * segment_duration, total_duration)
+        
+        segment = video.subclip(start_time, end_time)
+        
+        # Save the segment as a new file
+        
+        segment_filename = f"video_clip_{random.randint(1111,9999)}{int(datetime.now().timestamp())}.mp4"
+        segment.write_videofile(segment_filename, audio_codec="aac")
+        
+        splited_video_url.append(segment_filename)
+         # try:
+        client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
+        s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
+        
+        with open(segment_filename, 'rb') as data:  # Upload File To S3
+            upload=client_s3.upload_fileobj(data, bucket_name, s3_file_path,ExtraArgs={'ACL': 'public-read'})
+        
+        os.remove(segment_filename)
+        
+        url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
+        url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{s3_file_path}'
+        if url:
+            add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,
+                                media_type=type,media_file_type=file_ext,file_size=file_size,path=url,
+                                created_date=datetime.datetime.utcnow(),status =1)
+            db.add(add_nugget_attachment)
+            db.commit()
+            db.refresh(add_nugget_attachment)
+        
+        
 
 def is_date(string, fuzzy=False):
 
@@ -60,7 +113,34 @@ def EncryptandDecrypt(otp,flag=1):
         return decrypted
         
 
-def file_upload(file_name,ext,compress):
+
+async def file_upload(file_name,ext,compress):
+        
+    base_dir = f"{st.BASE_DIR}/rawcaster_uploads"
+    try:
+        os.makedirs(base_dir, mode=0o777, exist_ok=True)
+    except OSError as e:
+        sys.exit("Can't create {dir}: {err}".format(
+            dir=base_dir, err=e))
+
+    output_dir = base_dir + "/"
+    
+    characters = string.ascii_letters + string.digits
+    # Generate the random string
+    random_string = ''.join(random.choice(characters) for i in range(18))
+    
+    filename=f"uploadfile_{random_string}{ext}"    
+    
+    save_full_path=f'{output_dir}{filename}' 
+     
+    with open(save_full_path, "wb") as buffer:
+        shutil.copyfileobj(file_name.file, buffer)  
+        
+    return save_full_path
+        
+        
+
+async def read_file_upload(file_name,ext,compress):
         
     base_dir = f"{st.BASE_DIR}/rawcaster_uploads"
     try:
@@ -109,7 +189,7 @@ def video_file_upload(upload_file,compress,file_ext):
     save_full_path=f'{output_dir}{filename}'  
       
     with open(save_full_path, "wb") as buffer:
-        buffer.write(upload_file)
+        buffer.write(upload_file.file)
     
     if compress:
         command = f"ffmpeg -i {save_full_path} -vcodec libx265 -crf 50 {save_full_path}"

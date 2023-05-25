@@ -10,7 +10,7 @@ class VerifyAccounts(Base):
     first_name=Column(String(100))
     last_name=Column(String(100))
     telephone=Column(String(20))
-    email_id=Column(String(100))
+    email_id=Column(String(50))
     dob=Column(Date)
     location=Column(String(100))
     verify_date=Column(DateTime)
