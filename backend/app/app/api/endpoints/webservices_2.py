@@ -8,6 +8,8 @@ from sqlalchemy import extract
 from datetime import datetime,date
 from typing import List
 from app.core import config
+import openai
+from googletrans import Translator
 
 
 router = APIRouter() 
@@ -407,47 +409,260 @@ async def add_verify_account(db:Session=Depends(deps.get_db),token:str=Form(None
     
 
 
+# 91 AI Chat
+@router.post("/aichat")
+async def aichat(db:Session=Depends(deps.get_db),token:str=Form(None),user_query:str=Form(None)):
+    if token == None or token.strip() == "":
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    
+    access_token=checkToken(db,token)    
+    if access_token == False:
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    else:
+        get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+        user_name = get_token_details.user.display_name if get_token_details else None
+        created_at=common_date(datetime.utcnow(),None)
+        if user_query:
+            openai.api_key = config.open_ai_key
+            
+            response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                    {"role": "system", "content": "You are a chatbot"},
+                    {"role": "user", "content": f"{user_query}?"},
+                ]
+                )
 
-# 88  Text To Audio Conversion
+            result = ''
+            if response:
+                for choice in response.choices:
+                    result += choice.message.content
+                
+                return {"status":1,"msg":result,"created_at":created_at}
+            else:
+                return {"status":0,"msg":"Failed to search"}
+        else:
+            return {"status":1,"msg":f"HI {user_name}, I am an Artificial Intelligence (AI), I can answer your question on anything. Speak or type your question here..","created_at":created_at}
+            
+        
+
+# Google Transalate APi Key = AIzaSyAMCCtM2tXa9ytt0a-JzoX74p6iDfDrlzM
+
+
+
+
+# 88  Text To Audio Conversion (Nugget Content)
+@router.post("/nuggetcontentaudio")
+async def nuggetcontentaudio(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:str=Form(None)):
+    if token == None or token.strip() == "":
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    if not nugget_id and not nugget_id.isnumeric():
+        return {"status":0,"msg":"Nugget id can't be blank"}
+    
+    # Check token
+    access_token=checkToken(db,token)
+        
+    if access_token == False:
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    else:
+        # Get nuggets
+        get_nugget=db.query(Nuggets).filter(Nuggets.id == nugget_id,Nuggets.status == 1).first()
+        if get_nugget:
+            get_exist_audio=db.query(NuggetContentAudio).filter(NuggetContentAudio.nugget_master_id == get_nugget.nuggets_id,NuggetContentAudio.status == 1).first()
+            if get_exist_audio:
+                return {"status":1,"msg":"Success","file_path":get_exist_audio.path}
+            
+            else:
+                text=get_nugget.nuggets_master.content if get_nugget else None
+                if text:
+                    
+                    target_language='en'
+                
+                    translator = Translator(service_urls=['translate.google.com'])
+
+                    # Detect the source language
+                    detected_lang = translator.detect(text).lang
+
+                    # Translate the text to the target language
+                    translation = translator.translate(text, src=detected_lang, dest=target_language)
+                    
+                    translated_text=translation.text
+                    
+                    # Create an instance of the Polly client
+                    polly_client = boto3.Session(
+                        aws_access_key_id=config.access_key,
+                        aws_secret_access_key=config.access_secret,
+                        region_name='us-west-2'  # Replace with your desired AWS region
+                    ).client('polly')
+
+                    # Specify the desired voice and output format
+                    voice_id = 'Joanna'
+                    output_format = 'mp3'
+
+                    # Request speech synthesis
+                    response = polly_client.synthesize_speech(
+                        Text=translated_text,
+                        VoiceId=voice_id,
+                        OutputFormat=output_format
+                    )
+                    # Upload File
+                    base_dir = f"{st.BASE_DIR}/rawcaster_uploads"
+                    try:
+                        os.makedirs(base_dir, mode=0o777, exist_ok=True)
+                    except OSError as e:
+                        sys.exit("Can't create {dir}: {err}".format(
+                            dir=base_dir, err=e))
+
+                    output_dir = base_dir + "/"
+                    
+                    filename=f"converted_{int(datetime.now().timestamp())}.mp3"    
+                    
+                    save_full_path=f'{output_dir}{filename}' 
+                    
+                    with open(save_full_path, 'wb') as file:
+                        file.write(response['AudioStream'].read())
+                        
+                    s3_file_path=f"nuggets/converted_audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
+                            
+                    result=upload_to_s3(save_full_path,s3_file_path)
+                    
+                    if result['status'] == 1:
+                        add_audio_file=NuggetContentAudio(nugget_master_id = get_nugget.nuggets_id,path= result['url'],created_at=datetime.utcnow(),status =1)
+                        db.add(add_audio_file)
+                        db.commit()
+                        db.refresh(add_audio_file)
+                        return {"status":1,"msg":"success","file_path":result['url']}
+                        
+                    else:
+                        return result
+                     
+        else:
+            return {"status":0,"msg":"Invalid Nugget"}
+        
+
+
+# # 89  AI Response Text Audio
+
 @router.post("/texttoaudio")
-async def texttoaudio(db:Session=Depends(deps.get_db),sample:str=Form(None)):
-    import boto3
-    from googletrans import Translator
-    from gtts import gTTS
-    import os
-
-    # AWS Polly configuration
-    aws_access_key_id = access_key
-    aws_secret_access_key = access_secret
-    aws_region = 'us-west-2'  # Replace with your desired AWS region
-
-    # Google Translate configuration
-    google_translate_api_key = 'AIzaSyA76vJLb6G4c9ToMZ4QENyS6Hpi4cwDzhY'
-
-    # Text to be translated and converted to audio
-    text = "Hello, this is an example text."
-
-    # Translate text to the desired language using Google Translate
+async def texttoaudio(db:Session=Depends(deps.get_db),message:str=Form(None)):
+    if not message:
+        return {"status":0,"msg":"Meaage can't be Empty"}
+    
+    target_language='en'
+                
     translator = Translator(service_urls=['translate.google.com'])
-    translated_text = translator.translate(text, dest='fr').text  # Translate to French
 
-    # Use AWS Polly to convert translated text to audio
+    # Detect the source language
+    detected_lang = translator.detect(message).lang
+
+    # Translate the text to the target language
+    translation = translator.translate(message, src=detected_lang, dest=target_language)
+    
+    translated_text=translation.text
+    
+    # Create an instance of the Polly client
     polly_client = boto3.Session(
-        aws_access_key_id=aws_access_key_id,
-        aws_secret_access_key=aws_secret_access_key,
-        region_name=aws_region
+        aws_access_key_id=config.access_key,
+        aws_secret_access_key=config.access_secret,
+        region_name='us-west-2'  # Replace with your desired AWS region
     ).client('polly')
 
+    # Specify the desired voice and output format
+    voice_id = 'Joanna'
+    output_format = 'mp3'
+
+    # Request speech synthesis
     response = polly_client.synthesize_speech(
         Text=translated_text,
-        OutputFormat='mp3',
-        VoiceId='Joanna'  # Choose the desired voice
+        VoiceId=voice_id,
+        OutputFormat=output_format
+    )
+    # Upload File
+    base_dir = f"{st.BASE_DIR}/rawcaster_uploads/converted_audio"
+    try:
+        os.makedirs(base_dir, mode=0o777, exist_ok=True)
+    except OSError as e:
+        sys.exit("Can't create {dir}: {err}".format(
+            dir=base_dir, err=e))
+
+    output_dir = base_dir + "/"
+    
+    filename=f"converted_{int(datetime.now().timestamp())}.mp3"    
+    
+    save_full_path=f'{output_dir}{filename}' 
+    
+    with open(save_full_path, 'wb') as file:
+        file.write(response['AudioStream'].read())
+        
+    return base_dir
+
+
+# Test
+
+# 91 AI Chat
+@router.post("/audio_to_text")
+async def audio_to_text(audio_file:UploadFile=File(None)):
+
+    # Create a Transcribe client
+    transcribe = boto3.client('transcribe',aws_access_key_id=config.access_key,
+            aws_secret_access_key=config.access_secret,
+            region_name='us-west-2')
+
+    # Specify the audio file path
+    audio_file = "/home/surya_maestro/Music/Jack Sparrow English Dialogue.mp3"
+
+    # Start the transcription job
+    response = transcribe.start_transcription_job(
+        TranscriptionJobName='audio-to-text-job',
+        LanguageCode='en-US',
+        MediaFormat='wav',
+        Media={
+            'MediaFileUri': 'file://' + audio_file
+        }
     )
 
-    # Save the audio to a file
-    audio_filename = 'output.mp3'
-    with open(audio_filename, 'wb') as file:
-        file.write(response['AudioStream'].read())
+    # Get the transcription job status
+    job_status = response['TranscriptionJob']['TranscriptionJobStatus']
+    while job_status not in ['COMPLETED', 'FAILED']:
+        response = transcribe.get_transcription_job(
+            TranscriptionJobName='audio-to-text-job'
+        )
+        job_status = response['TranscriptionJob']['TranscriptionJobStatus']
 
-    # Play the audio
-    os.system(f"start {audio_filename}")
+        # If the job is still in progress, wait for a while
+        if job_status not in ['COMPLETED', 'FAILED']:
+            import time
+            time.sleep(5)
+
+    # Once the job is completed, retrieve the transcript
+    if job_status == 'COMPLETED':
+        transcript_uri = response['TranscriptionJob']['Transcript']['TranscriptFileUri']
+        transcript = transcribe.get_transcription_job(
+            TranscriptionJobName='audio-to-text-job'
+        )['TranscriptionJob']['Transcript']['Results']
+
+        # Print the transcript
+        print("Transcript:")
+        print(transcript)
+    else:
+        print("Transcription job failed")
+    
+    
+    # openai.api_key = config.open_ai_key
+    
+    # response = openai.ChatCompletion.create(
+    # model="gpt-3.5-turbo",
+    # messages=[
+    #         {"role": "system", "content": "You are a chatbot"},
+    #         {"role": "user", "content": f"{user_query}?"},
+    #     ]
+    #     )
+
+    # result = ''
+    # if response:
+    #     for choice in response.choices:
+    #         result += choice.message.content
+
+    #     return {"status":1,"msg":result}
+    # else:
+    #     return {"status":0,"msg":"Failed to search"}

@@ -23,13 +23,14 @@ base_domain_url = ""
 base_url_segment = "/rawcaster"
 base_upload_folder = "local_uploads"
 
-# 108 DB
-# data_base = "mysql+pymysql://maemysqluser:MaeNewMysql2@2@@192.168.1.109/rawcaster"
+# CBE Server
 data_base ='mysql+pymysql://maemysqluser:%s@cbe.themaestro.in/rawcaster' % quote('MaeNewMysql2@2@') 
 
 access_key='AKIAYFYE6EFYG6RJOPMF'
 access_secret='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'
 bucket_name='rawcaster'
+
+open_ai_key="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"
 
 api_doc_path = "/docs"
 

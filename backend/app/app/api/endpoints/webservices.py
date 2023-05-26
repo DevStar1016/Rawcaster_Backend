@@ -899,13 +899,16 @@ def user_profile(db,id):
     if get_user:       
         followers_count=db.query(FollowUser).filter_by(following_userid = id).count()
         following_count=db.query(FollowUser).filter_by(follower_userid = id).count()
-        nugget_count=db.query(NuggetsMaster).join(Nuggets).filter(NuggetsMaster.user_id == id,NuggetsMaster.status == 1,Nuggets.nuggets_id == NuggetsMaster.id).count()
+        
+        nugget_count=db.query(Nuggets).join(NuggetsMaster,Nuggets.nuggets_id == NuggetsMaster.id).filter(Nuggets.user_id == id,Nuggets.status == 1,NuggetsMaster.status == 1,Nuggets.nugget_status != 2).count()
+        
         event_count=db.query(Events).filter(Events.created_by == id,Events.status == 1).count()
         
         friend_count=db.query(MyFriends).filter(MyFriends.status == 1,MyFriends.request_status == 1,or_(MyFriends.sender_id == get_user.id,MyFriends.receiver_id == get_user.id)).count()
         # Get Account Verified or Not (Only For Diamond Members)
         get_verify_details=db.query(VerifyAccounts).filter(VerifyAccounts.user_id == get_user.id).first()
-        
+        # Get Save Nuggets
+        get_saved_nuggets=db.query(NuggetsSave).filter(NuggetsSave.user_id == get_user.id,NuggetsSave.status == 1).count()
         user_details={}
         user_details.update({"user_id":get_user.id,
                             "user_ref_id":get_user.user_ref_id if get_user.user_ref_id else "",
@@ -942,7 +945,8 @@ def user_profile(db,id):
                             "work_at":get_user.work_at if get_user.work_at else "",
                             "studied_at":get_user.studied_at if get_user.studied_at else "",
                             "influencer_category":get_user.influencer_category if get_user.influencer_category else "",
-                            "account_verify_type": (2 if get_verify_details.verify_status == 1 else 1) if get_verify_details else 0  # 0 -Request not send , 1- Pending ,2 - Verified
+                            "account_verify_type": (2 if get_verify_details.verify_status == 1 else 1) if get_verify_details else 0,  # 0 -Request not send , 1- Pending ,2 - Verified
+                            "saved_nugget_count":get_saved_nuggets
                         })
         token_text=(str(get_user.user_ref_id) + str(datetime.datetime.utcnow().timestamp())).encode("ascii")
         invite_url=inviteBaseurl()
@@ -2487,6 +2491,8 @@ async def addnuggets(background_tasks: BackgroundTasks,db:Session=Depends(deps.g
                                 s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                             
                                 if type == 'video':
+                                    # pass
+                                    return {"status":1,"msg":"Success","nugget_status":0} 
                                     
                                     background_tasks.add_task(process_data,db,uploaded_file_path,login_user_id,master_id,share_type,share_with)
                                     return {"status":1,"msg":"Success","nugget_status":0}
@@ -2867,7 +2873,7 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
                         following = 1
                     
                     voted=db.query(NuggetPollVoted).filter(NuggetPollVoted.nugget_id == nuggets.id,NuggetPollVoted.user_id == login_user_id).first()
-                    saved=db.query(NuggetsSave).filter(NuggetsSave.nugget_id == nuggets.id,NuggetsSave.user_id == login_user_id).count()
+                    saved=db.query(NuggetsSave).filter(NuggetsSave.nugget_id == nuggets.id,NuggetsSave.user_id == login_user_id,NuggetsSave.status == 1).count()
                     
                     if nuggets.share_type == 1:
                         if following == 1:
@@ -3038,6 +3044,7 @@ async def deletenugget(db:Session=Depends(deps.get_db),token:str=Form(None),nugg
                     if check_nugget_creater.type == 1:
                         update_nugget_master=db.query(NuggetsMaster).filter_by(id = check_nugget_creater.nuggets_id).update({"status":0})
                         update_notification=db.query(Notification).filter_by(ref_id=nugget_id).delete()
+                        delete_save_nugget=db.query(NuggetsSave).filter(NuggetsSave.user_id == login_user_id,NuggetsSave.nugget_id == nugget_id).update({"status":0})
                         db.commit()
                         
                         return {"status":1,"msg":"Nugget Deleted"}
@@ -8464,15 +8471,19 @@ async def saveandunsavenugget(db:Session=Depends(deps.get_db),token:str=Form(Non
                         nuggetsave=NuggetsSave(user_id=login_user_id,nugget_id=nugget_id,created_date=datetime.datetime.utcnow())
                         db.add(nuggetsave)
                         db.commit()
+                        db.refresh(nuggetsave)
+                        
+                        get_saved_nugget=db.query(NuggetsSave).filter(NuggetsSave.user_id == login_user_id,NuggetsSave.status == 1).count()
                         
                         if nuggetsave:
                             ref_id=5
-                            Insertnotification(db,check_nuggets.user_id,login_user_id,ref_id,nugget_id)
-                            return {"status":1,"msg":"Success"}
+                            insert_notification=Insertnotification(db,check_nuggets.user_id,login_user_id,ref_id,nugget_id)
+                            
+                            return {"status":1,"msg":"Success","saved_nugget_count":get_saved_nugget}
                         else:
-                            return {"status":1,"msg":"failed to save"}
+                            return {"status":0,"msg":"failed to save"}
                     else:
-                        return {"status":1,"msg":"Your already saved this nugget"}
+                        return {"status":0,"msg":"Your already saved this nugget"} 
                                 
                 elif save == 2:  # Unsave
                     checkprevioussave=db.query(NuggetsSave).filter(NuggetsSave.nugget_id == nugget_id,NuggetsSave.user_id == login_user_id).first()
@@ -8482,7 +8493,9 @@ async def saveandunsavenugget(db:Session=Depends(deps.get_db),token:str=Form(Non
                         db.commit()
 
                         if deleteresult:
-                            return {"status":1,"msg":"Success"}
+                            get_saved_nugget=db.query(NuggetsSave).filter(NuggetsSave.user_id == login_user_id,NuggetsSave.status == 1).count()
+                            
+                            return {"status":1,"msg":"Success","saved_nugget_count":get_saved_nugget}
 
                         else:
                             return {"status":0,"msg":"failed to unsave"}
