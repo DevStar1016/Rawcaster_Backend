@@ -42,8 +42,8 @@ RUN bash -c "pip3 install pybase64"
 RUN bash -c "pip3 install regex"
 RUN bash -c "pip3 install --force-reinstall httpcore==0.15"
 #RUN bash -c "pip3 install urlparse4"
-
-RUN pip install -r requirements.txt
+COPY requirements.txt .
+RUN pip3 install -r requirements.txt
 # COPY ./app /app
 COPY ./app /app
 ENV PYTHONPATH=/app
