@@ -16,35 +16,14 @@ from moviepy.video.io.VideoFileClip import VideoFileClip
 router = APIRouter() 
 celery_app = Celery("tasks", broker="redis://localhost:8000")
 
-@celery_app.task
-def process_data(filename,test,multi_file):
-    segment_duration = 5 * 60
-    print(test)
-    for row in multi_file:
-        print(row)
-    video = VideoFileClip(filename)   # Video Split ( 5 Minutes)
-    duration = video.duration
-    splited_video_url=[]
-    total_duration = video.duration
-    
-    # if duration < 3000:
-    num_segments = math.ceil(total_duration / segment_duration)
-    for i in range(num_segments):
-    
-        start_time = i * segment_duration
-        end_time = min((i+1) * segment_duration, total_duration)
-        
-        segment = video.subclip(start_time, end_time)
-        
-        # Save the segment as a new file
-        
-        segment_filename = f"video_clip_{random.randint(1111,9999)}{int(datetime.now().timestamp())}.mp4"
-        segment.write_videofile(segment_filename, audio_codec="aac")
-        
-        splited_video_url.append(segment_filename)
-        
-    # Perform the file processing here
-    # This function will run in the background
+@router.post("/uploadass")
+def process_data():
+    try:
+    # Code that may raise an exception
+        x = 1 / 0
+    except Exception as e:
+        exception_type = e.__class__
+        print(exception_type)
 
 @router.post("/uploada")
 async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
