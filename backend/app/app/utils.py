@@ -183,7 +183,7 @@ async def audio_file_upload(upload_file,compress):
 def upload_to_s3(local_file_pth,s3_bucket_path):
    
     try:
-        local_file_pth='test'
+        
         client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
         
         with open(local_file_pth, 'rb') as data:  # Upload File To S3
@@ -194,10 +194,11 @@ def upload_to_s3(local_file_pth,s3_bucket_path):
         url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
         url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{s3_bucket_path}'
         return {"status":1,"url":url}
+    
     except Exception as e:
         exception_type = e.__class__
         print(exception_type)
-        return {"Unable to uploads"}
+        return {"status":0,"msg":"Unable to upload"}
     
 
 async def send_email(db,to_mail, subject, message):
