@@ -20,4 +20,5 @@ class NuggetsMaster(Base):
     nugget_poll_voted=relationship("NuggetPollVoted",back_populates="nuggets_master")
     nuggets_attachment=relationship("NuggetsAttachment",back_populates="nuggets_master")
     nugget_poll_option=relationship("NuggetPollOption",back_populates="nuggets_master")
+    nugget_content_audio=relationship("NuggetContentAudio",back_populates="nuggets_master")
     

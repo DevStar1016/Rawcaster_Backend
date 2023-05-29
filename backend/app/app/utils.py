@@ -1,4 +1,4 @@
-from sqlalchemy import or_,and_,func
+from sqlalchemy import or_,and_
 import math
 from app.core.config import settings as st
 from datetime import datetime,timedelta
@@ -6,7 +6,6 @@ import datetime
 from app.models import *
 import random,string
 import hashlib
-from email_validator import EmailNotValidError
 import re
 import math
 import requests
@@ -15,18 +14,25 @@ from dateutil.relativedelta import relativedelta
 from jose import jwt
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 import base64
-from operator import itemgetter
-from urllib.parse import urlparse, urlunparse
 from PIL import Image
 import os,boto3
 import sys
-from PIL import Image
 import time
-from dateutil.parser import parse
 import subprocess
 from mail_templates.mail_template import *
-import shutil
 from cryptography.fernet import Fernet
+from app.core import config
+from celery import Celery
+from moviepy.video.io.VideoFileClip import VideoFileClip
+import shutil
+
+celery_app = Celery("tasks", broker="redis://localhost:8000")
+
+
+access_key=config.access_key
+access_secret=config.access_secret
+bucket_name=config.bucket_name
+  
 
 def is_date(string, fuzzy=False):
 
@@ -59,9 +65,44 @@ def EncryptandDecrypt(otp,flag=1):
         return decrypted
         
 
-def file_upload(file_name,ext,compress):
+
+async def file_upload(file_name,ext,compress):
         
-    base_dir = f"{st.BASE_DIR}/rawcaster"
+    # base_dir = f"{st.BASE_DIR}rawcaster_uploads"
+    base_dir = "rawcaster_uploads"
+    
+    try:
+        os.makedirs(base_dir, mode=0o777, exist_ok=True)
+    except OSError as e:
+        sys.exit("Can't create {dir}: {err}".format(
+            dir=base_dir, err=e))
+
+    output_dir = base_dir + "/"
+    
+    characters = string.ascii_letters + string.digits
+    # Generate the random string
+    random_string = ''.join(random.choice(characters) for i in range(18))
+    
+    filename=f"uploadfile_{random_string}{ext}"    
+    
+    save_full_path=f'{output_dir}{filename}' 
+    if ext in ['jpg', 'jpeg', 'png', 'gif']:
+        img = Image.open(file_name)
+        img.save(save_full_path, quality=80)
+    
+    else:
+        with open(save_full_path, "wb") as buffer:
+            shutil.copyfileobj(file_name.file, buffer)  
+        
+    return save_full_path
+        
+        
+
+async def read_file_upload(file_name,ext,compress):
+        
+    # base_dir = f"{st.BASE_DIR}rawcaster_uploads"
+    base_dir = "rawcaster_uploads"
+    
     try:
         os.makedirs(base_dir, mode=0o777, exist_ok=True)
     except OSError as e:
@@ -83,11 +124,10 @@ def file_upload(file_name,ext,compress):
     return save_full_path
 
 
-
+def video_file_upload(upload_file,compress,file_ext):    
+    # base_dir = f"{st.BASE_DIR}rawcaster_uploads"
+    base_dir = "rawcaster_uploads"
     
-
-def video_file_upload(upload_file,compress):    
-    base_dir = f"{st.BASE_DIR}/rawcaster"
     try:
         os.makedirs(base_dir, mode=0o777, exist_ok=True)
     except OSError as e:
@@ -99,12 +139,12 @@ def video_file_upload(upload_file,compress):
     characters = string.ascii_letters + string.digits
     # Generate the random string
     random_string = ''.join(random.choice(characters) for i in range(18))
-    filename=f"video_{random_string}.mp4"    
+    filename=f"video_{random_string}{file_ext}"    
    
     save_full_path=f'{output_dir}{filename}'  
       
     with open(save_full_path, "wb") as buffer:
-        buffer.write(upload_file)
+        buffer.write(upload_file.file)
     
     if compress:
         command = f"ffmpeg -i {save_full_path} -vcodec libx265 -crf 50 {save_full_path}"
@@ -114,7 +154,9 @@ def video_file_upload(upload_file,compress):
     
 
 async def audio_file_upload(upload_file,compress):
-    base_dir = f"{st.BASE_DIR}/rawcaster"
+    # base_dir = f"{st.BASE_DIR}rawcaster_uploads"
+    base_dir = "rawcaster_uploads"
+    
     try:
         os.makedirs(base_dir, mode=0o777, exist_ok=True)
     except OSError as e:
@@ -139,9 +181,7 @@ async def audio_file_upload(upload_file,compress):
 
 
 def upload_to_s3(local_file_pth,s3_bucket_path):
-    bucket_name='rawcaster'
-    access_key="AKIAYFYE6EFYGNPCA32D"
-    access_secret="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"
+   
     try:
         client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
         
@@ -395,8 +435,7 @@ def addNotificationSmsEmail(db,user,email_detail,login_user_id):
     mobile_nos = ""
     if user:
         
-        get_user =db.query(User.id,User.country_code,User.email_id,User.mobile_no,UserSettings.nuggets,UserSettings.events,UserSettings.friend_request)
-        get_user=get_user.filter(UserSettings.user_id == User.id,User.status == 1,User.id.in_(user)).all()
+        get_user =db.query(User.id,User.country_code,User.email_id,User.mobile_no,UserSettings.nuggets,UserSettings.events,UserSettings.friend_request).filter(UserSettings.user_id == User.id,User.status == 1,User.id.in_(user)).all()
         
         for user in get_user:
             permission_arr = list(user[type])
@@ -405,12 +444,12 @@ def addNotificationSmsEmail(db,user,email_detail,login_user_id):
             
             elif len(permission_arr) > 2 and permission_arr[2] == "1" and user["mobile_no"]:
                 mobile_nos += user["country_code"] + str(user["mobile_no"]) + ","
-
+    # Type 1- Phone number 2- Email
     if email:
         
         add_notification = NotificationSmsEmail(
             user_id=login_user_id,
-            type=2,
+            type=2, 
             mobile_no_email_id=email,
             subject=subject,
             message=mail_message,
@@ -712,13 +751,10 @@ def NuggetAccessCheck(db,login_user_id,nugget_id):
     request_status=3
     response_type=1
     
-    
     get_all_blocked_users=get_friend_requests(db,login_user_id,requested_by,request_status,response_type)
-    
-        
+      
     blocked_users=get_all_blocked_users['blocked']
-    
-
+   
     if blocked_users:
         criteria = criteria.filter(Nuggets.user_id.notin_(blocked_users))
    
@@ -846,7 +882,8 @@ def CheckMobileNumber(db,mobile_no,geo_location):
 
 
 def inviteBaseurl():
-    return 'https://rawcaster.com/'
+    return 'https://dev.rawcaster.com/'
+    # return 'https://rawcaster.com/'
 
 
 def OTPverificationtype(db,get_user):
@@ -1381,15 +1418,25 @@ async def SendOtp(db,user_id,signup_type):
     
     get_user=db.query(User).filter(User.id == user_id).first()
     to_mail=get_user.email_id
-    subject=f"One Time Password - {otp}"
-    message=f"{otp} is your One Time Password"
+    
+    subject="Rawcaster - Verify OTP"
+    
+    content=""
+    content += "<table width='600' border='0' align='center' cellpadding='10' cellspacing='0' style='border: 1px solid #e8e8e8;'><tr><td> "
+    content +=  'Hi, Greetings from Rawcaster<br /><br />'
+    content += f'Your OTP for Rawcaster account verification is : <b> {otp } </b><br /><br />'
+    # content += 'Click this link to validate your account '
+    content += 'Regards,<br />Administration Team<br /><a href="https://rawcaster.com/">Rawcaster.com</a> LLC'
+    content += "</td></tr></table>"
+    
+    body=mail_content(content)
     
     if int(signup_type) == 1:
-        mail_send=await send_email(db,to_mail,subject,message)
+        mail_send=await send_email(db,to_mail,subject,body)
         
     elif int(signup_type) == 2:
         mobile_no=f"{get_user.country_code}{get_user.mobile_no}"
-        
+        message=f"{otp} is your One Time Password. Do not share this OTP with anyone"
         send_sms=sendSMS(mobile_no,message)
     else:
         pass
@@ -1678,7 +1725,7 @@ def ChangeReferralExpiryDate(db,referrerid):
         if referrer.user_status_id == 1:
             user_status=db.query(UserStatusMaster).filter(UserStatusMaster.id == 3).first()
             if user_status:
-                total_referral_point=int(referrer.total_referral_point)+ 1
+                total_referral_point= int(referrer.total_referral_point)+ 1
                 if user_status.referral_needed <= total_referral_point:
                     expiry_date=datetime.datetime.utcnow()
                     if referrer.referral_expiry_date != None:
@@ -1689,7 +1736,7 @@ def ChangeReferralExpiryDate(db,referrerid):
                     user_status_id=3
             
         else:
-            total_referral_point=referrer+total_referral_point + 1
+            total_referral_point=referrer.total_referral_point + 1
         
         update_user=db.query(User).filter(User.id == referrer.id).update({"user_status_id":user_status_id,"referral_expiry_date":expiry_date,"total_referral_point":total_referral_point})
         db.commit()

@@ -20,23 +20,29 @@ base_url =""
 base_dir="/var/www/html"
 base_domain_url = ""
 
-base_url_segment = ""
+base_url_segment = "/rawcaster"
 base_upload_folder = "local_uploads"
 
-# CBE
-# data_base ='mysql+pymysql://python:%s@dev.rawcaster.com/rawcaster' % quote('W3solutions123!@#')
+# CBE Server
+data_base ='mysql+pymysql://Admin:Rawcaster2240422@rawcasterdev.c3xecvdvxfvf.us-east-1.rds.amazonaws.com/rawcasterdev'
+# data_base ='mysql+pymysql://maemysqluser:%s@cbe.themaestro.in/rawcaster' % quote('MaeNewMysql2@2@') 
 
-# Dev
-# data_base ='mysql+pymysql://python:%s@dev.rawcaster.com/rawcaster' % quote('W3solutions123!@#')
+api_doc_path = "/docs"
+
 
 # 108 DB
 # data_base = "mysql+pymysql://maemysqluser:MaeNewMysql2@2@@192.168.1.109/rawcaster"
 data_base ='mysql+pymysql://Admin:Rawcaster2240422@rawcasterdev.c3xecvdvxfvf.us-east-1.rds.amazonaws.com/rawcasterdev'
 # data_base ='mysql+pymysql://maemysqluser:%s@cbe.themaestro.in/rawcaster' % quote('MaeNewMysql2@2@')
 
+# AWS Credentials
+access_key='AKIAYFYE6EFYG6RJOPMF'
+access_secret='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'
+bucket_name='rawcaster'
 
+# AI Access Key
+open_ai_key="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"
 
-api_doc_path = "/docs"
 
 class Settings(BaseSettings):
     API_V1_STR: str = base_url_segment
