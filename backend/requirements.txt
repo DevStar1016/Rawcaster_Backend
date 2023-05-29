@@ -6,7 +6,6 @@ fastapi_pagination
 passlib
 python-multipart
 boto3 
-fastapi_mail
 websockets
 python-dateutil
 Pillow
@@ -15,3 +14,8 @@ langdetect
 gtts
 playsound
 chime
+celery
+openai
+translate
+googletrans
+SpeechRecognition
