@@ -26,13 +26,17 @@ base_upload_folder = "local_uploads"
 # CBE Server
 data_base ='mysql+pymysql://maemysqluser:%s@cbe.themaestro.in/rawcaster' % quote('MaeNewMysql2@2@') 
 
+api_doc_path = "/docs"
+
+
+# AWS Credentials
 access_key='AKIAYFYE6EFYG6RJOPMF'
 access_secret='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'
 bucket_name='rawcaster'
 
+# AI Access Key
 open_ai_key="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"
 
-api_doc_path = "/docs"
 
 class Settings(BaseSettings):
     API_V1_STR: str = base_url_segment

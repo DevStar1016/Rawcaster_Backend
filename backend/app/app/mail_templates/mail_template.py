@@ -13,7 +13,7 @@ def mail_content(content):
                 <title></title>
             </head>
 
-            <body style="padding: 0px; margin: 0px;">
+            <body style="padding: 0px; margin: 0px; font-size:20px; ">
 
                 <div style="background: #edecfa;">
                     <table width="760" align="center"

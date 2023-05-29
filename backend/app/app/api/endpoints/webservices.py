@@ -2219,8 +2219,8 @@ async def deletefriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None)
 # 5 -> Both Group & Individual
 # 6 -> All My Friends
 # 7-> Only fans
+
 from celery import Celery
-import asyncio
 import os
 celery_app = Celery("tasks", broker="redis://localhost:8000")
 
@@ -2229,7 +2229,6 @@ def process_data(db,uploaded_file_path,login_user_id,master_id,share_type,share_
     
     segment_duration = 5 * 60
     video = VideoFileClip(uploaded_file_path)   # Video Split ( 5 Minutes)
-    duration = video.duration
     splited_video_url=[]
     total_duration = video.duration
     
@@ -2245,36 +2244,38 @@ def process_data(db,uploaded_file_path,login_user_id,master_id,share_type,share_
         # Save the segment as a new file
         
         segment_filename = f"video_clip_{random.randint(1111,9999)}{int(datetime.datetime.now().timestamp())}.mp4"
-        segment.write_videofile(segment_filename, audio_codec="aac")
+        segment.write_videofile(segment_filename, audio_codec="aac",bitrate='8000k')
         
         splited_video_url.append(segment_filename)
         
 
-        # try:
-        client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
-        s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
-        
-        with open(segment_filename, 'rb') as data:  # Upload File To S3
-            upload=client_s3.upload_fileobj(data, bucket_name, s3_file_path,ExtraArgs={'ACL': 'public-read'})
-        
-        file_stat = os.stat(segment_filename)
-        file_size=file_stat.st_size
-    
-        os.remove(segment_filename)
-        
-        url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
-        url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{s3_file_path}'
-        if url:
-            add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=master_id,
-                                media_type='video',media_file_type='mp4',file_size=file_size,path=url,
-                                created_date=datetime.datetime.utcnow(),status =1)
-            db.add(add_nugget_attachment)
-            db.commit()
-            db.refresh(add_nugget_attachment)
+        try:
+            client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
+            s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
             
-        else:
-            return {"status":0,"msg":"Failed to Upload"}
+            with open(segment_filename, 'rb') as data:  # Upload File To S3
+                upload=client_s3.upload_fileobj(data, bucket_name, s3_file_path,ExtraArgs={'ACL': 'public-read'})
+            
+            file_stat = os.stat(segment_filename)
+            file_size=file_stat.st_size
+        
+            os.remove(segment_filename)
+            
+            url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
+            url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{s3_file_path}'
+            if url:
+                add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=master_id,
+                                    media_type='video',media_file_type='mp4',file_size=file_size,path=url,
+                                    created_date=datetime.datetime.utcnow(),status =1)
+                db.add(add_nugget_attachment)
+                db.commit()
+                db.refresh(add_nugget_attachment)
                 
+            else:
+                return {"status":0,"msg":"Failed to Upload"}
+        except:
+            return {"status":0,"msg":"Failed to Upload"}
+                   
     add_nuggets=Nuggets(nuggets_id=master_id,user_id=login_user_id,type=1,share_type=share_type,created_date=datetime.datetime.utcnow())
     db.add(add_nuggets)
     db.commit()
@@ -2462,9 +2463,7 @@ async def addnuggets(background_tasks: BackgroundTasks,db:Session=Depends(deps.g
                             file_stat = os.stat(uploaded_file_path)
                             file_size= file_stat.st_size
                             
-                            type='image'
-                            path="/uploads/nuggets"
-                            
+                            type='image'                            
                             if 'video' in file_temp:
                                 type='video'
                             elif 'audio' in file_temp:
@@ -2472,7 +2471,7 @@ async def addnuggets(background_tasks: BackgroundTasks,db:Session=Depends(deps.g
                             
                             if file_size > 1000000 and type == 'image' and file_ext != '.gif':
                                 # uploaded_file_path=await file_upload(read_file,file_ext,compress=1)
-                                s3_file_path=f'nuggets/Image_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}'
+                                s3_file_path=f'nuggets/Image_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}'
                                 
                                 result=upload_to_s3(uploaded_file_path,s3_file_path)
                                 if result['status'] == 1:
@@ -2491,11 +2490,27 @@ async def addnuggets(background_tasks: BackgroundTasks,db:Session=Depends(deps.g
                                 s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                             
                                 if type == 'video':
-                                    # pass
-                                    return {"status":1,"msg":"Success","nugget_status":0} 
+                                    # video = VideoFileClip(uploaded_file_path)   # Video Split ( 5 Minutes)
+                                    # total_duration = video.duration
+                                    # if total_duration < 300 :
+                                    #     s3_file_path=f'nuggets/Image_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}'
+                                
+                                    #     result=upload_to_s3(uploaded_file_path,s3_file_path)
+                                    #     if result['status'] == 1:
+                                    #         add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,
+                                    #                                     media_type=type,media_file_type=file_ext,file_size=file_size,path=result['url'],
+                                    #                                     created_date=datetime.datetime.utcnow(),status =1)
+                                    #         db.add(add_nugget_attachment)
+                                    #         db.commit()
+                                    #         db.refresh(add_nugget_attachment)
+                                            
+                                    #     else:
+                                    #         return result
+                                        
+                                    # else:
                                     
-                                    background_tasks.add_task(process_data,db,uploaded_file_path,login_user_id,master_id,share_type,share_with)
-                                    return {"status":1,"msg":"Success","nugget_status":0}
+                                        background_tasks.add_task(process_data,db,uploaded_file_path,login_user_id,master_id,share_type,share_with)
+                                        return {"status":1,"msg":"Success","nugget_status":0}
                                     
                               
                                 elif type == 'audio':
@@ -6594,6 +6609,7 @@ async def nuggetabusereport(db:Session=Depends(deps.get_db),token:str=Form(None)
         access_check=NuggetAccessCheck(db,login_user_id,nugget_id)
         if not access_check:
             return {"status":0,"msg":"Unauthorized access"}
+        
         report=db.query(NuggetReport).filter(NuggetReport.user_id==login_user_id,NuggetReport.nugget_id==nugget_id).first()
 
         if not report:
@@ -6612,7 +6628,7 @@ async def nuggetabusereport(db:Session=Depends(deps.get_db),token:str=Form(None)
             else:
                 return {"status":0,"msg":"Nugget ID not correct"}
         else:
-            {"status":0,"msg":"You have already reported this nugget posting."}
+            return {"status":0,"msg":"You have already reported this nugget posting."}
 
 
 
