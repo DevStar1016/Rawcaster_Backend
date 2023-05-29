@@ -30,6 +30,11 @@ data_base ='mysql+pymysql://Admin:Rawcaster2240422@rawcasterdev.c3xecvdvxfvf.us-
 api_doc_path = "/docs"
 
 
+# 108 DB
+# data_base = "mysql+pymysql://maemysqluser:MaeNewMysql2@2@@192.168.1.109/rawcaster"
+data_base ='mysql+pymysql://Admin:Rawcaster2240422@rawcasterdev.c3xecvdvxfvf.us-east-1.rds.amazonaws.com/rawcasterdev'
+# data_base ='mysql+pymysql://maemysqluser:%s@cbe.themaestro.in/rawcaster' % quote('MaeNewMysql2@2@')
+
 # AWS Credentials
 access_key='AKIAYFYE6EFYG6RJOPMF'
 access_secret='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'

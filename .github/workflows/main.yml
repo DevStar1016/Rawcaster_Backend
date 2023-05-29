@@ -34,6 +34,7 @@ jobs:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         ECR_REPOSITORY: rawcasterecr
         IMAGE_TAG: docker_file_change
+
       run: |
         docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG backend/
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
