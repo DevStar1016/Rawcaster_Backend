@@ -197,6 +197,7 @@ def upload_to_s3(local_file_pth,s3_bucket_path):
     except Exception as e:
         exception_type = e.__class__
         print(exception_type)
+        return {"Unable to uploads"}
     
 
 async def send_email(db,to_mail, subject, message):

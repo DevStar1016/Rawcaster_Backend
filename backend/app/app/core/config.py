@@ -24,8 +24,8 @@ base_url_segment = "/rawcaster"
 base_upload_folder = "local_uploads"
 
 # CBE Server
-# data_base ='mysql+pymysql://Admin:Rawcaster2240422@rawcasterdev.c3xecvdvxfvf.us-east-1.rds.amazonaws.com/rawcasterdev'
-data_base ='mysql+pymysql://maemysqluser:%s@cbe.themaestro.in/rawcaster' % quote('MaeNewMysql2@2@') 
+data_base ='mysql+pymysql://Admin:Rawcaster2240422@rawcasterdev.c3xecvdvxfvf.us-east-1.rds.amazonaws.com/rawcasterdev'
+# data_base ='mysql+pymysql://maemysqluser:%s@cbe.themaestro.in/rawcaster' % quote('MaeNewMysql2@2@') 
 
 api_doc_path = "/docs"
 
