@@ -2491,24 +2491,24 @@ async def addnuggets(background_tasks: BackgroundTasks,db:Session=Depends(deps.g
                                 s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                             
                                 if type == 'video':
-                                    # video = VideoFileClip(uploaded_file_path)   # Video Split ( 5 Minutes)
-                                    # total_duration = video.duration
-                                    # if total_duration < 300 :
-                                    #     s3_file_path=f'nuggets/Image_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}'
+                                    video = VideoFileClip(uploaded_file_path)   # Video Split ( 5 Minutes)
+                                    total_duration = video.duration
+                                    if total_duration < 300 :
+                                        s3_file_path=f'nuggets/Image_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}'
                                 
-                                    #     result=upload_to_s3(uploaded_file_path,s3_file_path)
-                                    #     if result['status'] == 1:
-                                    #         add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,
-                                    #                                     media_type=type,media_file_type=file_ext,file_size=file_size,path=result['url'],
-                                    #                                     created_date=datetime.datetime.utcnow(),status =1)
-                                    #         db.add(add_nugget_attachment)
-                                    #         db.commit()
-                                    #         db.refresh(add_nugget_attachment)
+                                        result=upload_to_s3(uploaded_file_path,s3_file_path)
+                                        if result['status'] == 1:
+                                            add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,
+                                                                        media_type=type,media_file_type=file_ext,file_size=file_size,path=result['url'],
+                                                                        created_date=datetime.datetime.utcnow(),status =1)
+                                            db.add(add_nugget_attachment)
+                                            db.commit()
+                                            db.refresh(add_nugget_attachment)
                                             
-                                    #     else:
-                                    #         return result
+                                        else:
+                                            return result
                                         
-                                    # else:
+                                    else:
                                     
                                         background_tasks.add_task(process_data,db,uploaded_file_path,login_user_id,master_id,share_type,share_with)
                                         return {"status":1,"msg":"Success","nugget_status":0}
