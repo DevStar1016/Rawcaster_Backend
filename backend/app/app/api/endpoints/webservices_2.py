@@ -561,24 +561,12 @@ async def texttoaudio(db:Session=Depends(deps.get_db),token:str=Form(None),messa
     if access_token == False:
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     else:
-        target_language='en'
-                    
-        translator = Translator(service_urls=['translate.google.com'])
-        print(message)
-        # Detect the source language
-        detected_lang = translator.detect(message).lang
-
-        # Translate the text to the target language
-        translation = translator.translate(message, src=detected_lang, dest=target_language)
-        
-        translated_text=translation.text
-        
         # Create an instance of the Polly client
         polly_client = boto3.Session(
             aws_access_key_id=config.access_key,
             aws_secret_access_key=config.access_secret,
             region_name='us-west-2'  # Replace with your desired AWS region
-        ).client('polly')
+            ).client('polly')
 
         # Specify the desired voice and output format
         voice_id = 'Joanna'
@@ -586,12 +574,13 @@ async def texttoaudio(db:Session=Depends(deps.get_db),token:str=Form(None),messa
 
         # Request speech synthesis
         response = polly_client.synthesize_speech(
-            Text=translated_text,
+            Text=message,
             VoiceId=voice_id,
             OutputFormat=output_format
         )
         # Upload File
-        base_dir = "rawcaster_uploads/converted_audio"
+        # base_dir = f"{st.BASE_DIR}rawcaster_uploads"
+        base_dir = "rawcaster_uploads"
         
         try:
             os.makedirs(base_dir, mode=0o777, exist_ok=True)
@@ -607,110 +596,145 @@ async def texttoaudio(db:Session=Depends(deps.get_db),token:str=Form(None),messa
         
         with open(save_full_path, 'wb') as file:
             file.write(response['AudioStream'].read())
-        
-        s3_file_path=f"nuggets/converted_ai_audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
-                                
+            
+        s3_file_path=f"nuggets/converted_audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
+                
         result=upload_to_s3(save_full_path,s3_file_path)
         return result
 
 
 
-# Test
-import speech_recognition as sr
 # 91 AI Chat Audio Chat
 @router.post("/audio_to_text")
 async def audio_to_text(audio_file:UploadFile=File(None)):
-    transcribe_client = boto3.client('transcribe',aws_access_key_id=config.access_key,
-        aws_secret_access_key=config.access_secret,
-        region_name='us-west-2')
-    
-    
-    
-    def transcribe_audio(file_path):
-    # Create an Amazon Transcribe client
+    def transcribe_audio(bucket_name, object_key):
         transcribe = boto3.client('transcribe',aws_access_key_id=config.access_key,
             aws_secret_access_key=config.access_secret,
             region_name='us-west-2')
 
-        # Specify the AWS S3 bucket and key where the audio file is located
-        bucket_name = 'rawcaster'
-        audio_key = 'https://rawcaster.s3.us-west-2.amazonaws.com/nuggets/audio_15291685323973.mp3'  # Replace with your audio file path
-        job_name=f"transcription-job-name{int(datetime.utcnow().timestamp())}"
-        
-        # Start the transcription job
-        transcribe.start_transcription_job(
-            TranscriptionJobName=job_name,
-            Media={'MediaFileUri': f's3://{bucket_name}/{audio_key}'},
-            MediaFormat='wav',
-            LanguageCode='en-US'  # Adjust the language code if needed
+        response = transcribe.start_transcription_job(
+            TranscriptionJobName='MyTranscriptionJob',
+            LanguageCode='en-US',
+            MediaFormat='mp3',
+            Media={
+                'MediaFileUri': object_key
+            }
         )
 
-        # Wait for the transcription job to complete
-        while True:
-            response = transcribe.get_transcription_job(
-                TranscriptionJobName=job_name
-            )
-            if response['TranscriptionJob']['TranscriptionJobStatus'] in ['COMPLETED', 'FAILED']:
+        return response
+
+    # Provide your S3 bucket name and audio file's object key
+    bucket_name = 'rawcaster'
+    object_key = 'https://rawcaster.s3.us-west-2.amazonaws.com/nuggets/converted_audio_59381685144351.mp3'
+
+    # Transcribe the audio
+    response = transcribe_audio(bucket_name, object_key)
+
+    # Get the transcription job status
+    status = response['TranscriptionJob']['TranscriptionJobStatus']
+    print(f"Transcription job status: {status}")
+    
+    
+    
+    
+    
+# 92 Upload Video File
+@router.post("/split_file")
+async def split_file(audio_file:UploadFile=File(None)):
+
+
+    def split_video(input_file, output_prefix, duration):
+        # Generate the command to split the video using FFmpeg
+        command = [
+            'ffmpeg',
+            '-i', input_file,
+            '-c', 'copy',
+            '-map', '0',
+            '-segment_time', str(duration),
+            '-f', 'segment',
+            '-reset_timestamps', '1',
+            output_prefix + '%03d.mp4'
+        ]
+
+        # Run the command using subprocess
+        subprocess.run(command)
+
+        # Generate the output file paths
+        file_paths = []
+        for i in range(0, 1000):  # Assuming up to 999 output parts
+            file_path = output_prefix + f'{i:03d}.mp4'
+            
+            if not os.path.exists(file_path):
+                print("s")
                 break
+            file_paths.append(file_path)
 
-        # Get the transcription results
-        if response['TranscriptionJob']['TranscriptionJobStatus'] == 'COMPLETED':
-            transcription_uri = response['TranscriptionJob']['Transcript']['TranscriptFileUri']
-            transcription = transcribe.get_transcription_job(
-                TranscriptionJobName=job_name
-            )['TranscriptionJob']['Transcript']['Results']
-            return transcription
+        return file_paths
 
-        return None  # Transcription job failed
+    # Example usage
+    input_file = '/home/surya_maestro/Pictures/VID-20230529-WA0003.mp4'  # Path to the input video file
+    output_prefix = f'output_part_{int(datetime.utcnow().timestamp())}'  # Prefix for the output video parts
+    duration = 10  # Duration of each video part in seconds
 
-    # Usage example
-    audio_file_path = 'path/to/audio/file.wav'  # Replace with your audio file path
-    transcription_result = transcribe_audio(audio_file_path)
+    output_files = split_video(input_file, output_prefix, duration)
+    return output_files
 
-    if transcription_result:
-        print(transcription_result)
-    else:
-        print('Transcription failed.')
-    
-    
-    
-    
-    
-    
-    
-    
-    # s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
-    
-    # # file_path="/home/surya_maestro/Music/Jack Sparrow English Dialogue.wav"
-    # audio_file_key="https://rawcaster.s3.us-west-2.amazonaws.com/nuggets/audio_15491685140207.mp3"
-    
-    # def transcribe_audio_file(file_key):
-    #     job_name = f'transcription_job{int(datetime.utcnow().timestamp())}'
-    #     job_uri = f's3://rawcaster/{file_key}'
+        
+# Example usage
 
-    #     response = transcribe_client.start_transcription_job(
+    # # Example usage
+    # # split_video('/home/surya_maestro/Videos/god.mp4', duration=10) 
+    # split_video('/home/surya_maestro/Pictures/VID-20230529-WA0003.mp4', duration=10) 
+    
+
+    # Example usage
+    
+    # transcribe_client = boto3.client('transcribe',aws_access_key_id=config.access_key,
+    #     aws_secret_access_key=config.access_secret,
+    #     region_name='us-west-2')
+    
+    # def transcribe_audio(file_path):
+    # # Create an Amazon Transcribe client
+    #     transcribe = boto3.client('transcribe',aws_access_key_id=config.access_key,
+    #         aws_secret_access_key=config.access_secret,
+    #         region_name='us-west-2')
+
+    #     # Specify the AWS S3 bucket and key where the audio file is located
+    #     bucket_name = 'rawcaster'
+    #     audio_key = 'https://rawcaster.s3.us-west-2.amazonaws.com/nuggets/converted_audio_59381685144351.mp3'  # Replace with your audio file path
+    #     job_name=f"transcription-job-name{int(datetime.utcnow().timestamp())}"
+        
+    #     # Start the transcription job
+    #     transcribe.start_transcription_job(
     #         TranscriptionJobName=job_name,
-    #         Media={'MediaFileUri': job_uri},
-    #         MediaFormat='mp3',  # Specify the correct format of your audio file
-    #         LanguageCode='en-US'  # Specify the language code if other than English
+    #         Media={'MediaFileUri': f's3://{bucket_name}/{audio_key}'},
+    #         MediaFormat='wav',
+    #         LanguageCode='en-US'  # Adjust the language code if needed
     #     )
 
     #     # Wait for the transcription job to complete
     #     while True:
-    #         response = transcribe_client.get_transcription_job(TranscriptionJobName=job_name)
+    #         response = transcribe.get_transcription_job(
+    #             TranscriptionJobName=job_name
+    #         )
     #         if response['TranscriptionJob']['TranscriptionJobStatus'] in ['COMPLETED', 'FAILED']:
     #             break
 
-    #     # Get the transcript
-    #     transcript_uri = response['TranscriptionJob']['Transcript']['TranscriptFileUri']
-    #     transcript_response = s3.get_object(Bucket=transcript_uri.split('/')[2], Key=transcript_uri.split('/')[3])
-    #     transcript = transcript_response['Body'].read().decode('utf-8')
+    #     # Get the transcription results
+    #     if response['TranscriptionJob']['TranscriptionJobStatus'] == 'COMPLETED':
+    #         transcription_uri = response['TranscriptionJob']['Transcript']['TranscriptFileUri']
+    #         transcription = transcribe.get_transcription_job(
+    #             TranscriptionJobName=job_name
+    #         )['TranscriptionJob']['Transcript']['Results']
+    #         return transcription
 
-    #     return transcript
+    #     return None  # Transcription job failed
 
-    # transcript = transcribe_audio_file(audio_file_key)
-    # print(transcript)
-    
-    # return transcript
-    
-    
+    # # Usage example
+    # audio_file_path = 'path/to/audio/file.wav'  # Replace with your audio file path
+    # transcription_result = transcribe_audio(audio_file_path)
+
+    # if transcription_result:
+    #     print(transcription_result)
+    # else:
+    #     print('Transcription failed.')

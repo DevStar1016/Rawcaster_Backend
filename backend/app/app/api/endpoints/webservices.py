@@ -19,6 +19,7 @@ from .webservices_2 import croninfluencemember
 import ast
 from mail_templates.mail_template import *
 from moviepy.video.io.VideoFileClip import VideoFileClip
+import subprocess
 
 router = APIRouter() 
 
@@ -2226,55 +2227,119 @@ celery_app = Celery("tasks", broker="redis://localhost:8000")
 
 @celery_app.task
 def process_data(db,uploaded_file_path,login_user_id,master_id,share_type,share_with):
+    input_file=uploaded_file_path
+    output_prefix = f'rawcaster_uploads/output_part_{int(datetime.datetime.utcnow().timestamp())}'  # Prefix for the output video parts
+    duration = 300  # Duration of each video part in seconds
     
-    segment_duration = 5 * 60
-    video = VideoFileClip(uploaded_file_path)   # Video Split ( 5 Minutes)
-    splited_video_url=[]
-    total_duration = video.duration
+    command = [
+            'ffmpeg',
+            '-i', input_file,
+            '-c', 'copy',
+            '-map', '0',
+            '-segment_time', str(duration),
+            '-f', 'segment',
+            '-reset_timestamps', '1',
+            output_prefix + '%03d.mp4'
+        ]
+
+    # Run the command using subprocess
+    subprocess.run(command)
+
+    # Generate the output file paths
+    file_paths = []
+    for i in range(0, 1000):  # Assuming up to 999 output parts
+        file_path = output_prefix + f'{i:03d}.mp4'
+        
+        if not os.path.exists(file_path):
+            break
+        file_paths.append(file_path)
+
+    splited_file_path=file_paths
     
-    # if duration < 3000:
-    num_segments = math.ceil(total_duration / segment_duration)
-    for i in range(num_segments):
+    client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
     
-        start_time = i * segment_duration
-        end_time = min((i+1) * segment_duration, total_duration)
+    for local_file_pth in splited_file_path:
+        s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
         
-        segment = video.subclip(start_time, end_time)
+        with open(local_file_pth, 'rb') as data:  # Upload File To S3
+            upload=client_s3.upload_fileobj(data, bucket_name, s3_file_path,ExtraArgs={'ACL': 'public-read'})
         
-        # Save the segment as a new file
+        # Get File Size
+        file_stat = os.stat(local_file_pth)
+        file_size=file_stat.st_size
         
-        segment_filename = f"video_clip_{random.randint(1111,9999)}{int(datetime.datetime.now().timestamp())}.mp4"
-        segment.write_videofile(segment_filename, audio_codec="aac",bitrate='8000k')
+        os.remove(local_file_pth)
         
-        splited_video_url.append(segment_filename)
+        # Update Data    
+        url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
+        url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{s3_file_path}'
+        if url:
+            add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=master_id,
+                                media_type='video',media_file_type='mp4',file_size=file_size,path=url,
+                                created_date=datetime.datetime.utcnow(),status =1)
+            db.add(add_nugget_attachment)
+            db.commit()
+            db.refresh(add_nugget_attachment)
+            
+        else:
+            return {"status":0,"msg":"Failed to Upload"}
+    
+    
+    
+    
+    
+    
+    # segment_duration = 5 * 60
+    # video = VideoFileClip(uploaded_file_path)   # Video Split ( 5 Minutes)
+    # splited_video_url=[]
+    # total_duration = video.duration
+    
+    # # if duration < 3000:
+    # num_segments = math.ceil(total_duration / segment_duration)
+    # for i in range(num_segments):
+    
+    #     start_time = i * segment_duration
+    #     end_time = min((i+1) * segment_duration, total_duration)
+        
+    #     segment = video.subclip(start_time, end_time)
+    #     print(segment)
+    #     # Save the segment as a new file
+    #     resized_clip = segment.size(1280, 720)
+        
+    #     segment_filename = f"video_clip_{random.randint(1111,9999)}{int(datetime.datetime.now().timestamp())}.mp4"
+    #     # resized_clip = segment.resolution(1580, 720)
+        
+    #     segment.write_videofile(segment_filename, audio_codec="aac",fps=30,resolution=(1280, 720))
+        
+    #     splited_video_url.append(segment_filename)
         
 
-        try:
-            client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
-            s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
+    #     try:
+    #         client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
+    #         s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
             
-            with open(segment_filename, 'rb') as data:  # Upload File To S3
-                upload=client_s3.upload_fileobj(data, bucket_name, s3_file_path,ExtraArgs={'ACL': 'public-read'})
+    #         with open(segment_filename, 'rb') as data:  # Upload File To S3
+    #             upload=client_s3.upload_fileobj(data, bucket_name, s3_file_path,ExtraArgs={'ACL': 'public-read'})
             
-            file_stat = os.stat(segment_filename)
-            file_size=file_stat.st_size
+    #         file_stat = os.stat(segment_filename)
+    #         file_size=file_stat.st_size
         
-            os.remove(segment_filename)
+    #         os.remove(segment_filename)
             
-            url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
-            url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{s3_file_path}'
-            if url:
-                add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=master_id,
-                                    media_type='video',media_file_type='mp4',file_size=file_size,path=url,
-                                    created_date=datetime.datetime.utcnow(),status =1)
-                db.add(add_nugget_attachment)
-                db.commit()
-                db.refresh(add_nugget_attachment)
+    #         url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
+    #         url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{s3_file_path}'
+    #         if url:
+    #             add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=master_id,
+    #                                 media_type='video',media_file_type='mp4',file_size=file_size,path=url,
+    #                                 created_date=datetime.datetime.utcnow(),status =1)
+    #             db.add(add_nugget_attachment)
+    #             db.commit()
+    #             db.refresh(add_nugget_attachment)
                 
-            else:
-                return {"status":0,"msg":"Failed to Upload"}
-        except:
-            return {"status":0,"msg":"Failed to Upload"}
+    #         else:
+    #             return {"status":0,"msg":"Failed to Upload"}
+    #     except:
+    #         return {"status":0,"msg":"Failed to Upload"}
                    
     add_nuggets=Nuggets(nuggets_id=master_id,user_id=login_user_id,type=1,share_type=share_type,created_date=datetime.datetime.utcnow())
     db.add(add_nuggets)
@@ -2490,25 +2555,25 @@ async def addnuggets(background_tasks: BackgroundTasks,db:Session=Depends(deps.g
                                 s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                             
                                 if type == 'video':
-                                    # video = VideoFileClip(uploaded_file_path)   # Video Split ( 5 Minutes)
-                                    # total_duration = video.duration
-                                    # if total_duration < 300 :
-                                    #     s3_file_path=f'nuggets/Image_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}'
-                                
-                                    #     result=upload_to_s3(uploaded_file_path,s3_file_path)
-                                    #     if result['status'] == 1:
-                                    #         add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,
-                                    #                                     media_type=type,media_file_type=file_ext,file_size=file_size,path=result['url'],
-                                    #                                     created_date=datetime.datetime.utcnow(),status =1)
-                                    #         db.add(add_nugget_attachment)
-                                    #         db.commit()
-                                    #         db.refresh(add_nugget_attachment)
-                                            
-                                    #     else:
-                                    #         return result
-                                        
-                                    # else:
+                                    video = VideoFileClip(uploaded_file_path)   # Video Split ( 5 Minutes)
+                                    total_duration = video.duration
                                     
+                                    if total_duration  < 300 :
+                                        
+                                        result=upload_to_s3(uploaded_file_path,s3_file_path)
+                                        if result['status'] == 1:
+                                            add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,
+                                                                        media_type=type,media_file_type=file_ext,file_size=file_size,path=result['url'],
+                                                                        created_date=datetime.datetime.utcnow(),status =1)
+                                            db.add(add_nugget_attachment)
+                                            db.commit()
+                                            db.refresh(add_nugget_attachment)
+                                            
+                                        else:
+                                            return result
+                                        
+                                    else:
+                                        
                                         background_tasks.add_task(process_data,db,uploaded_file_path,login_user_id,master_id,share_type,share_with)
                                         return {"status":1,"msg":"Success","nugget_status":0}
                                     
