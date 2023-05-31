@@ -1254,8 +1254,8 @@ def get_event_detail(db,event_id,login_user_id):
                         "original_user_image":event_details.user.profile_img if event_details.created_by else "",
                         "event_melody_id":event_details.event_melody_id if event_details.event_melody_id else "",
                         "waiting_room":event_details.waiting_room if event_details.waiting_room != None else 0,
-                        "join_before_host":event_details.join_before_host if event_details.join_before_host != None else 0,
-                        "sound_notify":event_details.sound_notify if event_details.sound_notify != None else 0,
+                        "join_before_host":event_details.join_before_host if event_details.join_before_host != None or event_details.join_before_host != "" else 0,
+                        "sound_notify":event_details.sound_notify if event_details.sound_notify != None or event_details.sound_notify != "" else 0,
                         "user_screenshare":event_details.user_screenshare if event_details.user_screenshare != None else 0,
                         "melodies":{"path":default_melody.path if default_melody.path else None,"type":default_melody.type if default_melody.type else None,"is_default":default_melody.event_id if default_melody.event_id else None}
                     })

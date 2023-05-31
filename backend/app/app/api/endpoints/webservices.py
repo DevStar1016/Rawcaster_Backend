@@ -1589,6 +1589,7 @@ async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(Non
                             group_access=0
                         else:
                             group_access=1
+                            
                     elif check_influencer_category and check_influencer_category.type == 1 and check_influencer_category.lock_my_connection == 1:
                         group_access=1
                         
@@ -1642,24 +1643,35 @@ async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(Non
                                             "last_seen":group_member.user.last_seen if group_member.user_id else "",
                                             "typing":0
                                             })
-            
-                    result_list.append({
-                                        "group_id":res.id,
-                                        "group_name":groupname,
-                                        "group_icon":res.group_icon if res.group_icon else defaultimage('group_icon'),
-                                        "group_member_count":(gte_frnd_group_count + 1 if grouptype == 1 else gte_frnd_group_count)  if gte_frnd_group_count else 0,
-                                        "group_owner":res.created_by if res.created_by else 0,
-                                        "typing":0,
-                                        "chat_enabled":res.chat_enabled,
-                                        "group_type":grouptype,
-                                        "group_access":1 if group_access == 1 else 0,
-                                        "group_category":group_category if group_category else 3,
-                                        "last_msg":get_group_chat.message if get_group_chat else "",
-                                        "last_msg_datetime":(common_date(get_group_chat.sent_datetime) if get_group_chat.sent_datetime else "") if get_group_chat else "",
-                                        "result_list":3,
-                                        "group_member_ids":members,
-                                        "group_members_list":memberlist
-                                        })
+                    
+                    if group_access == 1 and get_user.user_status_id == 4 and grouptype == 1:
+                        result_list.append({
+                                            "group_id":res.id,
+                                            "group_name":groupname,
+                                            "group_icon":res.group_icon if res.group_icon else defaultimage('group_icon'),
+                                            "group_member_count":(gte_frnd_group_count + 1 if grouptype == 1 else gte_frnd_group_count)  if gte_frnd_group_count else 0,
+                                            "locked":1
+                                            })
+                    else:
+                        result_list.append({
+                                            "group_id":res.id,
+                                            "group_name":groupname,
+                                            "locked":0,
+                                            "owner_membership_type":get_user.user_status_id,
+                                            "group_icon":res.group_icon if res.group_icon else defaultimage('group_icon'),
+                                            "group_member_count":(gte_frnd_group_count + 1 if grouptype == 1 else gte_frnd_group_count)  if gte_frnd_group_count else 0,
+                                            "group_owner":res.created_by if res.created_by else 0,
+                                            "typing":0,
+                                            "chat_enabled":res.chat_enabled,
+                                            "group_type":grouptype,
+                                            "group_access":1 if group_access == 1 else 0,
+                                            "group_category":group_category if group_category else 3,
+                                            "last_msg":get_group_chat.message if get_group_chat else "",
+                                            "last_msg_datetime":(common_date(get_group_chat.sent_datetime) if get_group_chat.sent_datetime else "") if get_group_chat else "",
+                                            "result_list":3,
+                                            "group_member_ids":members,
+                                            "group_members_list":memberlist
+                                            })
                       
                 return {"status":1,"msg":"Success","group_count":get_row_count,"total_pages":total_pages,"current_page_no":current_page_no,"friend_group_list":result_list}
             
