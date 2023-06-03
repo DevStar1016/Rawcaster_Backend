@@ -153,32 +153,6 @@ def video_file_upload(upload_file,compress,file_ext):
     return save_full_path
     
 
-async def audio_file_upload(upload_file,compress):
-    # base_dir = f"{st.BASE_DIR}rawcaster_uploads"
-    base_dir = "rawcaster_uploads"
-    
-    try:
-        os.makedirs(base_dir, mode=0o777, exist_ok=True)
-    except OSError as e:
-        sys.exit("Can't create {dir}: {err}".format(
-            dir=base_dir, err=e))
-
-    output_dir = base_dir + "/"
-    
-    filename=f"audio_{random.randint(1111,9999)}_{datetime.datetime.now().timestamp()}.mp4"    
-   
-    save_full_path=f'{output_dir}{filename}'  
-      
-    with open(save_full_path, "wb") as buffer:
-        buffer.write(upload_file)
-    
-    return save_full_path
-
-    # subprocess.run(["ffmpeg", "-i", save_full_path, "-ab", "32k", "-y", output_path])
-
-    # return output_path
-    
-
 
 def upload_to_s3(local_file_pth,s3_bucket_path):
    

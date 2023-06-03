@@ -35,7 +35,7 @@ access_secret='2xf3IXK0x9s5KX4da01OM5Lhl+vV17ttloRMeXVk'
 bucket_name='rawcaster'
 
 # AI Access Key
-open_ai_key="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"
+open_ai_key="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"
 
 
 class Settings(BaseSettings):

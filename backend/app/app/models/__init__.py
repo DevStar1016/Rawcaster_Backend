@@ -59,5 +59,6 @@ from .claim_accounts import ClaimAccounts
 from .influencer_chat import InfluencerChat
 from .verify_accounts import VerifyAccounts
 from .nugget_content_audio import NuggetContentAudio
+from .read_out_language import ReadOutLanguage
 
 
