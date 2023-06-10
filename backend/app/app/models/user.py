@@ -43,6 +43,7 @@ class User(Base):
     total_referral_point=Column(Integer,nullable=False,default=0)
     unused_referral_points=Column(Integer,nullable=False,default=0)
     influencer_category=Column(String(20))
+    existing_user=Column(TINYINT,default=1) 
     # Newly Added
     work_at=Column(String(100))
     studied_at=Column(String(100))

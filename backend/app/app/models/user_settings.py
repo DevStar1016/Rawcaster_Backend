@@ -46,10 +46,12 @@ class UserSettings(Base):
     lock_my_influencer=Column(TINYINT,comment="1-Yes,0-No",default=0)
     live_event_banner=Column(String(500))
     talkshow_event_banner=Column(String(500))
-    
+    read_out_language_id=Column(Integer,ForeignKey("read_out_language.id"))
     
     status=Column(TINYINT,default=1)
    
     user=relationship("User",back_populates="user_settings")   
     language=relationship("Language",back_populates="user_settings")   
+    read_out_language=relationship("ReadOutLanguage",back_populates="user_settings")   
+    
     

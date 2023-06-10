@@ -9,8 +9,8 @@ from datetime import datetime,date
 from typing import List
 from app.core import config
 import openai
-from googletrans import Translator
-
+import json
+from pydub import AudioSegment
 
 router = APIRouter() 
 
@@ -76,7 +76,8 @@ async def add_event_abuse_report(db:Session=Depends(deps.get_db),token:str=Form(
                                 return {"status":1,"msg":"Success"}
                             else:
                                 return result
-                        except:
+                        except Exception as e:
+                            print(e)
                             return {"status":0,"msg":"Unable to Upload File"}
                             
                     else:
@@ -146,7 +147,8 @@ async def testaddeventabusereport(db:Session=Depends(deps.get_db),token:str=Form
                                 return {"status":1,"msg":"Success"}
                             else:
                                 return result
-                        except:
+                        except Exception as e:
+                            print(e)
                             return {"status":0,"msg":"Unable to Upload File"}
                             
                     else:
@@ -317,40 +319,40 @@ async def influencerchat(db:Session=Depends(deps.get_db),token:str=Form(None),ty
                     content.append(message)
                     
                 elif type in file_type:
-                    if type == 2 or type == 5:
-                        for attachment in attachment:
-                            file_ext = os.path.splitext(attachment.filename)[1]
-                            
-                            uploaded_file_path=file_upload(attachment,compress=1)
-                            s3_file_path=f'Image_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}{file_ext}'
-                            
-                            result=upload_to_s3(uploaded_file_path,s3_file_path)
-                            if result['status'] and result['status'] == 1:
-                                content.append(result['url'])
-                            else:
-                                return result
+                    # if type == 2 or type == 5:
+                    for attach in attachment:
+                        file_ext = os.path.splitext(attach.filename)[1]
                         
-                    if type == 4: # Video
-                        readed_file=await attachment.read()
-                        save_file_path=video_file_upload(readed_file,compress=None)
-                        segment_filename = f"video_{random.randint(1111,9999)}{int(datetime.now().timestamp())}.mp4"
+                        uploaded_file_path=file_upload(attach,file_ext,compress=None)
+                        s3_file_path=f'Image_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}{file_ext}'
                         
-                        result=upload_to_s3(save_file_path,segment_filename)
+                        result=upload_to_s3(uploaded_file_path,s3_file_path)
                         if result['status'] and result['status'] == 1:
                             content.append(result['url'])
                         else:
                             return result
                         
-                    if type == 3: # Audio
-                        readed_file=await attachment.read()
-                        save_file_path=await audio_file_upload(readed_file,compress=None)
-                        segment_filename = f"audio_{random.randint(1111,9999)}{int(datetime.now().timestamp())}.mp3"
+                    # if type == 4: # Video
+                    #     readed_file=await attachment.read()
+                    #     save_file_path=video_file_upload(readed_file,compress=None)
+                    #     segment_filename = f"video_{random.randint(1111,9999)}{int(datetime.now().timestamp())}.mp4"
                         
-                        result=upload_to_s3(save_file_path,segment_filename)
-                        if result['status'] and result['status'] == 1:
-                            content.append(result['url'])
-                        else:
-                            return result
+                    #     result=upload_to_s3(save_file_path,segment_filename)
+                    #     if result['status'] and result['status'] == 1:
+                    #         content.append(result['url'])
+                    #     else:
+                    #         return result
+                        
+                    # if type == 3: # Audio
+                    #     readed_file=await attachment.read()
+                    #     save_file_path=await file_upload(readed_file,compress=None)
+                    #     segment_filename = f"audio_{random.randint(1111,9999)}{int(datetime.now().timestamp())}.mp3"
+                        
+                    #     result=upload_to_s3(save_file_path,segment_filename)
+                    #     if result['status'] and result['status'] == 1:
+                    #         content.append(result['url'])
+                    #     else:
+                    #         return result
                         
                 for msg in content:
                     # Add Group Chat
@@ -411,30 +413,119 @@ async def add_verify_account(db:Session=Depends(deps.get_db),token:str=Form(None
 
 # 91 AI Chat
 @router.post("/aichat")
-async def aichat(db:Session=Depends(deps.get_db),token:str=Form(None),user_query:str=Form(None)):
+async def aichat(db:Session=Depends(deps.get_db),token:str=Form(None),user_query:str=Form(None),audio_file:UploadFile=File(None)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    
+    if user_query and len(user_query) > 100:
+        return {"status":0,"msg":"Content length must be less than 100"}
+        
     access_token=checkToken(db,token)    
+    
     if access_token == False:
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     else:
         get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
         user_name = get_token_details.user.display_name if get_token_details else None
         created_at=common_date(datetime.utcnow(),None)
-        if user_query:
+        query=None
+        if audio_file:
+            
+            file_ext = os.path.splitext(audio_file.filename)[1]
+                                
+            uploaded_file_path=await file_upload(audio_file,file_ext,compress=1)
+            # Get Duration of the File
+            try:
+                audio = AudioSegment.from_file(uploaded_file_path)
+                duration_in_seconds = len(audio) / 1000
+                if not duration_in_seconds < 120:
+                    return {"status":0,"msg":"Allowed only maximum 2 minutes"}
+            except Exception as e:
+                print(e)
+                return {'status':0,"msg":"Try again later..."}
+            
+            # Upload to S3
+            s3_file_path=f'nuggets/audio_{int(datetime.utcnow().timestamp())}{file_ext}'
+                                        
+            result=upload_to_s3(uploaded_file_path,s3_file_path)
+            
+            if result['status'] == 1:
+                try:
+                    transcribe = boto3.client('transcribe',aws_access_key_id=config.access_key,
+                        aws_secret_access_key=config.access_secret,
+                        region_name='us-west-2')
+
+                    job_name = f'my_job_{int(datetime.utcnow().timestamp())}'
+                    
+                    output_bucket = 'rawcaster'
+                    output_key = f'transcriptions/converted_text{int(datetime.utcnow().timestamp())}.json'
+                    language_code = 'en-US'  # Language code of the audio (e.g., en-US for US English)
+                
+                    response = transcribe.start_transcription_job(
+                            TranscriptionJobName=job_name,
+                            LanguageCode=language_code,
+                            Media={'MediaFileUri': result['url']},
+                            OutputBucketName=output_bucket,
+                            OutputKey=output_key,
+                            Settings={
+                                'ShowSpeakerLabels': True,
+                                'MaxSpeakerLabels': 2  # Set the expected number of speakers in the audio
+                            }
+                        )
+                    
+                    while True:
+                    
+                        response = transcribe.get_transcription_job(TranscriptionJobName=job_name)
+                        status = response['TranscriptionJob']['TranscriptionJobStatus']
+                        
+                        if status == 'COMPLETED':
+                            result_url = response['TranscriptionJob']['Transcript']['TranscriptFileUri']
+                
+                            # Download the result file
+                            s3_client = boto3.client('s3',aws_access_key_id=config.access_key,
+                                aws_secret_access_key=config.access_secret,
+                                region_name='us-west-2')
+                                
+                            res = result_url.split('rawcaster/', 1) if result_url else None
+                            splitString = res[1]
+
+                            # Retrieve the JSON file object from S3
+                            response = s3_client.get_object(Bucket='rawcaster', Key=splitString)
+
+                            # Read the contents of the JSON file
+                            json_data = response['Body'].read().decode('utf-8')
+                            # Parse the JSON data
+                            parsed_data = json.loads(json_data)
+                            
+                            # Audio Content
+                            query=parsed_data['results']['transcripts'][0]['transcript']
+                            break
+                        if status == 'FAILED':
+                            return {"status":0,"msg":"Unable to convert"}
+                except Exception as e:
+                    print(e)
+                    return {"status":0,"msg":"Something went wrong..."}
+                    
+                    
+                    
+        else:
+            query=user_query
+        
+        if query:
+
+            
             openai.api_key = config.open_ai_key
             
             response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
                     {"role": "system", "content": "You are a chatbot"},
-                    {"role": "user", "content": f"{user_query}?"},
+                    {"role": "user", "content": f"{query}"},
                 ]
                 )
-
+            
             result = ''
             if response:
+               
                 for choice in response.choices:
                     result += choice.message.content
                 
@@ -443,12 +534,6 @@ async def aichat(db:Session=Depends(deps.get_db),token:str=Form(None),user_query
                 return {"status":0,"msg":"Failed to search"}
         else:
             return {"status":1,"msg":f"HI {user_name}, I am an Artificial Intelligence (AI), I can answer your question on anything. Speak or type your question here..","created_at":created_at}
-            
-        
-
-# Google Transalate APi Key = AIzaSyAMCCtM2tXa9ytt0a-JzoX74p6iDfDrlzM
-
-
 
 
 # 92  Text To Audio Conversion (Nugget Content)
@@ -465,85 +550,104 @@ async def nuggetcontentaudio(db:Session=Depends(deps.get_db),token:str=Form(None
     if access_token == False:
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     else:
+        # check Read Out Language
+        get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+        login_user_id = get_token_details.user_id if get_token_details else None
+        
+        get_user_readout_language=db.query(UserSettings.id.label("user_setting_id"),ReadOutLanguage.id.label("read_out_id"),ReadOutLanguage.language_code).filter(UserSettings.user_id == login_user_id,ReadOutLanguage.id == UserSettings.read_out_language_id).first()
+        
+        target_language=get_user_readout_language.language_code if get_user_readout_language else 'en'
+       
         # Get nuggets
         get_nugget=db.query(Nuggets).filter(Nuggets.id == nugget_id,Nuggets.status == 1).first()
         if get_nugget:
-            get_exist_audio=db.query(NuggetContentAudio).filter(NuggetContentAudio.nugget_master_id == get_nugget.nuggets_id,NuggetContentAudio.status == 1).first()
-            if get_exist_audio:
-                return {"status":1,"msg":"Success","file_path":get_exist_audio.path}
             
-            else:
-                text=get_nugget.nuggets_master.content if get_nugget else None
+            # get_exist_audio=db.query(NuggetContentAudio).filter(NuggetContentAudio.nugget_master_id == get_nugget.nuggets_id,NuggetContentAudio.status == 1).first()
+            # if get_exist_audio:
                 
-                if text:
-                    try:
-                        target_language='en'
+            #     return {"status":1,"msg":"Success","file_path":get_exist_audio.path}
+            
+            # else:
+                text_contnet=get_nugget.nuggets_master.content if get_nugget else None
+                
+                if text_contnet:
+                    # target_language=get_user_readout_language.language_code
                     
-                        translator = Translator(service_urls=['translate.google.com'])
+                    # Transalate
+                    
+                    translate = boto3.client('translate',aws_access_key_id=config.access_key,
+                        aws_secret_access_key=config.access_secret,
+                        region_name='us-west-2')
+                    
+                    response = translate.translate_text(
+                        Text=text_contnet,
+                        SourceLanguageCode='auto',  # Automatically detect the source language
+                        TargetLanguageCode=target_language
+                    )
+                    transalation_language=response['TranslatedText']
+                    
+                    # Create an instance of the Polly client
+                    polly_client = boto3.Session(
+                        aws_access_key_id=config.access_key,
+                        aws_secret_access_key=config.access_secret,
+                        region_name='us-west-2'  # Replace with your desired AWS region
+                        ).client('polly')
 
-                        # Detect the source language
-                        detected_lang = translator.detect(text).lang
-
-                        # Translate the text to the target language
-                        translation = translator.translate(text, src=detected_lang, dest=target_language)
-                        
-                        translated_text=translation.text
-                        
-                        # Create an instance of the Polly client
-                        polly_client = boto3.Session(
-                            aws_access_key_id=config.access_key,
-                            aws_secret_access_key=config.access_secret,
-                            region_name='us-west-2'  # Replace with your desired AWS region
-                            ).client('polly')
-
-                        # Specify the desired voice and output format
-                        voice_id = 'Joanna'
-                        output_format = 'mp3'
-
-                        # Request speech synthesis
-                        response = polly_client.synthesize_speech(
-                            Text=translated_text,
+                    # Specify the desired voice and output format
+                    voice_id = 'Joanna'
+                    output_format = 'mp3'
+                    
+                    supported_language=['ar-AE', "en-US", 'en-IN', 'es-MX', 'en-ZA', 'tr-TR', 'ru-RU', 'ro-RO', 'pt-PT', 'pl-PL', 'nl-NL', 'it-IT', 'is-IS', 'fr-FR', 'fi-FI','es-ES', 'de-DE', 'yue-CN', 'ko-KR', 'en-NZ', 'en-GB-WLS', 'hi-IN', 'arb', 'cy-GB', 'cmn-CN', 'da-DK', 'en-AU', 'pt-BR', 'nb-NO', 'sv-SE', 'ja-JP', 'es-US', 'ca-ES', 'fr-CA', 'en-GB', 'de-AT']
+                    
+                    matching_languages = [lang for lang in supported_language if lang.startswith(target_language)]
+                    
+                    
+                    text_without_punctuation = transalation_language.translate(str.maketrans("", "", string.punctuation))
+                    
+                    response = polly_client.synthesize_speech(
+                            Text=transalation_language,
                             VoiceId=voice_id,
-                            OutputFormat=output_format
+                            OutputFormat=output_format,
+                            LanguageCode= matching_languages[0] if matching_languages else 'en-US'
                         )
-                        # Upload File
-                        # base_dir = f"{st.BASE_DIR}rawcaster_uploads"
-                        base_dir = "rawcaster_uploads"
-                        
-                        try:
-                            os.makedirs(base_dir, mode=0o777, exist_ok=True)
-                        except OSError as e:
-                            sys.exit("Can't create {dir}: {err}".format(
-                                dir=base_dir, err=e))
+                    # Upload File
+                    base_dir = "rawcaster_uploads"
+                    
+                    try:
+                        os.makedirs(base_dir, mode=0o777, exist_ok=True)
+                    except OSError as e:
+                        print(e)
+                        sys.exit("Can't create {dir}: {err}".format(
+                            dir=base_dir, err=e))
 
-                        output_dir = base_dir + "/"
-                        
-                        filename=f"converted_{int(datetime.now().timestamp())}.mp3"    
-                        
-                        save_full_path=f'{output_dir}{filename}' 
-                        
-                        with open(save_full_path, 'wb') as file:
-                            file.write(response['AudioStream'].read())
+                    output_dir = base_dir + "/"
+                    
+                    filename=f"converted_{int(datetime.now().timestamp())}.mp3"    
+                    
+                    save_full_path=f'{output_dir}{filename}' 
+                    
+                    with open(save_full_path, 'wb') as file:
+                        file.write(response['AudioStream'].read())
+                    
+                    s3_file_path=f"nuggets/converted_audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
                             
-                        s3_file_path=f"nuggets/converted_audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
-                                
-                        result=upload_to_s3(save_full_path,s3_file_path)
+                    result=upload_to_s3(save_full_path,s3_file_path)
+                    
+                    if result['status'] == 1:
+                        add_audio_file=NuggetContentAudio(nugget_master_id = get_nugget.nuggets_id,path= result['url'],created_at=datetime.utcnow(),status =1)
+                        db.add(add_audio_file)
+                        db.commit()
+                        db.refresh(add_audio_file)
+                        return {"status":1,"msg":"success","file_path":result['url']}
                         
-                        if result['status'] == 1:
-                            add_audio_file=NuggetContentAudio(nugget_master_id = get_nugget.nuggets_id,path= result['url'],created_at=datetime.utcnow(),status =1)
-                            db.add(add_audio_file)
-                            db.commit()
-                            db.refresh(add_audio_file)
-                            return {"status":1,"msg":"success","file_path":result['url']}
-                            
-                        else:
-                            return result
-                    except:
-                        return {"status":0,"msg":"Unable to convert"}
+                    else:
+                        return result
+                    # except:
+                    #     return {"status":0,"msg":"Unable to convert"}
                         
         else:
             return {"status":0,"msg":"Invalid Nugget"}
-        
+            
 
 
 # # 89  AI Response Text Audio
@@ -571,20 +675,40 @@ async def texttoaudio(db:Session=Depends(deps.get_db),token:str=Form(None),messa
         # Specify the desired voice and output format
         voice_id = 'Joanna'
         output_format = 'mp3'
+        
+        # Detect Language
+        def detect_language(text):
+            comprehend = boto3.client('comprehend',aws_access_key_id=config.access_key,
+            aws_secret_access_key=config.access_secret,
+            region_name='us-west-2')
 
-        # Request speech synthesis
+            response = comprehend.detect_dominant_language(Text=text)
+            languages = response['Languages']
+            
+            if len(languages) > 0:
+               
+                detected_language = languages[0]['LanguageCode']
+                return detected_language
+            return None
+        
+        language_code = detect_language(message)
+        supported_language=['ar-AE', "en-US", 'en-IN', 'es-MX', 'en-ZA', 'tr-TR', 'ru-RU', 'ro-RO', 'pt-PT', 'pl-PL', 'nl-NL', 'it-IT', 'is-IS', 'fr-FR', 'fi-FI','es-ES', 'de-DE', 'yue-CN', 'ko-KR', 'en-NZ', 'en-GB-WLS', 'hi-IN', 'arb', 'cy-GB', 'cmn-CN', 'da-DK', 'en-AU', 'pt-BR', 'nb-NO', 'sv-SE', 'ja-JP', 'es-US', 'ca-ES', 'fr-CA', 'en-GB', 'de-AT']
+        
+        matching_languages = [lang for lang in supported_language if lang.startswith(language_code)]
+        
         response = polly_client.synthesize_speech(
             Text=message,
             VoiceId=voice_id,
-            OutputFormat=output_format
+            OutputFormat=output_format,
+            LanguageCode= matching_languages[0] if matching_languages else 'en-US'
         )
         # Upload File
-        # base_dir = f"{st.BASE_DIR}rawcaster_uploads"
         base_dir = "rawcaster_uploads"
         
         try:
             os.makedirs(base_dir, mode=0o777, exist_ok=True)
         except OSError as e:
+            print(e)
             sys.exit("Can't create {dir}: {err}".format(
                 dir=base_dir, err=e))
 
@@ -602,139 +726,3 @@ async def texttoaudio(db:Session=Depends(deps.get_db),token:str=Form(None),messa
         result=upload_to_s3(save_full_path,s3_file_path)
         return result
 
-
-
-# 91 AI Chat Audio Chat
-@router.post("/audio_to_text")
-async def audio_to_text(audio_file:UploadFile=File(None)):
-    def transcribe_audio(bucket_name, object_key):
-        transcribe = boto3.client('transcribe',aws_access_key_id=config.access_key,
-            aws_secret_access_key=config.access_secret,
-            region_name='us-west-2')
-
-        response = transcribe.start_transcription_job(
-            TranscriptionJobName='MyTranscriptionJob',
-            LanguageCode='en-US',
-            MediaFormat='mp3',
-            Media={
-                'MediaFileUri': object_key
-            }
-        )
-
-        return response
-
-    # Provide your S3 bucket name and audio file's object key
-    bucket_name = 'rawcaster'
-    object_key = 'https://rawcaster.s3.us-west-2.amazonaws.com/nuggets/converted_audio_59381685144351.mp3'
-
-    # Transcribe the audio
-    response = transcribe_audio(bucket_name, object_key)
-
-    # Get the transcription job status
-    status = response['TranscriptionJob']['TranscriptionJobStatus']
-    print(f"Transcription job status: {status}")
-    
-    
-    
-    
-    
-# 92 Upload Video File
-@router.post("/split_file")
-async def split_file(audio_file:UploadFile=File(None)):
-
-
-    def split_video(input_file, output_prefix, duration):
-        # Generate the command to split the video using FFmpeg
-        command = [
-            'ffmpeg',
-            '-i', input_file,
-            '-c', 'copy',
-            '-map', '0',
-            '-segment_time', str(duration),
-            '-f', 'segment',
-            '-reset_timestamps', '1',
-            output_prefix + '%03d.mp4'
-        ]
-
-        # Run the command using subprocess
-        subprocess.run(command)
-
-        # Generate the output file paths
-        file_paths = []
-        for i in range(0, 1000):  # Assuming up to 999 output parts
-            file_path = output_prefix + f'{i:03d}.mp4'
-            
-            if not os.path.exists(file_path):
-                print("s")
-                break
-            file_paths.append(file_path)
-
-        return file_paths
-
-    # Example usage
-    input_file = '/home/surya_maestro/Pictures/VID-20230529-WA0003.mp4'  # Path to the input video file
-    output_prefix = f'output_part_{int(datetime.utcnow().timestamp())}'  # Prefix for the output video parts
-    duration = 10  # Duration of each video part in seconds
-
-    output_files = split_video(input_file, output_prefix, duration)
-    return output_files
-
-        
-# Example usage
-
-    # # Example usage
-    # # split_video('/home/surya_maestro/Videos/god.mp4', duration=10) 
-    # split_video('/home/surya_maestro/Pictures/VID-20230529-WA0003.mp4', duration=10) 
-    
-
-    # Example usage
-    
-    # transcribe_client = boto3.client('transcribe',aws_access_key_id=config.access_key,
-    #     aws_secret_access_key=config.access_secret,
-    #     region_name='us-west-2')
-    
-    # def transcribe_audio(file_path):
-    # # Create an Amazon Transcribe client
-    #     transcribe = boto3.client('transcribe',aws_access_key_id=config.access_key,
-    #         aws_secret_access_key=config.access_secret,
-    #         region_name='us-west-2')
-
-    #     # Specify the AWS S3 bucket and key where the audio file is located
-    #     bucket_name = 'rawcaster'
-    #     audio_key = 'https://rawcaster.s3.us-west-2.amazonaws.com/nuggets/converted_audio_59381685144351.mp3'  # Replace with your audio file path
-    #     job_name=f"transcription-job-name{int(datetime.utcnow().timestamp())}"
-        
-    #     # Start the transcription job
-    #     transcribe.start_transcription_job(
-    #         TranscriptionJobName=job_name,
-    #         Media={'MediaFileUri': f's3://{bucket_name}/{audio_key}'},
-    #         MediaFormat='wav',
-    #         LanguageCode='en-US'  # Adjust the language code if needed
-    #     )
-
-    #     # Wait for the transcription job to complete
-    #     while True:
-    #         response = transcribe.get_transcription_job(
-    #             TranscriptionJobName=job_name
-    #         )
-    #         if response['TranscriptionJob']['TranscriptionJobStatus'] in ['COMPLETED', 'FAILED']:
-    #             break
-
-    #     # Get the transcription results
-    #     if response['TranscriptionJob']['TranscriptionJobStatus'] == 'COMPLETED':
-    #         transcription_uri = response['TranscriptionJob']['Transcript']['TranscriptFileUri']
-    #         transcription = transcribe.get_transcription_job(
-    #             TranscriptionJobName=job_name
-    #         )['TranscriptionJob']['Transcript']['Results']
-    #         return transcription
-
-    #     return None  # Transcription job failed
-
-    # # Usage example
-    # audio_file_path = 'path/to/audio/file.wav'  # Replace with your audio file path
-    # transcription_result = transcribe_audio(audio_file_path)
-
-    # if transcription_result:
-    #     print(transcription_result)
-    # else:
-    #     print('Transcription failed.')

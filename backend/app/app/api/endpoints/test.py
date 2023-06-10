@@ -14,16 +14,43 @@ from moviepy.video.io.VideoFileClip import VideoFileClip
 
 
 router = APIRouter() 
-celery_app = Celery("tasks", broker="redis://localhost:8000")
+import cv2
 
-@router.post("/uploadass")
-def process_data():
-    try:
-    # Code that may raise an exception
-        x = 1 / 0
-    except Exception as e:
-        exception_type = e.__class__
-        print(exception_type)
+@router.post("/uploada")
+async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+    # Load the video file
+    video_path = 'path_to_video_file.mp4'
+    video_capture = cv2.VideoCapture(video_path)
+
+    # Define the region to censor (e.g., rectangle coordinates)
+    censor_x = 100
+    censor_y = 100
+    censor_width = 200
+    censor_height = 200
+
+    # Loop through each frame in the video
+    while video_capture.isOpened():
+        # Read the current frame
+        ret, frame = video_capture.read()
+        
+        if not ret:
+            break
+        
+        # Apply the censoring effect
+        blurred_region = frame[censor_y:censor_y+censor_height, censor_x:censor_x+censor_width]
+        blurred_region = cv2.GaussianBlur(blurred_region, (99, 99), 0)
+        frame[censor_y:censor_y+censor_height, censor_x:censor_x+censor_width] = blurred_region
+        
+        # Display the resulting frame
+        cv2.imshow('Censored Video', frame)
+        
+        # Check for key press
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    # Release the video capture and close all windows
+    video_capture.release()
+    cv2.destroyAllWindows()
 
 @router.post("/uploada")
 async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File(...)):

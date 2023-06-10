@@ -153,32 +153,6 @@ def video_file_upload(upload_file,compress,file_ext):
     return save_full_path
     
 
-async def audio_file_upload(upload_file,compress):
-    # base_dir = f"{st.BASE_DIR}rawcaster_uploads"
-    base_dir = "rawcaster_uploads"
-    
-    try:
-        os.makedirs(base_dir, mode=0o777, exist_ok=True)
-    except OSError as e:
-        sys.exit("Can't create {dir}: {err}".format(
-            dir=base_dir, err=e))
-
-    output_dir = base_dir + "/"
-    
-    filename=f"audio_{random.randint(1111,9999)}_{datetime.datetime.now().timestamp()}.mp4"    
-   
-    save_full_path=f'{output_dir}{filename}'  
-      
-    with open(save_full_path, "wb") as buffer:
-        buffer.write(upload_file)
-    
-    return save_full_path
-
-    # subprocess.run(["ffmpeg", "-i", save_full_path, "-ab", "32k", "-y", output_path])
-
-    # return output_path
-    
-
 
 def upload_to_s3(local_file_pth,s3_bucket_path):
    
@@ -1258,8 +1232,8 @@ def get_event_detail(db,event_id,login_user_id):
                         "original_user_image":event_details.user.profile_img if event_details.created_by else "",
                         "event_melody_id":event_details.event_melody_id if event_details.event_melody_id else "",
                         "waiting_room":event_details.waiting_room if event_details.waiting_room != None else 0,
-                        "join_before_host":event_details.join_before_host if event_details.join_before_host != None else 0,
-                        "sound_notify":event_details.sound_notify if event_details.sound_notify != None else 0,
+                        "join_before_host":event_details.join_before_host if event_details.join_before_host != None or event_details.join_before_host != "" else 0,
+                        "sound_notify":event_details.sound_notify if event_details.sound_notify != None or event_details.sound_notify != "" else 0,
                         "user_screenshare":event_details.user_screenshare if event_details.user_screenshare != None else 0,
                         "melodies":{"path":default_melody.path if default_melody.path else None,"type":default_melody.type if default_melody.type else None,"is_default":default_melody.event_id if default_melody.event_id else None}
                     })
@@ -1547,7 +1521,7 @@ def GetRawcasterUserID(db,type):
     
     
     
-async def logins(db,username, password, device_type, device_id, push_id,login_from,voip_token,app_type,socual,first_time):
+async def logins(db,username, password, device_type, device_id, push_id,login_from,voip_token,app_type,socual):
     username=username.strip() if username else None
    
     get_user = db.query(User).filter(
@@ -1706,7 +1680,15 @@ async def logins(db,username, password, device_type, device_id, push_id,login_fr
                 if dt >= get_user.referral_expiry_date:
                     update_user=db.query(User).filter(User.id == get_user.id).update({'user_status_id':1,'referral_expiry_date':None})
                     db.commit()
-            return {"status":1,"msg":"Success","salt_token":salt_token,"token":token_text,"email":username,"expirytime":common_date(exptime),"profile_image":profile_image,"name":name,"user_id":user_id,"authcode":new_auth_code,"acc_verify_status":get_user.is_email_id_verified,"first_time":first_time}
+            # Check Existing user first time sign
+            existing_user=0
+            if get_user.existing_user == 1:
+                existing_user=1
+            # update existing user flag
+            get_user.existing_user = 0
+            db.commit()
+            
+            return {"status":1,"msg":"Success","salt_token":salt_token,"token":token_text,"email":username,"expirytime":common_date(exptime),"profile_image":profile_image,"name":name,"user_id":user_id,"authcode":new_auth_code,"acc_verify_status":get_user.is_email_id_verified,"first_time":existing_user}
         else:
             return {"status":0,"msg" : "Failed to Generate Access Token. try again"}
             

@@ -19,3 +19,4 @@ openai
 translate
 googletrans
 SpeechRecognition
+pydub
