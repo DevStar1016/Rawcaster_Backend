@@ -352,10 +352,10 @@ async def signupverify(db:Session=Depends(deps.get_db),auth_code:str=Form(None,d
                             # Get Token
                             get_token=db.query(ApiTokens).filter(ApiTokens.id == alt_token_id).first()
                             if get_token:
-                                first_time=1
+                                
                                 username=str(get_user.mobile_no) if get_user.mobile_no else None if otp_flag == "sms" else get_user.email_id
                                 
-                                generate_access_token=await logins(db,username,get_user.password,get_token.device_type,get_token.device_id,get_token.push_device_id,get_token.device_type,get_token.voip_token,get_token.app_type,0,first_time)
+                                generate_access_token=await logins(db,username,get_user.password,get_token.device_type,get_token.device_id,get_token.push_device_id,get_token.device_type,get_token.voip_token,get_token.app_type,0)
                                 return generate_access_token
 
                     return {"status" :1, "msg" :"Your account has been verified successfully."}
@@ -586,8 +586,8 @@ async def login(db:Session=Depends(deps.get_db),auth_code:str=Form(None,descript
         
         if username.strip() != "" and password.strip() != "":
             password = hashlib.sha1(password.encode('utf-8')).hexdigest()
-            first_time=1
-            generate_access_token=await logins(db,username,password,device_type,device_id,push_id,login_from,voip_token,app_type,0,first_time)
+            
+            generate_access_token=await logins(db,username,password,device_type,device_id,push_id,login_from,voip_token,app_type,0)
             return generate_access_token
                 
         else:
@@ -887,7 +887,8 @@ async def contactus(db:Session=Depends(deps.get_db),name:str=Form(None),email_id
             
             try:
                 send_mail=await send_email(db,to_mail,subject,body)
-            except:
+            except Exception as e:
+                print(e)
                 return {"status" : 0, "msg" :"Something went wrong.Please Try Again later"}
                 
             
@@ -2465,6 +2466,11 @@ async def addnuggets(background_tasks: BackgroundTasks,db:Session=Depends(deps.g
             return {"status": 0, "msg": "Sorry! Share with groups or friends list missing."}
         
         else:
+            check_content_length=db.query(User).filter(User.id == login_user_id,UserStatusMaster.id == User.user_status_id).first()
+            
+            if check_content_length and content and (check_content_length.user_status_master.max_nugget_char) < len(content):
+                return {"status":0,"msg":f'Content length must be less than {check_content_length.user_status_master.max_nugget_char}'}
+            
             anyissue = 0
             
             if share_type == 3 or share_type == 4 or share_type == 5:
@@ -2785,7 +2791,7 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
                 if nugget_type == 1:  # Video
                     get_nuggets=get_nuggets.filter(Nuggets.nuggets_id ==NuggetsAttachment.nugget_id,NuggetsAttachment.media_type == 'video')
                     
-                elif nugget_type == 2:  # Audio and Image
+                if nugget_type == 2:  # Audio and Image
                     get_nuggets=get_nuggets.outerjoin(NuggetsAttachment,Nuggets.nuggets_id == NuggetsAttachment.nugget_id).filter(or_(NuggetsAttachment.media_type == None,NuggetsAttachment.media_type == 'image',NuggetsAttachment.media_type == 'audio'))
                     
                 if filter_type == 1:  # Influencer
@@ -2797,10 +2803,11 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
                         for group_list in follow_user:
                             my_followers.append(group_list.following_userid)
                
-                    get_nuggets=get_nuggets.filter(or_(Nuggets.user_id == login_user_id,Nuggets.user_id.in_(my_followers)),Nuggets.share_type != 2)
+                    get_nuggets=get_nuggets.filter(or_(and_(Nuggets.user_id == login_user_id),and_(Nuggets.user_id.in_(my_followers)),Nuggets.share_type != 2))
                     
                 elif user_public_nugget_display_setting == 0 :  # Rawcaster
-                    get_nuggets=get_nuggets.filter(or_(and_(Nuggets.user_id == login_user_id),and_(Nuggets.user_id == raw_id)))
+                   
+                    get_nuggets=get_nuggets.filter(or_(Nuggets.user_id == login_user_id,Nuggets.user_id == raw_id))
                    
                 elif user_public_nugget_display_setting == 1:   # Public
                     get_nuggets=get_nuggets.filter( or_(
@@ -2912,11 +2919,11 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
                         if type == 1:
                             friend_groups=db.query(FriendGroups).filter(FriendGroups.id.in_(shared_group_ids)).all()
                             for friend_group in friend_groups:
-                                shared_detail.append({'name':friend_group.group_name,"img":friend_group.group_icon})
+                                shared_detail.append({"id":friend_group.id,'name':friend_group.group_name,"img":friend_group.group_icon})
                         elif type == 2:
                             friend_groups=db.query(User).filter(User.id.in_(shared_group_ids)).all()
                             for friend_group in friend_groups:
-                                shared_detail.append({'name':friend_group.display_name,"img":friend_group.profile_img})
+                                shared_detail.append({'id':friend_group.id,'name':friend_group.display_name,"img":friend_group.profile_img})
                     
                     get_nugget_attachment=db.query(NuggetsAttachment).filter(NuggetsAttachment.nugget_id == nuggets.nuggets_id,NuggetsAttachment.status == 1)
                     if nugget_type == 1:
@@ -3575,6 +3582,11 @@ async def editnugget(*,background_tasks: BackgroundTasks,db:Session=Depends(deps
                     return {"status": 0, "msg": "Sorry! Share with groups or friends list missing."}
                 
                 else:
+                    check_content_length=db.query(User).filter(User.id == login_user_id,UserStatusMaster.id == User.user_status_id).first()
+            
+                    if check_content_length and content and (check_content_length.user_status_master.max_nugget_char) < len(content):
+                        return {"status":0,"msg":f'Content length must be less than {check_content_length.user_status_master.max_nugget_char}'}
+                    
                     anyissue = 0
                     
                     if share_type == 3 or share_type == 4 or share_type == 5:
@@ -5210,7 +5222,7 @@ async def listnotifications(db:Session=Depends(deps.get_db),token:str=Form(None)
             get_nuggets=db.query(Nuggets).filter(Nuggets.user_id == login_user_id)
             
             if notification_type == 6:  # Poll Notification
-                get_nuggets=get_nuggets.filter(NuggetsMaster.poll_duration != None,NuggetsMaster.poll_duration != '')
+                get_nuggets=get_nuggets.filter(Nuggets.nuggets_id == NuggetsMaster.id,NuggetsMaster.poll_duration != None,NuggetsMaster.poll_duration != '')
                 
                 nuggets_id=[]
                 for polls in get_nuggets:
@@ -5223,8 +5235,8 @@ async def listnotifications(db:Session=Depends(deps.get_db),token:str=Form(None)
                     if datetime.datetime.utcnow() >= poll_expire_date:
                         nuggets_id.append(polls.nuggets_master.id)
                 
-                get_nuggets=get_nuggets.filter(NuggetsMaster.id.in_(nuggets_id))
-
+                get_nuggets=get_nuggets.filter(NuggetsMaster.id.in_(nuggets_id)).order_by(Nuggets.id.desc())
+                
             
             if notification_type == 1: # Nugget
                 filters=[3,4,5,6,7,8]
@@ -6432,11 +6444,11 @@ async def globalsearchevents(db:Session=Depends(deps.get_db),token:str=Form(None
                 Events.event_status == 1,
                 Events.event_type_id == 1,
                 or_(
-                    Events.title.ilike(f"%{search_key}%"),
-                    User.display_name.ilike(f"%{search_key}%"),
-                    User.first_name.ilike(f"%{search_key}%"),
-                    User.last_name.ilike(f"%{search_key}%"),
-                    User.first_name + ' ' + User.last_name.ilike(f"%{search_key}%")
+                    Events.title.ilike(search_key+"%"),
+                    User.display_name.ilike(search_key+"%"),
+                    User.first_name.ilike(search_key+"%"),
+                    User.last_name.ilike(search_key+"%"),
+                    User.first_name.ilike(search_key+"%")
                 ),
                 Events.start_date_time > datetime.datetime.utcnow()
             )
@@ -8114,13 +8126,13 @@ async def socialmedialogin(db:Session=Depends(deps.get_db),signin_type:str=Form(
                 check_phone=db.query(User).filter(and_(User.mobile_no == mobile_no, User.status.in_([0, 1, 2, 3]))).count()
             
             if check_email_id:  
-                first_time=0         
-                reply=await logins(db,email_id,password,device_type,device_id,push_id,login_from,voip_token,app_type,1,first_time)
+                
+                reply=await logins(db,email_id,password,device_type,device_id,push_id,login_from,voip_token,app_type,1)
                 return reply
             
             if check_phone :
-                first_time=0         
-                reply=await logins(db,email_id,password,device_type,device_id,push_id,login_from,voip_token,app_type,1,first_time)
+                   
+                reply=await logins(db,email_id,password,device_type,device_id,push_id,login_from,voip_token,app_type,1)
                 return reply
             
             else:
@@ -8215,8 +8227,7 @@ async def socialmedialogin(db:Session=Depends(deps.get_db),signin_type:str=Form(
                     if email_id=='':
                         email_id=mobile_no
                         
-                    first_time=1
-                    reply=await logins(db,email_id,password,device_type,device_id,push_id,login_from,voip_token,app_type,0,first_time)
+                    reply=await logins(db,email_id,password,device_type,device_id,push_id,login_from,voip_token,app_type,0)
                     return reply
                 else:
                     return {"status":0,"msg":"Something went wrong when creating a User"}

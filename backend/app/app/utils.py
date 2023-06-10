@@ -1517,7 +1517,7 @@ def GetRawcasterUserID(db,type):
     
     
     
-async def logins(db,username, password, device_type, device_id, push_id,login_from,voip_token,app_type,socual,first_time):
+async def logins(db,username, password, device_type, device_id, push_id,login_from,voip_token,app_type,socual):
     username=username.strip() if username else None
    
     get_user = db.query(User).filter(
@@ -1676,7 +1676,15 @@ async def logins(db,username, password, device_type, device_id, push_id,login_fr
                 if dt >= get_user.referral_expiry_date:
                     update_user=db.query(User).filter(User.id == get_user.id).update({'user_status_id':1,'referral_expiry_date':None})
                     db.commit()
-            return {"status":1,"msg":"Success","salt_token":salt_token,"token":token_text,"email":username,"expirytime":common_date(exptime),"profile_image":profile_image,"name":name,"user_id":user_id,"authcode":new_auth_code,"acc_verify_status":get_user.is_email_id_verified,"first_time":first_time}
+            # Check Existing user first time sign
+            existing_user=0
+            if get_user.existing_user == 1:
+                existing_user=1
+            # update existing user flag
+            get_user.existing_user = 0
+            db.commit()
+            
+            return {"status":1,"msg":"Success","salt_token":salt_token,"token":token_text,"email":username,"expirytime":common_date(exptime),"profile_image":profile_image,"name":name,"user_id":user_id,"authcode":new_auth_code,"acc_verify_status":get_user.is_email_id_verified,"first_time":existing_user}
         else:
             return {"status":0,"msg" : "Failed to Generate Access Token. try again"}
             

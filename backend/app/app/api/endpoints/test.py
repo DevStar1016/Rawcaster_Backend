@@ -14,37 +14,43 @@ from moviepy.video.io.VideoFileClip import VideoFileClip
 
 
 router = APIRouter() 
-celery_app = Celery("tasks", broker="redis://localhost:8000")
+import cv2
 
-@celery_app.task
-def process_data(filename,test,multi_file):
-    segment_duration = 5 * 60
-    print(test)
-    for row in multi_file:
-        print(row)
-    video = VideoFileClip(filename)   # Video Split ( 5 Minutes)
-    duration = video.duration
-    splited_video_url=[]
-    total_duration = video.duration
-    
-    # if duration < 3000:
-    num_segments = math.ceil(total_duration / segment_duration)
-    for i in range(num_segments):
-    
-        start_time = i * segment_duration
-        end_time = min((i+1) * segment_duration, total_duration)
+@router.post("/uploada")
+async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+    # Load the video file
+    video_path = 'path_to_video_file.mp4'
+    video_capture = cv2.VideoCapture(video_path)
+
+    # Define the region to censor (e.g., rectangle coordinates)
+    censor_x = 100
+    censor_y = 100
+    censor_width = 200
+    censor_height = 200
+
+    # Loop through each frame in the video
+    while video_capture.isOpened():
+        # Read the current frame
+        ret, frame = video_capture.read()
         
-        segment = video.subclip(start_time, end_time)
+        if not ret:
+            break
         
-        # Save the segment as a new file
+        # Apply the censoring effect
+        blurred_region = frame[censor_y:censor_y+censor_height, censor_x:censor_x+censor_width]
+        blurred_region = cv2.GaussianBlur(blurred_region, (99, 99), 0)
+        frame[censor_y:censor_y+censor_height, censor_x:censor_x+censor_width] = blurred_region
         
-        segment_filename = f"video_clip_{random.randint(1111,9999)}{int(datetime.now().timestamp())}.mp4"
-        segment.write_videofile(segment_filename, audio_codec="aac")
+        # Display the resulting frame
+        cv2.imshow('Censored Video', frame)
         
-        splited_video_url.append(segment_filename)
-        
-    # Perform the file processing here
-    # This function will run in the background
+        # Check for key press
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    # Release the video capture and close all windows
+    video_capture.release()
+    cv2.destroyAllWindows()
 
 @router.post("/uploada")
 async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
