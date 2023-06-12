@@ -504,13 +504,14 @@ def get_nugget_detail(db,nugget_id,login_user_id):
                     friend_groups=db.query(FriendGroups.group_name,FriendGroups.group_icon).filter(FriendGroups.id.in_(shared_group_ids)).all()
                     for frnd_group in friend_groups:
                         shared_detail.append({"name":frnd_group.group_name if frnd_group.group_name else "",
-                                              "img":frnd_group.group_icon if frnd_group.group_icon else ""
+                                              "img":frnd_group.group_icon if frnd_group.group_icon else "",
+                                              "id":frnd_group.id
                                             })
 
                 elif type == 2:
-                    friend_groups=db.query(User.display_name,User.profile_img).filter(User.id.in_(shared_group_ids)).all()
+                    friend_groups=db.query(User.display_name,User.profile_img,User.id).filter(User.id.in_(shared_group_ids)).all()
                     for frnd_gp in friend_groups:
-                        shared_detail.append({"name":frnd_gp.display_name if frnd_gp.display_name else "","img":frnd_gp.profile_img if frnd_gp.profile_img else ""})
+                        shared_detail.append({"id":frnd_gp.id,"name":frnd_gp.display_name if frnd_gp.display_name else "","img":frnd_gp.profile_img if frnd_gp.profile_img else ""})
                 
             shared_group_list=[]
             shared_friends_list=[]

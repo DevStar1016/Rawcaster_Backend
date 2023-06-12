@@ -2425,6 +2425,8 @@ def process_data(db,uploaded_file_path,login_user_id,master_id,share_type,share_
 
 
 
+
+
 # 25. Add Nuggets
 @router.post("/addnuggets")
 async def addnuggets(background_tasks: BackgroundTasks,db:Session=Depends(deps.get_db),token:str=Form(None),content:str=Form(None),share_type:str=Form(None),share_with:str=Form(None,description='friends":[1,2,3],"groups":[1,2,3]}'),
@@ -2499,34 +2501,40 @@ async def addnuggets(background_tasks: BackgroundTasks,db:Session=Depends(deps.g
             if anyissue == 1:
                 return {"status": 0, "msg": "Sorry! Share with groups or friends list not correct."}
             else:
-                add_nuggets_master=NuggetsMaster(user_id=login_user_id,content=content,_metadata=metadata,poll_duration=poll_duration,created_date=datetime.datetime.utcnow(),status=0)
-                db.add(add_nuggets_master)
-                db.commit()
                 
-                if add_nuggets_master:
-                    # Poll Option save
-                    if poll_option:
-                        poll_option=json.loads(poll_option) if poll_option else []
+                content_location=0
+                looping_count=len(nuggets_media) if nuggets_media else 1
+                
+                nugget_details=[]
+                for i in range(looping_count):
+                    add_nuggets_master=NuggetsMaster(user_id=login_user_id,content=content if content_location == 0 else None,_metadata=metadata,poll_duration=poll_duration,created_date=datetime.datetime.utcnow(),status=0)
+                    db.add(add_nuggets_master)
+                    db.commit()
+                    content_location=content_location+1
+                    if add_nuggets_master:
+                        # Poll Option save
+                        if poll_option:
+                            poll_option=json.loads(poll_option) if poll_option else []
+                            
+                            for option in poll_option:
+                                add_NuggetPollOption=NuggetPollOption(nuggets_master_id=add_nuggets_master.id,option_name=option.strip(),
+                                                                        created_date=datetime.datetime.utcnow(),status=1)
                         
-                        for option in poll_option:
-                            add_NuggetPollOption=NuggetPollOption(nuggets_master_id=add_nuggets_master.id,option_name=option.strip(),
-                                                                    created_date=datetime.datetime.utcnow(),status=1)
-                    
-                            db.add(add_NuggetPollOption)
-                            db.commit()
-                    
-                    # Nuggets Media
-                    if nuggets_media:
-                        master_id=add_nuggets_master.id
+                                db.add(add_NuggetPollOption)
+                                db.commit()
                         
-                        for nugget_media in nuggets_media:
-                            file_name=nugget_media.filename
-                            file_temp=nugget_media.content_type
+                        # Nuggets Media
+                        
+                        if nuggets_media:
+                            master_id=add_nuggets_master.id
+                            
+                            file_name=nuggets_media[i-1].filename
+                            file_temp=nuggets_media[i-1].content_type
                             
                             # File Upload
-                            file_ext = os.path.splitext(nugget_media.filename)[1]
+                            file_ext = os.path.splitext(nuggets_media[i-1].filename)[1]
                             
-                            uploaded_file_path=await file_upload(nugget_media,file_ext,compress=1)
+                            uploaded_file_path=await file_upload(nuggets_media[i-1],file_ext,compress=1)
                             file_stat = os.stat(uploaded_file_path)
                             file_size= file_stat.st_size
                             
@@ -2578,7 +2586,7 @@ async def addnuggets(background_tasks: BackgroundTasks,db:Session=Depends(deps.g
                                         background_tasks.add_task(process_data,db,uploaded_file_path,login_user_id,master_id,share_type,share_with)
                                         return {"status":1,"msg":"Success","nugget_status":0}
                                     
-                              
+                                
                                 elif type == 'audio':
                                     s3_file_path=f"nuggets/audio_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp3"
                                     
@@ -2606,97 +2614,462 @@ async def addnuggets(background_tasks: BackgroundTasks,db:Session=Depends(deps.g
                                         db.refresh(add_nugget_attachment)
                                     else:
                                         return result
-                                   
-                    # Add New Nuggets
-                    add_nuggets=Nuggets(nuggets_id=add_nuggets_master.id,user_id=login_user_id,type=1,share_type=share_type,created_date=datetime.datetime.utcnow())
-                    db.add(add_nuggets)
-                    db.commit()
-                    db.refresh(add_nuggets)
-                    
-                    if add_nuggets:
-                        
-                        nuggets=StoreHashTags(db,add_nuggets.id)
-                        
-                        totalmembers=[]
-                        
-                        if share_type == 6 or share_type == 1:
-                            requested_by=None
-                            request_status=1
-                            response_type=1
-                            search_key=None
-                            get_member=get_friend_requests(db,login_user_id,requested_by,request_status,response_type)
-
-                            totalmembers=totalmembers+get_member['accepted']
-                        
-                        if share_type == 7:
-                            get_members=getFollowers(db,login_user_id)
-
-                        # If share type is Group or Individual
-                        if share_type == 3 or share_type == 4 or share_type == 5:
-                            if share_type == 4:
-                                share_with['groups'] =''
-                            if share_type == 3:
-                                share_with['friends'] =''
+                                    
+                            # Add New Nuggets
+                            add_nuggets=Nuggets(nuggets_id=add_nuggets_master.id,user_id=login_user_id,type=1,share_type=share_type,created_date=datetime.datetime.utcnow())
+                            db.add(add_nuggets)
+                            db.commit()
+                            db.refresh(add_nuggets)
                             
-                            if share_with:
+                            if add_nuggets:
                                 
-                                for key,val in share_with.items():
-                                    if val:
-                                        for shareid in val:
-                                            type= 2 if key == 'friends' else 1
-                                            add_NuggetsShareWith=NuggetsShareWith(nuggets_id=add_nuggets.id,type =type,share_with=shareid)
-                                            db.add(add_NuggetsShareWith)
-                                            db.commit()
-                                            
-                                            if add_NuggetsShareWith:
-                                                if key == 'friends':
-                                                    totalmembers.append(shareid)
-                                                else:
-                                                    getgroupmember=db.query(FriendGroupMembers).filter_by(group_id =shareid).all()
+                                nuggets=StoreHashTags(db,add_nuggets.id)
+                                
+                                totalmembers=[]
+                                
+                                if share_type == 6 or share_type == 1:
+                                    requested_by=None
+                                    request_status=1
+                                    response_type=1
+                                    search_key=None
+                                    get_member=get_friend_requests(db,login_user_id,requested_by,request_status,response_type)
+
+                                    totalmembers=totalmembers+get_member['accepted']
+                                
+                                if share_type == 7:
+                                    get_members=getFollowers(db,login_user_id)
+
+                                # If share type is Group or Individual
+                                if share_type == 3 or share_type == 4 or share_type == 5:
+                                    if share_type == 4:
+                                        share_with['groups'] =''
+                                    if share_type == 3:
+                                        share_with['friends'] =''
+                                    
+                                    if share_with:
+                                        
+                                        for key,val in share_with.items():
+                                            if val:
+                                                for shareid in val:
+                                                    type= 2 if key == 'friends' else 1
+                                                    add_NuggetsShareWith=NuggetsShareWith(nuggets_id=add_nuggets.id,type =type,share_with=shareid)
+                                                    db.add(add_NuggetsShareWith)
+                                                    db.commit()
                                                     
-                                                    for member in getgroupmember:
-                                                        if member.user_id not in totalmembers:
-                                                            totalmembers.append(member.user_id)
-                                                
-                        if totalmembers:
+                                                    if add_NuggetsShareWith:
+                                                        if key == 'friends':
+                                                            totalmembers.append(shareid)
+                                                        else:
+                                                            getgroupmember=db.query(FriendGroupMembers).filter_by(group_id =shareid).all()
+                                                            
+                                                            for member in getgroupmember:
+                                                                if member.user_id not in totalmembers:
+                                                                    totalmembers.append(member.user_id)
+                                                        
+                                if totalmembers:
+                                    
+                                    for users in totalmembers:
+                                        notification_type=1
+                                        add_notification=Insertnotification(db,users,login_user_id,notification_type,add_nuggets.id)
+                                            
+                                        get_user=db.query(User).filter(User.id == login_user_id).first()
+                                        user_name=''
+                                        if get_user:
+                                            user_name=get_user.display_name
+                                        
+                                        message_detail={
+                                                "message":"Posted new Nugget",
+                                                "data":{"refer_id":add_nuggets.id,"type":"add_nugget"},
+                                                "type":"nuggets"
+                                            }
+                                        send_push_notification=pushNotify(db,totalmembers,message_detail,login_user_id)
+                                        body=''
+                                        sms_message=''
+                                        
+                                        if add_nuggets.id and add_nuggets.id != '':                                    
+                                            sms_message,body=nuggetNotifcationEmail(db,add_nuggets.id)  # Pending
+                                            
+                                        subject='Rawcaster - Notification'
+                                        email_detail={"subject":subject,"mail_message":body,"sms_message":sms_message,"type":"nuggets"}
+                                        add_notification_sms_email= addNotificationSmsEmail(db,totalmembers,email_detail,login_user_id)
+
+                                nugget_detail=get_nugget_detail(db,add_nuggets.id,login_user_id)  # Pending
+                                
+                                # Update Nugget Master
+                                update_nuggets_master=db.query(NuggetsMaster).filter_by(id = add_nuggets_master.id).update({"status":1})
+                                db.commit()
+                                
+                                nugget_details.append(nugget_detail)
+                            else:
+                                return {"status":0,"msg":"Failed to create Nugget"}
+                        else:
+                            # Add New Nuggets
+                            add_nuggets=Nuggets(nuggets_id=add_nuggets_master.id,user_id=login_user_id,type=1,share_type=share_type,created_date=datetime.datetime.utcnow())
+                            db.add(add_nuggets)
+                            db.commit()
+                            db.refresh(add_nuggets)
                             
-                            for users in totalmembers:
-                                notification_type=1
-                                add_notification=Insertnotification(db,users,login_user_id,notification_type,add_nuggets.id)
-                                    
-                                get_user=db.query(User).filter(User.id == login_user_id).first()
-                                user_name=''
-                                if get_user:
-                                    user_name=get_user.display_name
+                            if add_nuggets:
                                 
-                                message_detail={
-                                        "message":"Posted new Nugget",
-                                        "data":{"refer_id":add_nuggets.id,"type":"add_nugget"},
-                                        "type":"nuggets"
-                                    }
-                                send_push_notification=pushNotify(db,totalmembers,message_detail,login_user_id)
-                                body=''
-                                sms_message=''
+                                nuggets=StoreHashTags(db,add_nuggets.id)
                                 
-                                if add_nuggets.id and add_nuggets.id != '':                                    
-                                    sms_message,body=nuggetNotifcationEmail(db,add_nuggets.id)  # Pending
+                                totalmembers=[]
+                                
+                                if share_type == 6 or share_type == 1:
+                                    requested_by=None
+                                    request_status=1
+                                    response_type=1
+                                    search_key=None
+                                    get_member=get_friend_requests(db,login_user_id,requested_by,request_status,response_type)
+
+                                    totalmembers=totalmembers+get_member['accepted']
+                                
+                                if share_type == 7:
+                                    get_members=getFollowers(db,login_user_id)
+
+                                # If share type is Group or Individual
+                                if share_type == 3 or share_type == 4 or share_type == 5:
+                                    if share_type == 4:
+                                        share_with['groups'] =''
+                                    if share_type == 3:
+                                        share_with['friends'] =''
                                     
-                                subject='Rawcaster - Notification'
-                                email_detail={"subject":subject,"mail_message":body,"sms_message":sms_message,"type":"nuggets"}
-                                add_notification_sms_email= addNotificationSmsEmail(db,totalmembers,email_detail,login_user_id)
+                                    if share_with:
+                                        
+                                        for key,val in share_with.items():
+                                            if val:
+                                                for shareid in val:
+                                                    type= 2 if key == 'friends' else 1
+                                                    add_NuggetsShareWith=NuggetsShareWith(nuggets_id=add_nuggets.id,type =type,share_with=shareid)
+                                                    db.add(add_NuggetsShareWith)
+                                                    db.commit()
+                                                    
+                                                    if add_NuggetsShareWith:
+                                                        if key == 'friends':
+                                                            totalmembers.append(shareid)
+                                                        else:
+                                                            getgroupmember=db.query(FriendGroupMembers).filter_by(group_id =shareid).all()
+                                                            
+                                                            for member in getgroupmember:
+                                                                if member.user_id not in totalmembers:
+                                                                    totalmembers.append(member.user_id)
+                                                        
+                                if totalmembers:
+                                    
+                                    for users in totalmembers:
+                                        notification_type=1
+                                        add_notification=Insertnotification(db,users,login_user_id,notification_type,add_nuggets.id)
+                                            
+                                        get_user=db.query(User).filter(User.id == login_user_id).first()
+                                        user_name=''
+                                        if get_user:
+                                            user_name=get_user.display_name
+                                        
+                                        message_detail={
+                                                "message":"Posted new Nugget",
+                                                "data":{"refer_id":add_nuggets.id,"type":"add_nugget"},
+                                                "type":"nuggets"
+                                            }
+                                        send_push_notification=pushNotify(db,totalmembers,message_detail,login_user_id)
+                                        body=''
+                                        sms_message=''
+                                        
+                                        if add_nuggets.id and add_nuggets.id != '':                                    
+                                            sms_message,body=nuggetNotifcationEmail(db,add_nuggets.id)  # Pending
+                                            
+                                        subject='Rawcaster - Notification'
+                                        email_detail={"subject":subject,"mail_message":body,"sms_message":sms_message,"type":"nuggets"}
+                                        add_notification_sms_email= addNotificationSmsEmail(db,totalmembers,email_detail,login_user_id)
 
-                        nugget_detail=get_nugget_detail(db,add_nuggets.id,login_user_id)  # Pending
-                        
-                        # Update Nugget Master
-                        update_nuggets_master=db.query(NuggetsMaster).filter_by(id = add_nuggets_master.id).update({"status":1})
-                        db.commit()
-
-                        return {"status":1,"msg":"Nuggets created successfully!","nugget_detail":nugget_detail}
+                                nugget_detail=get_nugget_detail(db,add_nuggets.id,login_user_id)  # Pending
+                                
+                                # Update Nugget Master
+                                update_nuggets_master=db.query(NuggetsMaster).filter_by(id = add_nuggets_master.id).update({"status":1})
+                                db.commit()
+                                
+                                nugget_details.append(nugget_detail)
+                            else:
+                                return {"status":0,"msg":"Failed to create Nugget"}
                     else:
-                        return {"status":0,"msg":"Failed to create Nugget"}
+                        return {"status":0,"msg":"Failed to create Nugget master"}
                     
-                else:
-                    return {"status":0,"msg":"Failed to create Nugget master"}
+                return {"status":1,"msg":"Nuggets created successfully!","nugget_detail":sorted(nugget_details, key=lambda x: x["nugget_id"])}
+                       
+                        
+                    
+
+# 25. Add Nuggets
+# @router.post("/addnuggets")
+# async def addnuggets(background_tasks: BackgroundTasks,db:Session=Depends(deps.get_db),token:str=Form(None),content:str=Form(None),share_type:str=Form(None),share_with:str=Form(None,description='friends":[1,2,3],"groups":[1,2,3]}'),
+#                      nuggets_media:List[UploadFile]=File(None),poll_option:str=Form(None),poll_duration:str=Form(None),metadata:str=Form(None)):
+               
+#     if token == None or token.strip() == "":
+#         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+#     elif not content and not nuggets_media:
+#         return {"status": 0, "msg": "Sorry! Nuggets content or Media can not be empty."}
+    
+#     elif share_type == None or not share_type.isnumeric():
+#         return {"status": 0, "msg": "Sorry! Share type can not be empty."}
+    
+#     else:
+#         share_type=int(share_type) if share_type else None
+#         access_token=checkToken(db,token)
+        
+#         if access_token == False:
+#             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+#         else:
+#             get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+#             login_user_id=get_token_details.user_id   
+            
+#         if IsAccountVerified(db,login_user_id) == False:
+#             return {"status":0,"msg":"You need to complete your account validation before you can do this"}
+            
+#         share_with= json.loads(share_with) if share_with else []
+        
+#         if (share_type == 3 or share_type == 4 or share_type == 5) and not share_with:
+#             return {"status": 0, "msg": "Sorry! Share with can not be empty."}
+        
+#         elif share_type == 3 and (not share_with.get("groups") or not share_with["groups"]):
+#             return {"status": 0, "msg": "Sorry! Share with groups list missing."}
+        
+#         elif share_type == 4 and (not share_with.get("friends") or not share_with["friends"]):
+#             return {"status": 0, "msg": "Sorry! Share with friends list missing."}
+        
+#         elif share_type == 5 and ((not share_with.get("groups") or not share_with["groups"]) and (not share_with.get("friends") or not share_with["friends"])):
+#             return {"status": 0, "msg": "Sorry! Share with groups or friends list missing."}
+        
+#         else:
+#             check_content_length=db.query(User).filter(User.id == login_user_id,UserStatusMaster.id == User.user_status_id).first()
+            
+#             if check_content_length and content and (check_content_length.user_status_master.max_nugget_char) < len(content):
+#                 return {"status":0,"msg":f'Content length must be less than {check_content_length.user_status_master.max_nugget_char}'}
+            
+#             anyissue = 0
+            
+#             if share_type == 3 or share_type == 4 or share_type == 5:
+#                 if share_with:
+#                     for key, val in share_with.items():
+#                         if val:
+#                             if key == "group" and (share_type == 3 or share_type == 5):
+#                                 get_groups=db.query(FriendGroups).filter(FriendGroups.id == val,FriendGroups.status == 1,FriendGroups.created_by == login_user_id)
+
+#                                 get_groups = {id: id for id, _ in get_groups.all()}
+
+#                                 if len(get_groups) != len(val):
+#                                     anyissue=1
+                                
+#                                 elif key == "friends" and (share_type == 4 or share_type == 5):
+                                    
+#                                     query = db.query(MyFriends.id, case([(MyFriends.receiver_id == login_user_id, MyFriends.sender_id)], else_=MyFriends.receiver_id).label('receiver_id'))
+#                                     query = query.filter(MyFriends.status == 1, MyFriends.request_status == 1)
+#                                     query = query.filter((MyFriends.sender_id == login_user_id) | (MyFriends.receiver_id == login_user_id))
+#                                     query=db.query(FriendGroups).filter(FriendGroups.id == val,FriendGroups.status == 1,FriendGroups.created_by == login_user_id)
+                                    
+#                                     get_friends = query.all()
+                                    
+#                                     if len(set(val) - set(get_friends)) > 0:
+#                                         anyissue = 1
+#             if anyissue == 1:
+#                 return {"status": 0, "msg": "Sorry! Share with groups or friends list not correct."}
+#             else:
+#                 add_nuggets_master=NuggetsMaster(user_id=login_user_id,content=content,_metadata=metadata,poll_duration=poll_duration,created_date=datetime.datetime.utcnow(),status=0)
+#                 db.add(add_nuggets_master)
+#                 db.commit()
+                
+#                 if add_nuggets_master:
+#                     # Poll Option save
+#                     if poll_option:
+#                         poll_option=json.loads(poll_option) if poll_option else []
+                        
+#                         for option in poll_option:
+#                             add_NuggetPollOption=NuggetPollOption(nuggets_master_id=add_nuggets_master.id,option_name=option.strip(),
+#                                                                     created_date=datetime.datetime.utcnow(),status=1)
+                    
+#                             db.add(add_NuggetPollOption)
+#                             db.commit()
+                    
+#                     # Nuggets Media
+#                     if nuggets_media:
+#                         master_id=add_nuggets_master.id
+                        
+#                         for nugget_media in nuggets_media:
+#                             file_name=nugget_media.filename
+#                             file_temp=nugget_media.content_type
+                            
+#                             # File Upload
+#                             file_ext = os.path.splitext(nugget_media.filename)[1]
+                            
+#                             uploaded_file_path=await file_upload(nugget_media,file_ext,compress=1)
+#                             file_stat = os.stat(uploaded_file_path)
+#                             file_size= file_stat.st_size
+                            
+#                             type='image'                            
+#                             if 'video' in file_temp:
+#                                 type='video'
+#                             elif 'audio' in file_temp:
+#                                 type='audio'
+                            
+#                             if file_size > 1000000 and type == 'image' and file_ext != '.gif':
+#                                 s3_file_path=f'nuggets/Image_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}'
+                                
+#                                 result=upload_to_s3(uploaded_file_path,s3_file_path)
+#                                 if result['status'] == 1:
+#                                     add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,
+#                                                                 media_type=type,media_file_type=file_ext,file_size=file_size,path=result['url'],
+#                                                                 created_date=datetime.datetime.utcnow(),status =1)
+#                                     db.add(add_nugget_attachment)
+#                                     db.commit()
+#                                     db.refresh(add_nugget_attachment)
+                                    
+#                                 else:
+#                                     return result
+                            
+#                             else:
+                                
+#                                 s3_file_path=f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
+                            
+#                                 if type == 'video':
+#                                     video = VideoFileClip(uploaded_file_path)   # Video Split ( 5 Minutes)
+#                                     total_duration = video.duration
+                                    
+#                                     if total_duration  < 300 :
+                                        
+#                                         result=upload_to_s3(uploaded_file_path,s3_file_path)
+#                                         if result['status'] == 1:
+#                                             add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,
+#                                                                         media_type=type,media_file_type=file_ext,file_size=file_size,path=result['url'],
+#                                                                         created_date=datetime.datetime.utcnow(),status =1)
+#                                             db.add(add_nugget_attachment)
+#                                             db.commit()
+#                                             db.refresh(add_nugget_attachment)
+                                            
+#                                         else:
+#                                             return result
+                                        
+#                                     else:
+                                        
+#                                         background_tasks.add_task(process_data,db,uploaded_file_path,login_user_id,master_id,share_type,share_with)
+#                                         return {"status":1,"msg":"Success","nugget_status":0}
+                                    
+                              
+#                                 elif type == 'audio':
+#                                     s3_file_path=f"nuggets/audio_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp3"
+                                    
+#                                     result=upload_to_s3(uploaded_file_path,s3_file_path)
+#                                     if result['status'] == 1:
+#                                         add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,
+#                                                                     media_type=type,media_file_type=file_ext,file_size=file_size,path=result['url'],
+#                                                                     created_date=datetime.datetime.utcnow(),status =1)
+#                                         db.add(add_nugget_attachment)
+#                                         db.commit()
+#                                         db.refresh(add_nugget_attachment)
+#                                     else:
+#                                         return result   
+                                
+#                                 else:                                
+                                
+#                                     result=upload_to_s3(uploaded_file_path,s3_file_path)
+                                
+#                                     if result['status'] == 1:
+#                                         add_nugget_attachment=NuggetsAttachment(user_id=login_user_id,nugget_id=add_nuggets_master.id,
+#                                                                     media_type=type,media_file_type=file_ext,file_size=file_size,path=result['url'],
+#                                                                     created_date=datetime.datetime.utcnow(),status =1)
+#                                         db.add(add_nugget_attachment)
+#                                         db.commit()
+#                                         db.refresh(add_nugget_attachment)
+#                                     else:
+#                                         return result
+                                   
+#                     # Add New Nuggets
+#                     add_nuggets=Nuggets(nuggets_id=add_nuggets_master.id,user_id=login_user_id,type=1,share_type=share_type,created_date=datetime.datetime.utcnow())
+#                     db.add(add_nuggets)
+#                     db.commit()
+#                     db.refresh(add_nuggets)
+                    
+#                     if add_nuggets:
+                        
+#                         nuggets=StoreHashTags(db,add_nuggets.id)
+                        
+#                         totalmembers=[]
+                        
+#                         if share_type == 6 or share_type == 1:
+#                             requested_by=None
+#                             request_status=1
+#                             response_type=1
+#                             search_key=None
+#                             get_member=get_friend_requests(db,login_user_id,requested_by,request_status,response_type)
+
+#                             totalmembers=totalmembers+get_member['accepted']
+                        
+#                         if share_type == 7:
+#                             get_members=getFollowers(db,login_user_id)
+
+#                         # If share type is Group or Individual
+#                         if share_type == 3 or share_type == 4 or share_type == 5:
+#                             if share_type == 4:
+#                                 share_with['groups'] =''
+#                             if share_type == 3:
+#                                 share_with['friends'] =''
+                            
+#                             if share_with:
+                                
+#                                 for key,val in share_with.items():
+#                                     if val:
+#                                         for shareid in val:
+#                                             type= 2 if key == 'friends' else 1
+#                                             add_NuggetsShareWith=NuggetsShareWith(nuggets_id=add_nuggets.id,type =type,share_with=shareid)
+#                                             db.add(add_NuggetsShareWith)
+#                                             db.commit()
+                                            
+#                                             if add_NuggetsShareWith:
+#                                                 if key == 'friends':
+#                                                     totalmembers.append(shareid)
+#                                                 else:
+#                                                     getgroupmember=db.query(FriendGroupMembers).filter_by(group_id =shareid).all()
+                                                    
+#                                                     for member in getgroupmember:
+#                                                         if member.user_id not in totalmembers:
+#                                                             totalmembers.append(member.user_id)
+                                                
+#                         if totalmembers:
+                            
+#                             for users in totalmembers:
+#                                 notification_type=1
+#                                 add_notification=Insertnotification(db,users,login_user_id,notification_type,add_nuggets.id)
+                                    
+#                                 get_user=db.query(User).filter(User.id == login_user_id).first()
+#                                 user_name=''
+#                                 if get_user:
+#                                     user_name=get_user.display_name
+                                
+#                                 message_detail={
+#                                         "message":"Posted new Nugget",
+#                                         "data":{"refer_id":add_nuggets.id,"type":"add_nugget"},
+#                                         "type":"nuggets"
+#                                     }
+#                                 send_push_notification=pushNotify(db,totalmembers,message_detail,login_user_id)
+#                                 body=''
+#                                 sms_message=''
+                                
+#                                 if add_nuggets.id and add_nuggets.id != '':                                    
+#                                     sms_message,body=nuggetNotifcationEmail(db,add_nuggets.id)  # Pending
+                                    
+#                                 subject='Rawcaster - Notification'
+#                                 email_detail={"subject":subject,"mail_message":body,"sms_message":sms_message,"type":"nuggets"}
+#                                 add_notification_sms_email= addNotificationSmsEmail(db,totalmembers,email_detail,login_user_id)
+
+#                         nugget_detail=get_nugget_detail(db,add_nuggets.id,login_user_id)  # Pending
+                        
+#                         # Update Nugget Master
+#                         update_nuggets_master=db.query(NuggetsMaster).filter_by(id = add_nuggets_master.id).update({"status":1})
+#                         db.commit()
+
+#                         return {"status":1,"msg":"Nuggets created successfully!","nugget_detail":nugget_detail}
+#                     else:
+#                         return {"status":0,"msg":"Failed to create Nugget"}
+                    
+#                 else:
+#                     return {"status":0,"msg":"Failed to create Nugget master"}
 
 
 # 26. List Nuggets
@@ -2763,7 +3136,7 @@ async def listnuggets(db:Session=Depends(deps.get_db),token:str=Form(None),my_nu
                 .group_by(Nuggets.id)
                 
             if search_key:
-                get_nuggets=get_nuggets.filter(or_(NuggetsMaster.content.ilike(search_key),User.display_name.ilike(search_key),User.first_name.ilike(search_key),User.last_name.ilike(search_key),))
+                get_nuggets=get_nuggets.filter(or_(NuggetsMaster.content.ilike("%"+search_key+"%"),User.display_name.ilike("%"+search_key+"%"),User.first_name.ilike("%"+search_key+"%"),User.last_name.ilike("%"+search_key+"%"),))
             
             if access_token == 'RAWCAST':  # When Customer not login
                 get_nuggets=get_nuggets.filter(Nuggets.share_type == 1)

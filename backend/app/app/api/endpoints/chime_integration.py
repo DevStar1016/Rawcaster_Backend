@@ -81,6 +81,7 @@ async def attendee_meeting(db:Session=Depends(deps.get_db),meeting_id:str=Form(N
         
         result={"attendeeResponse":{"Attendee":attendee_response['Attendee']},"meetingResponse":{"Meeting":response['Meeting']}}
         # return result
+        return result
         return {"status":1,"msg":"Success","data":result}
     
         return {"status":1,"msg":"Success","data":result,"participants":attendees,"participants_count":len(attendees)}
