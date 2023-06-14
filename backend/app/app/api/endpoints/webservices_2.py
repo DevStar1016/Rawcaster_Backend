@@ -725,4 +725,93 @@ async def texttoaudio(db:Session=Depends(deps.get_db),token:str=Form(None),messa
                 
         result=upload_to_s3(save_full_path,s3_file_path)
         return result
+    
+    
+    
+from google.cloud import speech
+@router.post("/nugget_audio_convert")
+async def nugget_audio_convert(db:Session=Depends(deps.get_db),nugget_master_id:int=Form(None)):
+    get_nugget=db.query(NuggetsAttachment).filter(NuggetsAttachment.nugget_id == nugget_master_id,NuggetsAttachment.status == 1,NuggetsAttachment.media_type=='audio').first()
+    if get_nugget:
+        query=None
+        # import os
+        # os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'path/to/service/account/key.json'
 
+        # # Initialize the speech-to-text client
+        # client = speech.SpeechClient()
+
+        # # Read the audio file
+        # with open(audio_file, 'rb') as audio_file:
+        #     audio_data = audio_file.read()
+
+        # # Configure speech recognition options
+        # config = speech.RecognitionConfig(
+        #     encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
+        #     sample_rate_hertz=16000,
+        #     language_code='en-US'
+        # )
+
+        # # Perform speech recognition
+        # audio = speech.RecognitionAudio(content=audio_data)
+        # response = client.recognize(config=config, audio=audio)
+
+        # # Extract and print the recognized text
+        # for result in response.results:
+        #     print('Transcript: {}'.format(result.alternatives[0].transcript))   
+            
+        try:
+            transcribe = boto3.client('transcribe',aws_access_key_id=config.access_key,
+                aws_secret_access_key=config.access_secret,
+                region_name='us-west-2')
+
+            job_name = f'my_job_{int(datetime.utcnow().timestamp())}'
+            
+            output_bucket = 'rawcaster'
+            output_key = f'transcriptions/converted_text{int(datetime.utcnow().timestamp())}.json'
+            language_code = 'en-US'  # Language code of the audio (e.g., en-US for US English)
+        
+            response = transcribe.start_transcription_job(
+                    TranscriptionJobName=job_name,
+                    LanguageCode=language_code,
+                    Media={'MediaFileUri': get_nugget.path},
+                    OutputBucketName=output_bucket,
+                    OutputKey=output_key,
+                    Settings={
+                        'ShowSpeakerLabels': True,
+                        'MaxSpeakerLabels': 2  # Set the expected number of speakers in the audio
+                    }
+                )
+            
+            while True:
+                
+                response = transcribe.get_transcription_job(TranscriptionJobName=job_name)
+                status = response['TranscriptionJob']['TranscriptionJobStatus']
+                
+                if status == 'COMPLETED':
+                    result_url = response['TranscriptionJob']['Transcript']['TranscriptFileUri']
+        
+                    # Download the result file
+                    s3_client = boto3.client('s3',aws_access_key_id=config.access_key,
+                        aws_secret_access_key=config.access_secret,
+                        region_name='us-west-2')
+                        
+                    res = result_url.split('rawcaster/', 1) if result_url else None
+                    splitString = res[1]
+
+                    # Retrieve the JSON file object from S3
+                    response = s3_client.get_object(Bucket='rawcaster', Key=splitString)
+
+                    # Read the contents of the JSON file
+                    json_data = response['Body'].read().decode('utf-8')
+                    # Parse the JSON data
+                    parsed_data = json.loads(json_data)
+                    
+                    # Audio Content
+                    query=parsed_data['results']['transcripts'][0]['transcript']
+                    break
+                if status == 'FAILED':
+                    return {"status":0,"msg":"Unable to convert"}
+        except Exception as e:
+            print(e)
+            return {"status":0,"msg":"Something went wrong..."}
+        return query

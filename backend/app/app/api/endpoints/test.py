@@ -10,60 +10,52 @@ from sqlalchemy import extract
 from datetime import datetime,date
 from typing import List
 from app.core import config
-from moviepy.video.io.VideoFileClip import VideoFileClip
-
+from moviepy.editor import VideoFileClip
+from pydub import AudioSegment
+# from better_profanity import profanity
 
 router = APIRouter() 
-import cv2
 
-@router.post("/uploada")
-async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
-    # Load the video file
-    video_path = 'path_to_video_file.mp4'
-    video_capture = cv2.VideoCapture(video_path)
 
-    # Define the region to censor (e.g., rectangle coordinates)
-    censor_x = 100
-    censor_y = 100
-    censor_width = 200
-    censor_height = 200
+from profanity import profanity
 
-    # Loop through each frame in the video
-    while video_capture.isOpened():
-        # Read the current frame
-        ret, frame = video_capture.read()
-        
-        if not ret:
-            break
-        
-        # Apply the censoring effect
-        blurred_region = frame[censor_y:censor_y+censor_height, censor_x:censor_x+censor_width]
-        blurred_region = cv2.GaussianBlur(blurred_region, (99, 99), 0)
-        frame[censor_y:censor_y+censor_height, censor_x:censor_x+censor_width] = blurred_region
-        
-        # Display the resulting frame
-        cv2.imshow('Censored Video', frame)
-        
-        # Check for key press
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+@router.post("/remove_abusive_words")
+async def remove_abusive_words(text:str=Form(None)):
+    # language='fr'
+    # profanity.load_words(language)
+    
+    censored = profanity.censor(text)
+    return censored
+ 
 
-    # Release the video capture and close all windows
-    video_capture.release()
-    cv2.destroyAllWindows()
 
-@router.post("/uploada")
-async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
-    # Save the file to a temporary location
-    # You can use the file.filename to generate a unique filename or any other logic
+@router.post("/censor_check")
+async def censor_check():
+    def censor_cut_check(filename, censor_duration_threshold=2, silence_threshold=-40):
+        # Load the video or audio file
+        if filename.endswith(('.mp4', '.mkv', '.avi')):
+            clip = VideoFileClip(filename)
+            audio = clip.audio
+        elif filename.endswith(('.mp3', '.wav')):
+            audio = AudioSegment.from_file(filename)
+        else:
+            raise ValueError("Unsupported file format.")
+       
+        # Convert audio to mono (if stereo) for silence detection
+        if audio.channels > 1:
+            audio = audio.set_channels(1)
 
-    temp_file_path ="/home/surya_maestro/Videos/20minutes1.mp4"
-    with open(temp_file_path, "wb") as temp_file:
-        while chunk := await file.read(4096):
-            temp_file.write(chunk)
-    test="sdad"
-    # Add the file processing task to the Celery queue
-    multi_file=[1,2,3]
-    background_tasks.add_task(process_data, temp_file_path,test,multi_file)
+        # Detect silence segments in the audio
+        silent_ranges = detect_silence(audio, min_silence_len=1000, silence_thresh=silence_threshold)
 
-    return {"message": "File uploaded and processing started in the background"}
+        # Check if any silence segment exceeds the censor duration threshold
+        for start, end in silent_ranges:
+            duration = (end - start) / 1000  # Convert milliseconds to seconds
+            if duration >= censor_duration_threshold:
+                return True  # Censor cut detected
+
+        return False  # No censor cut detected
+    
+    censor_cut_checks=censor_cut_check('/home/surya_maestro/Videos/god.mp4')    
+    
+    return censor_cut_checks

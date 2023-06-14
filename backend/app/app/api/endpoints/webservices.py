@@ -1207,18 +1207,18 @@ async def searchrawcasterusers(db:Session=Depends(deps.get_db),token:str=Form(No
                 
                 if search_key:
                     
-                    get_user=get_user.filter(or_(User.email_id.ilike(search_key+"%"),User.mobile_no.ilike(search_key+"%"),User.display_name.ilike(search_key+"%"),User.first_name.ilike(search_key+"%"),User.last_name.ilike(search_key+"%")))
+                    get_user=get_user.filter(or_(User.email_id.ilike(search_key+"%"),User.mobile_no.ilike(search_key+"%"),User.display_name.ilike("%"+search_key+"%"),User.first_name.ilike("%"+search_key+"%"),User.last_name.ilike("%"+search_key+"%")))
                 
                 get_row_count=get_user.count()
-                
+            
                 if get_row_count < 1 :
                     
                     if login_user_email == search_key:
                         return {"status":0,"msg":"No Result found","invite_flag":0}
                     else:
-                        
                         return {"status":0,"msg":"No Result found","invite_flag":1}
                 else:
+                   
                     default_page_size=25
                     limit,offset,total_pages=get_pagination(get_row_count,current_page_no,default_page_size)
                     
@@ -1595,19 +1595,19 @@ async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(Non
                             
                     elif check_influencer_category and check_influencer_category.type == 1 and check_influencer_category.lock_my_connection == 1:
                         group_access=1
-                        
-                            
+                           
                     group_category=None
                     if groupname == "My Fans":
                         grouptype=2
                         group_category=1
-                        
+                    
                     if groupname == "My Fans" and res.created_by != login_user_id:
-                        
                         grouptype=1
                         group_category=2
                         groupname=f"Influencer: {(res.user.display_name if res.user.display_name else '') if res.created_by else ''}"
+                    
                     if res.created_by == login_user_id and  groupname != "My Fans":
+                        grouptype=2
                         group_category = 3
                                
                         
@@ -1648,6 +1648,7 @@ async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(Non
                                             })
                     
                     if group_access == 1 and get_user.user_status_id == 4 and grouptype == 1:
+                        print()
                         result_list.append({
                                             "group_id":res.id,
                                             "group_name":groupname,
