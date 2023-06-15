@@ -1,0 +1,91 @@
+name: Dev Build and Publish
+
+on:
+  push:
+    branches:
+      - dev
+
+env:
+  ECR_REPOSITORY: rawcasterecr
+  CLUSTER_NAME: rawcaster-eks
+  AWS_REGION: us-east-1
+  USERNAME: zainsp
+  TOKEN: ${{ secrets.CI_TOKEN }}
+
+jobs:
+  build-publish-and-deploy:
+    name: Build and Publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Checkout heml chart
+        uses: actions/checkout@v3
+        with:
+          repository: GITHUB-User-Name/Repo-Name
+          ref: main
+          path: helm-chart
+          token: ${{ secrets.PA_TOKEN }}
+
+      - name: Configure git for private modules
+        run: git config --global url."https://USERNAME:${TOKEN}@github.com".insteadOf "https://github.com"
+
+      - name: Configure AWS credentials
+        id: configure
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: kubeconfing
+        run: |
+          aws eks update-kubeconfig --name ${{ env.CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+          echo 'KUBE_CONFIG_DATA<<EOF' >> $GITHUB_ENV
+          echo "$(cat ~/.kube/config | base64)" >> $GITHUB_ENV
+          echo 'EOF' >> $GITHUB_ENV
+
+      - name: Create Docker Version Tag
+        id: version
+        run: echo "::set-output name=tag::$(git rev-parse --short HEAD)"
+
+      # Build the Docker image
+      - name: Build
+        id: Build
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |-
+          docker build --tag "$ECR_REGISTRY/$ECR_REPOSITORY:${{ steps.version.outputs.tag }}" build
+
+      # Push the Docker image to Elastic Container Registry
+      - name: Publish
+        id: publish
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |-
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:${{ steps.version.outputs.tag }}"
+          echo "DOCKER_IMAGE=$ECR_REGISTRY/$ECR_REPOSITORY:${{ steps.version.outputs.tag }}" >> $GITHUB_ENV
+
+#      - name: Deploy
+#        uses: koslibpro/helm-eks-action@master
+#        env:
+#          KUBE_CONFIG_DATA: ${{ env.KUBE_CONFIG_DATA }}
+#        with:
+#          command: |-
+#            cd ./helm-chart
+#            helm upgrade --install safepay-client ./charts/client --set safepay.client.image=$DOCKER_IMAGE --namespace=dev  -f ./values/safepay/dev.yaml -f  ./values/safepay/values.template.yaml --dry-run
+#            helm upgrade --install safepay-client ./charts/client --set safepay.client.image=$DOCKER_IMAGE --namespace=dev  -f ./values/safepay/dev.yaml -f  ./values/safepay/values.template.yaml
+
+#      - uses: act10ns/slack@v1
+#        env:
+#          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+#        with:
+#          status: ${{ job.status }}
+#          config: .github/slack/config.yml
+#          channel: "#github-actions"
