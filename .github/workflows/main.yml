@@ -31,9 +31,9 @@ jobs:
           chmod +x kubectl
           sudo mv kubectl /usr/local/bin/
 
-      - name: Update kubeconfig
-        run: |
-          aws eks update-kubeconfig --name rawcaster-eks --region us-east-1
+      #- name: Update kubeconfig
+      #  run: |
+      #    aws eks update-kubeconfig --name rawcaster-eks --region us-east-1
 
       - name: Login to Amazon ECR
         id: login-ecr
