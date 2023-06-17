@@ -2507,6 +2507,12 @@ async def addnuggets(background_tasks: BackgroundTasks,db:Session=Depends(deps.g
             if anyissue == 1:
                 return {"status": 0, "msg": "Sorry! Share with groups or friends list not correct."}
             else:
+
+                
+                add_nuggets_master=NuggetsMaster(user_id=login_user_id,content=content,_metadata=metadata.encode('utf-8') if metadata else None ,poll_duration=poll_duration,created_date=datetime.datetime.utcnow(),status=0)
+                db.add(add_nuggets_master)
+                db.commit()
+
                 
                 content_location=0
                 looping_count=len(nuggets_media) if nuggets_media else 1
