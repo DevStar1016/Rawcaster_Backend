@@ -17,17 +17,15 @@ bucket_name=config.bucket_name
 
 @router.post("/create_meeting")
 async def create_meeting(db:Session=Depends(deps.get_db),host_name:str=Form(None)):
-
+    if not host_name:
+        return {"status":0,"msg":"Name is missing"}
+        
     # Create an instance of the Chime client
     chime_client = boto3.client('chime',aws_access_key_id='AKIAYFYE6EFYG6RJOPMF',
             aws_secret_access_key='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',
             region_name="us-east-1")
 
-    meeting_id = str(uuid.uuid4())  # Generate a unique meeting ID
-    
-    # start_time = datetime.datetime(2023, 6, 7, 14, 35, 0)  # Replace with the desired start time
-    start_time = datetime.datetime.utcnow() + timedelta(minutes=10)  # Start time 10 minutes from now
-    end_time = start_time + timedelta(minutes=3) 
+    meeting_id = str(uuid.uuid4())  # Generate a unique meeting ID 
     
     try:
         response = chime_client.create_meeting(
@@ -37,18 +35,18 @@ async def create_meeting(db:Session=Depends(deps.get_db),host_name:str=Form(None
             MeetingHostId=str(uuid.uuid4()),  # Generate a unique host ID
         
         )
-        
+   
         attendee_response = chime_client.create_attendee(
                 MeetingId=response['Meeting']['MeetingId'],
-                ExternalUserId=host_name if host_name else "Me" 
+                ExternalUserId=host_name
             )
         
         result={"attendeeResponse":{"Attendee":attendee_response['Attendee']},"meetingResponse":{"Meeting":response['Meeting']}}
 
-        return {"status":1,"msg":"Success","data":result,"owner":1}
+        return {"status":1,"msg":"Success","data":result}
 
-    except:
-        return {"status":0,"msg":"Failed to Create Meeting"}
+    except Exception as e:
+        return {"status":0,"msg":f"Failed to Create Meeting.Error:{str(e)}"}
      
 
 @router.post("/attendee_meeting")

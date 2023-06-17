@@ -3,7 +3,7 @@ name: Dev Build and Publish
 on:
   push:
     branches:
-      - dev
+      - main
 
 env:
   ECR_REPOSITORY: rawcasterecr

@@ -1229,7 +1229,11 @@ async def searchrawcasterusers(db:Session=Depends(deps.get_db),token:str=Form(No
                         
                         get_my_friends=db.query(MyFriends).filter(or_(MyFriends.sender_id == user.id,MyFriends.receiver_id == user.id),or_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == login_user_id),MyFriends.status == 1).first()
                         
-                        get_follow_user= db.query(FollowUser).filter(FollowUser.following_userid == user.id,FollowUser.follower_userid == login_user_id).first()
+                        get_follow_user_details= db.query(FollowUser).filter(FollowUser.following_userid == user.id)
+                        
+                        get_follow_user=get_follow_user_details.filter(FollowUser.follower_userid == login_user_id).first()
+                        
+                        follow_count=get_follow_user_details.count()
                         
                         mutual_friends=MutualFriends(db,login_user_id,user.id)
                         
@@ -1242,7 +1246,8 @@ async def searchrawcasterusers(db:Session=Depends(deps.get_db),token:str=Form(No
                                             "gender":user.gender if user.gender else "",
                                             "profile_img":user.profile_img if user.profile_img else "",
                                             "friend_request_status":get_my_friends.request_status if get_my_friends else "",
-                                            "follow":True if get_follow_user else False,                                            
+                                            "follow":True if get_follow_user else False,  
+                                            "follow_count":follow_count,                                          
                                             "location":user.geo_location if user.geo_location else "",
                                             "mutual_friends":mutual_friends,
                                             "bio_data":ProfilePreference(db,login_user_id,user.id,'bio_display_status',user.bio_data)
@@ -7719,7 +7724,8 @@ async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),use
                         }
                     else:
                         followback=db.query(FollowUser).filter(FollowUser.following_userid == login_user_id , FollowUser.follower_userid == follow.follower_userid).first()
-                        
+                        follow_count=db.query(FollowUser).filter(FollowUser.following_userid == follow.user1.id).count()
+                    
                         friend_details = {
                             'user_id': follow.user1.id if follow.user1.id != '' else '',
                             'user_ref_id':follow.user1.user_ref_id if follow.user1.user_ref_id != '' else '',
@@ -7731,7 +7737,8 @@ async def getfollowlist(db:Session=Depends(deps.get_db),token:str=Form(None),use
                             'profile_img': follow.user1.profile_img if follow.user1.profile_img != '' else '',
                             'online': ProfilePreference(db,login_user_id, follow.user1.id, 'online_status', follow.user1.online),
                             'last_seen': ((common_date(follow.user1.last_seen) if follow.user1.last_seen else "") if follow.user1.last_seen else "") if follow.user1.last_seen != '' else '',
-                            'follow': True if followback else False
+                            'follow': True if followback else False,
+                            'follow_count':follow_count
                         }
                         
                     result_list.append(friend_details)

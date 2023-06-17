@@ -511,27 +511,30 @@ async def aichat(db:Session=Depends(deps.get_db),token:str=Form(None),user_query
             query=user_query
         
         if query:
-
-            
-            openai.api_key = config.open_ai_key
-            
-            response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                    {"role": "system", "content": "You are a chatbot"},
-                    {"role": "user", "content": f"{query}"},
-                ]
-                )
-            
-            result = ''
-            if response:
-               
-                for choice in response.choices:
-                    result += choice.message.content
+            try:
+                openai.api_key = config.open_ai_key
                 
-                return {"status":1,"msg":result,"created_at":created_at}
-            else:
-                return {"status":0,"msg":"Failed to search"}
+                response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                        {"role": "system", "content": "You are a chatbot"},
+                        {"role": "user", "content": f"{query}"},
+                    ]
+                    )
+                
+                result = ''
+                if response:
+                
+                    for choice in response.choices:
+                        result += choice.message.content
+                    
+                    return {"status":1,"msg":result,"created_at":created_at}
+                else:
+                    return {"status":0,"msg":"Failed to search"}
+            except Exception as e:
+                print(e)
+                return {"status":0,"msg":"Try again later.."}
+                
         else:
             return {"status":1,"msg":f"HI {user_name}, I am an Artificial Intelligence (AI), I can answer your question on anything. Speak or type your question here..","created_at":created_at}
 
@@ -594,7 +597,7 @@ async def nuggetcontentaudio(db:Session=Depends(deps.get_db),token:str=Form(None
                         ).client('polly')
 
                     # Specify the desired voice and output format
-                    voice_id = 'Joanna'
+                    voice_id = 'Justin'
                     output_format = 'mp3'
                     
                     supported_language=['ar-AE', "en-US", 'en-IN', 'es-MX', 'en-ZA', 'tr-TR', 'ru-RU', 'ro-RO', 'pt-PT', 'pl-PL', 'nl-NL', 'it-IT', 'is-IS', 'fr-FR', 'fi-FI','es-ES', 'de-DE', 'yue-CN', 'ko-KR', 'en-NZ', 'en-GB-WLS', 'hi-IN', 'arb', 'cy-GB', 'cmn-CN', 'da-DK', 'en-AU', 'pt-BR', 'nb-NO', 'sv-SE', 'ja-JP', 'es-US', 'ca-ES', 'fr-CA', 'en-GB', 'de-AT']
@@ -728,7 +731,6 @@ async def texttoaudio(db:Session=Depends(deps.get_db),token:str=Form(None),messa
     
     
     
-from google.cloud import speech
 @router.post("/nugget_audio_convert")
 async def nugget_audio_convert(db:Session=Depends(deps.get_db),nugget_master_id:int=Form(None)):
     get_nugget=db.query(NuggetsAttachment).filter(NuggetsAttachment.nugget_id == nugget_master_id,NuggetsAttachment.status == 1,NuggetsAttachment.media_type=='audio').first()
