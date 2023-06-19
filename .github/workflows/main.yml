@@ -36,6 +36,7 @@ jobs:
           EKS_CLUSTER_ROLE_ARN: arn:aws:iam::562114208112:user/Bharath
         run: |
           aws eks update-kubeconfig --name rawcaster-eks --region us-east-1 --role-arn $EKS_CLUSTER_ROLE_ARN
+          kubectl get ns
 
 
       - name: Login to Amazon ECR
