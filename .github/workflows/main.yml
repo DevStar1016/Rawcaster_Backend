@@ -33,7 +33,7 @@ jobs:
 
       - name: Update kubeconfig
         env:
-          EKS_CLUSTER_ROLE_ARN: arn:aws:iam::562114208112:role/AWS-EKS-Worker-Node
+          EKS_CLUSTER_ROLE_ARN: arn:aws:iam::562114208112:role/AWS-EKS-Cluster-Role
         run: |
           aws eks update-kubeconfig --name rawcaster-eks --region us-east-1 --role-arn $EKS_CLUSTER_ROLE_ARN
 
