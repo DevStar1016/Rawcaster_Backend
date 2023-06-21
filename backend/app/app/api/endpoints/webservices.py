@@ -948,7 +948,9 @@ def user_profile(db,id):
                             "studied_at":get_user.studied_at if get_user.studied_at else "",
                             "influencer_category":get_user.influencer_category if get_user.influencer_category else "",
                             "account_verify_type": (2 if get_verify_details.verify_status == 1 else 1) if get_verify_details else 0,  # 0 -Request not send , 1- Pending ,2 - Verified
-                            "saved_nugget_count":get_saved_nuggets
+                            "saved_nugget_count":get_saved_nuggets,
+                            "nugget_content_length":get_user.user_status_master.max_nugget_char if get_user.user_status_id else 0
+                            
                         })
         token_text=(str(get_user.user_ref_id) + str(datetime.datetime.utcnow().timestamp())).encode("ascii")
         invite_url=inviteBaseurl()
@@ -2476,7 +2478,7 @@ async def addnuggets(background_tasks: BackgroundTasks,db:Session=Depends(deps.g
         else:
             check_content_length=db.query(User).filter(User.id == login_user_id,UserStatusMaster.id == User.user_status_id).first()
             
-            if check_content_length and content and (check_content_length.user_status_master.max_nugget_char) < len(content):
+            if check_content_length and content and (check_content_length.user_status_master.max_nugget_char) < len(content.replace('\n','')):
                 return {"status":0,"msg":f'Content length must be less than {check_content_length.user_status_master.max_nugget_char}'}
             
             anyissue = 0
@@ -3969,7 +3971,7 @@ async def editnugget(*,background_tasks: BackgroundTasks,db:Session=Depends(deps
                 else:
                     check_content_length=db.query(User).filter(User.id == login_user_id,UserStatusMaster.id == User.user_status_id).first()
             
-                    if check_content_length and content and (check_content_length.user_status_master.max_nugget_char) < len(content):
+                    if check_content_length and content and (check_content_length.user_status_master.max_nugget_char) < len(content.replace('\n','')):
                         return {"status":0,"msg":f'Content length must be less than {check_content_length.user_status_master.max_nugget_char}'}
                     
                     anyissue = 0
