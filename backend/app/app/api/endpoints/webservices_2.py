@@ -528,7 +528,7 @@ async def aichat(db:Session=Depends(deps.get_db),token:str=Form(None),user_query
                     for choice in response.choices:
                         result += choice.message.content
                     
-                    return {"status":1,"msg":result,"created_at":created_at}
+                    return {"status":1,"type":1 if audio_file else 0,"query":query,"msg":result,"created_at":created_at}
                 else:
                     return {"status":0,"msg":"Failed to search"}
             except Exception as e:
