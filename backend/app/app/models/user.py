@@ -84,5 +84,6 @@ class User(Base):
     country=relationship("Country",back_populates="user")
     event_abuse_report=relationship("EventAbuseReport",back_populates="user")
     verify_accounts=relationship("VerifyAccounts",back_populates="user")
+    qr_tokens=relationship("QrTokens",back_populates="user")
     
     

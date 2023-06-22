@@ -93,77 +93,6 @@ async def add_event_abuse_report(db:Session=Depends(deps.get_db),token:str=Form(
                 
 
 
-# Testing
-@router.post("/testaddeventabusereport")
-async def testaddeventabusereport(db:Session=Depends(deps.get_db),token:str=Form(None),event_id:str=Form(None),message:str=Form(None),attachment:UploadFile=File(None)):
-    if token == None or token.strip() == "":
-        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-    
-    elif event_id == None or not event_id.isnumeric():
-        return {"status":0,"msg":"Event id is missing"}
-   
-    elif message == None:
-        return {"status":0,"msg":"Message Cant be Blank"}
-    
-    else:
-      
-        access_token=checkToken(db,token)
-        
-        if access_token == False:
-            return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-        else:
-            event_id=int(event_id)
-            get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
-            login_user_id = get_token_details.user_id if get_token_details else None
-            
-            # Add Abuse Report
-            check_event=db.query(Events).filter(Events.id == event_id,Events.status == 1).first()
-            
-            if check_event:
-                add_abuse_report=EventAbuseReport(event_id=event_id,user_id=login_user_id,message=message,created_at=datetime.utcnow(),status = 0)
-                db.add(add_abuse_report)
-                db.commit()
-                db.refresh(add_abuse_report)
-                
-                if attachment:
-                    file_name=attachment.filename
-                    # file_temp=attachment.content_type
-                    # file_size=len(await attachment.read())
-                    file_ext = os.path.splitext(attachment.filename)[1]   
-                    file_extensions=['.jpg','.png','.jpeg']
-                                   
-                    if file_ext in file_extensions:
-                        try:
-                            s3_path=f"events/image_{random.randint(11111,99999)}{int(datetime.utcnow().timestamp())}{file_ext}"
-                            uploaded_file_path=file_upload(attachment,compress=None)
-                            
-                            result=upload_to_s3(uploaded_file_path,s3_path)
-                            # Upload to S3
-                            if result['status'] == 1:
-                                add_abuse_report.attachment = result['url']
-                                add_abuse_report.status = 1
-                                
-                                db.commit()
-                                return {"status":1,"msg":"Success"}
-                            else:
-                                return result
-                        except Exception as e:
-                            print(e)
-                            return {"status":0,"msg":"Unable to Upload File"}
-                            
-                    else:
-                        return {"status":0,"msg":"Accepted only jpg,png,jpeg"}
-                
-                # Update Event Absue Report
-                
-                add_abuse_report.status = 1
-                db.commit()
-                return {"status":1,"msg":"Success"}
-            else:
-                return {"status":0,"msg":"Invalid Event ID"}
-                
-
-
 # CRON
 @router.post("/croninfluencemember")
 async def croninfluencemember(db:Session=Depends(deps.get_db),user_id:int=Form(None)):
@@ -332,28 +261,6 @@ async def influencerchat(db:Session=Depends(deps.get_db),token:str=Form(None),ty
                         else:
                             return result
                         
-                    # if type == 4: # Video
-                    #     readed_file=await attachment.read()
-                    #     save_file_path=video_file_upload(readed_file,compress=None)
-                    #     segment_filename = f"video_{random.randint(1111,9999)}{int(datetime.now().timestamp())}.mp4"
-                        
-                    #     result=upload_to_s3(save_file_path,segment_filename)
-                    #     if result['status'] and result['status'] == 1:
-                    #         content.append(result['url'])
-                    #     else:
-                    #         return result
-                        
-                    # if type == 3: # Audio
-                    #     readed_file=await attachment.read()
-                    #     save_file_path=await file_upload(readed_file,compress=None)
-                    #     segment_filename = f"audio_{random.randint(1111,9999)}{int(datetime.now().timestamp())}.mp3"
-                        
-                    #     result=upload_to_s3(save_file_path,segment_filename)
-                    #     if result['status'] and result['status'] == 1:
-                    #         content.append(result['url'])
-                    #     else:
-                    #         return result
-                        
                 for msg in content:
                     # Add Group Chat
                     add_group_chat=GroupChat(group_id=get_friend_group.id,sender_id = login_user_id,message=message if type == 1 else None,path=msg if type != 1 else None,type=type,sent_datetime=datetime.utcnow(),status=1)          
@@ -363,8 +270,6 @@ async def influencerchat(db:Session=Depends(deps.get_db),token:str=Form(None),ty
                     
                 return {"status":1,"msg":"Success"}
             
-
-
 
 
 
@@ -532,8 +437,8 @@ async def aichat(db:Session=Depends(deps.get_db),token:str=Form(None),user_query
                 else:
                     return {"status":0,"msg":"Failed to search"}
             except Exception as e:
-                print(e)
-                return {"status":0,"msg":"Try again later.."}
+                
+                return {"status":0,"msg":f"Try again later..{e}"}
                 
         else:
             return {"status":1,"msg":f"HI {user_name}, I am an Artificial Intelligence (AI), I can answer your question on anything. Speak or type your question here..","created_at":created_at}
@@ -541,18 +446,21 @@ async def aichat(db:Session=Depends(deps.get_db),token:str=Form(None),user_query
 
 # 92  Text To Audio Conversion (Nugget Content)
 @router.post("/nuggetcontentaudio")
-async def nuggetcontentaudio(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:str=Form(None)):
+async def nuggetcontentaudio(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:str=Form(None),transalation_type:str=Form(None,description='1-audio,2-text')):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     if not nugget_id or not nugget_id.isnumeric():
         return {"status":0,"msg":"Check your nugget id"}
     
+    if transalation_type and not transalation_type.isnumeric():
+        return {"status":0,"msg":"Check transalation type"}
     # Check token
     access_token=checkToken(db,token)
         
     if access_token == False:
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     else:
+        transalation_type=int(transalation_type) if transalation_type else 1
         # check Read Out Language
         get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
         login_user_id = get_token_details.user_id if get_token_details else None
@@ -565,30 +473,28 @@ async def nuggetcontentaudio(db:Session=Depends(deps.get_db),token:str=Form(None
         get_nugget=db.query(Nuggets).filter(Nuggets.id == nugget_id,Nuggets.status == 1).first()
         if get_nugget:
             
-            # get_exist_audio=db.query(NuggetContentAudio).filter(NuggetContentAudio.nugget_master_id == get_nugget.nuggets_id,NuggetContentAudio.status == 1).first()
-            # if get_exist_audio:
-                
-            #     return {"status":1,"msg":"Success","file_path":get_exist_audio.path}
+            text_contnet=get_nugget.nuggets_master.content if get_nugget else None
             
-            # else:
-                text_contnet=get_nugget.nuggets_master.content if get_nugget else None
+            if text_contnet:
+                # target_language=get_user_readout_language.language_code
                 
-                if text_contnet:
-                    # target_language=get_user_readout_language.language_code
-                    
-                    # Transalate
-                    
-                    translate = boto3.client('translate',aws_access_key_id=config.access_key,
-                        aws_secret_access_key=config.access_secret,
-                        region_name='us-west-2')
-                    
-                    response = translate.translate_text(
-                        Text=text_contnet,
-                        SourceLanguageCode='auto',  # Automatically detect the source language
-                        TargetLanguageCode=target_language
-                    )
-                    transalation_language=response['TranslatedText']
-                    
+                # Transalate
+                
+                translate = boto3.client('translate',aws_access_key_id=config.access_key,
+                    aws_secret_access_key=config.access_secret,
+                    region_name='us-west-2')
+                
+                response = translate.translate_text(
+                    Text=text_contnet,
+                    SourceLanguageCode='auto',  # Automatically detect the source language
+                    TargetLanguageCode=target_language
+                )
+                transalation_language=response['TranslatedText']
+                
+                if transalation_type == 2:
+                    return {"status":1,"msg":"success","transalation":transalation_language}
+                else:
+                
                     # Create an instance of the Polly client
                     polly_client = boto3.Session(
                         aws_access_key_id=config.access_key,
@@ -645,7 +551,7 @@ async def nuggetcontentaudio(db:Session=Depends(deps.get_db),token:str=Form(None
                         
                     else:
                         return result
-                    # except:
+                # except:
                     #     return {"status":0,"msg":"Unable to convert"}
                         
         else:
@@ -730,90 +636,172 @@ async def texttoaudio(db:Session=Depends(deps.get_db),token:str=Form(None),messa
         return result
     
     
-    
-@router.post("/nugget_audio_convert")
-async def nugget_audio_convert(db:Session=Depends(deps.get_db),nugget_master_id:int=Form(None)):
-    get_nugget=db.query(NuggetsAttachment).filter(NuggetsAttachment.nugget_id == nugget_master_id,NuggetsAttachment.status == 1,NuggetsAttachment.media_type=='audio').first()
-    if get_nugget:
-        query=None
-        # import os
-        # os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'path/to/service/account/key.json'
-
-        # # Initialize the speech-to-text client
-        # client = speech.SpeechClient()
-
-        # # Read the audio file
-        # with open(audio_file, 'rb') as audio_file:
-        #     audio_data = audio_file.read()
-
-        # # Configure speech recognition options
-        # config = speech.RecognitionConfig(
-        #     encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
-        #     sample_rate_hertz=16000,
-        #     language_code='en-US'
-        # )
-
-        # # Perform speech recognition
-        # audio = speech.RecognitionAudio(content=audio_data)
-        # response = client.recognize(config=config, audio=audio)
-
-        # # Extract and print the recognized text
-        # for result in response.results:
-        #     print('Transcript: {}'.format(result.alternatives[0].transcript))   
-            
-        try:
-            transcribe = boto3.client('transcribe',aws_access_key_id=config.access_key,
-                aws_secret_access_key=config.access_secret,
-                region_name='us-west-2')
-
-            job_name = f'my_job_{int(datetime.utcnow().timestamp())}'
-            
-            output_bucket = 'rawcaster'
-            output_key = f'transcriptions/converted_text{int(datetime.utcnow().timestamp())}.json'
-            language_code = 'en-US'  # Language code of the audio (e.g., en-US for US English)
+# Audio to Text
+@router.post("/nuggetaudiotext")
+async def nugget_audio_convert(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(None)):
+    if not token:
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+   
+    access_token=checkToken(db,token)
         
-            response = transcribe.start_transcription_job(
-                    TranscriptionJobName=job_name,
-                    LanguageCode=language_code,
-                    Media={'MediaFileUri': get_nugget.path},
-                    OutputBucketName=output_bucket,
-                    OutputKey=output_key,
-                    Settings={
-                        'ShowSpeakerLabels': True,
-                        'MaxSpeakerLabels': 2  # Set the expected number of speakers in the audio
-                    }
-                )
+    if access_token == False:
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    else:
+        get_nugget=db.query(Nuggets.id,NuggetsAttachment.path).filter(Nuggets.id == nugget_id,NuggetsAttachment.nugget_id == Nuggets.nuggets_id,NuggetsAttachment.status == 1,NuggetsAttachment.media_type=='audio').first()
+   
+        if get_nugget:
+            query=None 
+            try:
+                transcribe = boto3.client('transcribe',aws_access_key_id=config.access_key,
+                    aws_secret_access_key=config.access_secret,
+                    region_name='us-west-2')
+                
+                            
+                job_name = f'my_job_{int(datetime.utcnow().timestamp())}'
+                
+                output_bucket = 'rawcaster'
+                output_key = f'transcriptions/converted_text{int(datetime.utcnow().timestamp())}.json'
+                language_code = 'hi-IN'  # Language code of the audio (e.g., en-US for US English)
             
-            while True:
+                response = transcribe.start_transcription_job(
+                        TranscriptionJobName=job_name,
+                        LanguageCode=language_code,
+                        Media={'MediaFileUri': get_nugget.path},
+                        OutputBucketName=output_bucket,
+                        OutputKey=output_key,
+                        Settings={
+                            'ShowSpeakerLabels': True,
+                            'MaxSpeakerLabels': 2  # Set the expected number of speakers in the audio
+                        }
+                    )
                 
-                response = transcribe.get_transcription_job(TranscriptionJobName=job_name)
-                status = response['TranscriptionJob']['TranscriptionJobStatus']
-                
-                if status == 'COMPLETED':
-                    result_url = response['TranscriptionJob']['Transcript']['TranscriptFileUri']
-        
-                    # Download the result file
-                    s3_client = boto3.client('s3',aws_access_key_id=config.access_key,
-                        aws_secret_access_key=config.access_secret,
-                        region_name='us-west-2')
-                        
-                    res = result_url.split('rawcaster/', 1) if result_url else None
-                    splitString = res[1]
-
-                    # Retrieve the JSON file object from S3
-                    response = s3_client.get_object(Bucket='rawcaster', Key=splitString)
-
-                    # Read the contents of the JSON file
-                    json_data = response['Body'].read().decode('utf-8')
-                    # Parse the JSON data
-                    parsed_data = json.loads(json_data)
+                while True:
                     
-                    # Audio Content
-                    query=parsed_data['results']['transcripts'][0]['transcript']
-                    break
-                if status == 'FAILED':
-                    return {"status":0,"msg":"Unable to convert"}
-        except Exception as e:
-            print(e)
-            return {"status":0,"msg":"Something went wrong..."}
-        return query
+                    response = transcribe.get_transcription_job(TranscriptionJobName=job_name)
+                    status = response['TranscriptionJob']['TranscriptionJobStatus']
+                    
+                    if status == 'COMPLETED':
+                        result_url = response['TranscriptionJob']['Transcript']['TranscriptFileUri']
+            
+                        # Download the result file
+                        s3_client = boto3.client('s3',aws_access_key_id=config.access_key,
+                            aws_secret_access_key=config.access_secret,
+                            region_name='us-west-2')
+                            
+                        res = result_url.split('rawcaster/', 1) if result_url else None
+                        splitString = res[1]
+
+                        # Retrieve the JSON file object from S3
+                        response = s3_client.get_object(Bucket='rawcaster', Key=splitString)
+
+                        # Read the contents of the JSON file
+                        json_data = response['Body'].read().decode('utf-8')
+                        # Parse the JSON data
+                        parsed_data = json.loads(json_data)
+                        
+                        # Audio Content
+                        query=parsed_data['results']['transcripts'][0]['transcript']
+                        break
+                    if status == 'FAILED':
+                        return {"status":0,"msg":"Unable to convert"}
+            except Exception as e:
+                print(e)
+                return {"status":0,"msg":f"Something went wrong..."}
+            
+            return {"status":1,"msg":"Success","content":query}
+    
+    
+    
+@router.post("/generate_qrtoken")
+async def generate_qrtoken(db:Session=Depends(deps.get_db),token:str=Form(None)):
+    if not token:
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    
+    # Check token        
+    access_token=checkToken(db,token)
+    
+    if access_token == False:
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    else:
+        # check Read Out Language
+        get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+        login_user_id= get_token_details.user_id if get_token_details else None
+        email_id = ((get_token_details.user.email_id if get_token_details.user.email_id else get_token_details.user.mobile_no) if get_token_details.user_id  else None) if get_token_details else None
+        
+        if email_id:
+            
+            random_string=f'{config.settings.SECRET_KEY}{int(datetime.utcnow().timestamp())}'
+            print(random_string)
+            check_qr_tokens=db.query(QrTokens).filter(QrTokens.user_id == login_user_id,QrTokens.status == 1).update({"status":0})
+            db.commit()
+            
+            # add QR Token
+            add_qr_token=QrTokens(user_id=login_user_id,token=hashlib.sha1(random_string.encode()).hexdigest(),status =1,created_at=datetime.utcnow(),expired_at=datetime.utcnow() + timedelta(minutes=1))
+            db.add(add_qr_token)
+            db.commit()
+            if add_qr_token:
+                qr_string=f'email:{email_id}-{random_string}'
+                encrypt_string = hashlib.sha1(qr_string.encode()).hexdigest()
+            
+                return {"status":1,"msg":"Success","qr_token":encrypt_string}
+            else:
+                return {"status":0,"msg":"Code generate failed"}
+                
+        else:
+            return {"status":0,"msg":"Email id is empty"}
+
+
+
+
+@router.post("/validate_qrtoken")
+async def validate_qrtoken(db:Session=Depends(deps.get_db),token:str=Form(None),qr_token:str=Form(None)):
+    if not token:
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    if not qr_token:
+        return {"status":0,"msg":"Auth code missing"}
+        
+    # Check token        
+    access_token=checkToken(db,token)
+    if access_token == False:
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+    else:
+        get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+        login_user_id= get_token_details.user_id if get_token_details else None
+        # MaeRaw567#&ghtDiuc@#9854*sG!1687312754
+        encrypt_string = hashlib.sha1(qr_token.encode()).hexdigest()
+        current_datetime=datetime.utcnow()
+        get_qr=db.query(QrTokens).filter(QrTokens.user_id == login_user_id,QrTokens.token == encrypt_string,QrTokens.expired_at >= current_datetime,QrTokens.status == 1).order_by(QrTokens.id.desc()).first()
+        if get_qr:
+            get_qr.status = 0
+            db.commit()
+            # Check Time validation
+            return {"status":1,"msg":"Success"}
+        else:
+            return {"status":0,"msg":"Token expired"}
+        
+        
+        
+
+@router.post("/detect_language")
+async def detect_language(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(None)):
+    import speech_recognition as sr
+    from langdetect import detect
+    def get_audio_language(audio_file):
+        r = sr.Recognizer()
+
+        # Load the audio file
+        with sr.AudioFile(audio_file) as source:
+            audio = r.record(source)
+
+        # Perform speech recognition to convert audio to text
+        text = r.recognize_google(audio)
+
+        # Detect the language of the recognized text
+        language_code = detect(text)
+
+        return language_code
+    
+    audio_file_path = '/home/surya_maestro/Music/Jack Sparrow English Dialogue.wav'
+
+    detected_language = get_audio_language(audio_file_path)
+    print("Detected language code:", detected_language)

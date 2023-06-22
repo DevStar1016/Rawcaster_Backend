@@ -7,12 +7,13 @@ from sqlalchemy.orm import Session
 from app.core import config
 import datetime
 router = APIRouter() 
+from pydantic import BaseModel,Field
+
 import uuid
 
 access_key=config.access_key
 access_secret=config.access_secret
 bucket_name=config.bucket_name
-
 
 
 @router.post("/create_meeting")
@@ -35,7 +36,7 @@ async def create_meeting(db:Session=Depends(deps.get_db),host_name:str=Form(None
             MeetingHostId=str(uuid.uuid4()),  # Generate a unique host ID
         
         )
-   
+        
         attendee_response = chime_client.create_attendee(
                 MeetingId=response['Meeting']['MeetingId'],
                 ExternalUserId=host_name
