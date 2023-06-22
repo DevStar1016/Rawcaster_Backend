@@ -9,7 +9,7 @@ from typing import List
 router = APIRouter() 
 
 
-@router.post("/invite_mails")
+@router.post("/invite_mails") 
 async def invite_mails(db:Session=Depends(deps.get_db)):
     get_notification=db.query(NotificationSmsEmail).filter(NotificationSmsEmail.status == 0).all()
     for notify in get_notification:
