@@ -782,7 +782,7 @@ async def validate_qrtoken(db:Session=Depends(deps.get_db),token:str=Form(None),
         
         
 
-# @router.post("/detect_language")
+# @router.post("/detect_language") 
 # async def detect_language(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(None)):
     
 #     import speech_recognition as sr
