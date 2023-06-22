@@ -446,13 +446,13 @@ async def aichat(db:Session=Depends(deps.get_db),token:str=Form(None),user_query
 
 # 92  Text To Audio Conversion (Nugget Content)
 @router.post("/nuggetcontentaudio")
-async def nuggetcontentaudio(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:str=Form(None),transalation_type:str=Form(None,description='1-audio,2-text')):
+async def nuggetcontentaudio(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:str=Form(None),translation_type:str=Form(None,description='1-audio,2-text')):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     if not nugget_id or not nugget_id.isnumeric():
         return {"status":0,"msg":"Check your nugget id"}
     
-    if transalation_type and not transalation_type.isnumeric():
+    if translation_type and not translation_type.isnumeric():
         return {"status":0,"msg":"Check transalation type"}
     # Check token
     access_token=checkToken(db,token)
@@ -460,7 +460,7 @@ async def nuggetcontentaudio(db:Session=Depends(deps.get_db),token:str=Form(None
     if access_token == False:
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     else:
-        transalation_type=int(transalation_type) if transalation_type else 1
+        translation_type=int(translation_type) if translation_type else 1
         # check Read Out Language
         get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
         login_user_id = get_token_details.user_id if get_token_details else None
@@ -491,8 +491,8 @@ async def nuggetcontentaudio(db:Session=Depends(deps.get_db),token:str=Form(None
                 )
                 transalation_language=response['TranslatedText']
                 
-                if transalation_type == 2:
-                    return {"status":1,"msg":"success","transalation":transalation_language}
+                if translation_type == 2:
+                    return {"status":1,"msg":"success","translation":transalation_language}
                 else:
                 
                     # Create an instance of the Polly client
@@ -782,26 +782,24 @@ async def validate_qrtoken(db:Session=Depends(deps.get_db),token:str=Form(None),
         
         
 
-@router.post("/detect_language")
-async def detect_language(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(None)):
-    import speech_recognition as sr
-    from langdetect import detect
-    def get_audio_language(audio_file):
-        r = sr.Recognizer()
-
-        # Load the audio file
-        with sr.AudioFile(audio_file) as source:
-            audio = r.record(source)
-
-        # Perform speech recognition to convert audio to text
-        text = r.recognize_google(audio)
-
-        # Detect the language of the recognized text
-        language_code = detect(text)
-
-        return language_code
+# @router.post("/detect_language")
+# async def detect_language(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(None)):
     
-    audio_file_path = '/home/surya_maestro/Music/Jack Sparrow English Dialogue.wav'
+#     import speech_recognition as sr
 
-    detected_language = get_audio_language(audio_file_path)
-    print("Detected language code:", detected_language)
+#     def get_audio_language(audio_file):
+#         r = sr.Recognizer()
+
+#         with sr.AudioFile(audio_file) as source:
+#             audio = r.record(source)
+
+#         # Specify the language code corresponding to the spoken language
+#         text = r.recognize_google(audio, language='en-US')
+
+#         return text
+
+#     audio_file_path = '/home/surya_maestro/Music/Jack Sparrow English Dialogue.wav'
+#     recognized_text = get_audio_language(audio_file_path)
+#     print("Recognized text:", recognized_text)
+    
+    
