@@ -785,21 +785,21 @@ async def validate_qrtoken(db:Session=Depends(deps.get_db),token:str=Form(None),
 # @router.post("/detect_language") 
 # async def detect_language(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(None)):
     
-#     import speech_recognition as sr
+    import speech_recognition as sr
 
-#     def get_audio_language(audio_file):
-#         r = sr.Recognizer()
+    def get_audio_language(audio_file):
+        r = sr.Recognizer()
 
-#         with sr.AudioFile(audio_file) as source:
-#             audio = r.record(source)
+        with sr.AudioFile(audio_file) as source:
+            audio = r.record(source)
 
-#         # Specify the language code corresponding to the spoken language
-#         text = r.recognize_google(audio, language='en-US')
+        # Specify the language code corresponding to the spoken language
+        text = r.recognize_google(audio, language='en-US')
 
-#         return text
+        return text
 
-#     audio_file_path = '/home/surya_maestro/Music/Jack Sparrow English Dialogue.wav'
-#     recognized_text = get_audio_language(audio_file_path)
-#     print("Recognized text:", recognized_text)
+    audio_file_path = '/home/surya_maestro/Music/Jack Sparrow English Dialogue.wav'
+    recognized_text = get_audio_language(audio_file_path)
+    print("Recognized text:", recognized_text)
     
     
