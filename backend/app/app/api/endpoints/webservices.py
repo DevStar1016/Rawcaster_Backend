@@ -7763,7 +7763,7 @@ async def addnuggetview(db:Session=Depends(deps.get_db),token:str=Form(None),nug
 
 # 73. Get Referral List
 
-@router.post("/getreferrallist")
+@router.post("/getreferrallist")  
 async def getreferrallist(db:Session=Depends(deps.get_db),token:str=Form(None),page_number:str=Form(default=1)):
     if token == None or token.strip() == "":
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
