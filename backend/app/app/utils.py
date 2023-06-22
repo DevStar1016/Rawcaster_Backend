@@ -25,6 +25,7 @@ from app.core import config
 from celery import Celery
 from moviepy.video.io.VideoFileClip import VideoFileClip
 import shutil
+from pyfcm import FCMNotification
 
 celery_app = Celery("tasks", broker="redis://localhost:8000")
 
@@ -170,9 +171,7 @@ def upload_to_s3(local_file_pth,s3_bucket_path):
         return {"status":1,"url":url}
     
     except Exception as e:
-        exception_type = e.__class__
-        print(exception_type)
-        return {"status":0,"msg":"Unable to upload"}
+        return {"status":0,"msg":f"Unable to upload:{e}"}
     
 
 async def send_email(db,to_mail, subject, message):
