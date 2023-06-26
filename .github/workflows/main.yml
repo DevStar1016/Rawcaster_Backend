@@ -8,7 +8,7 @@ on:
 env:
   AWS_REGION: us-east-1
   EKS_CLUSTER_NAME: rawcaster-eks
-  ECR_REPOSITORY_NAME: rawcaster-python-api
+  ECR_REPOSITORY_NAME: rawcasterecr
 
 jobs:
   deploy:
@@ -46,7 +46,7 @@ jobs:
 #      - name: Build, tag, and push image to Amazon ECR
 #        env:
 #          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-#          ECR_REPOSITORY: rawcaster-python-api
+#          ECR_REPOSITORY: rawcasterecr
 #          IMAGE_TAG: ai_and_chime
 
 #        run: |
