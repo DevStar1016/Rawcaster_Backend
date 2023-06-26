@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
         - name: user
-          image: 562114208112.dkr.ecr.us-east-1.amazonaws.com/rawcasterecr@sha256:04c22f320604a9f3b630245291c6a58041ec1e7b1acb7b5738a882707f0101de
+          image: 562114208112.dkr.ecr.us-east-1.amazonaws.com/rawcaster-python-api:26062023
           imagePullPolicy: Always
           envFrom:
           - secretRef:
