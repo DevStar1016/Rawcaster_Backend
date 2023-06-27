@@ -55,4 +55,8 @@ jobs:
 
       - name: Deploy to EKS
         run: |
-          kubectl apply -f test.yml -n sandbox
+<<<<<<< HEAD
+          kubectl apply -f test.yml -n dev
+=======
+          kubectl apply -f test.yml -n dev
+>>>>>>> 5f12749c3f7d7812865e144d8997845328595eee

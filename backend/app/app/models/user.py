@@ -44,6 +44,7 @@ class User(Base):
     unused_referral_points=Column(Integer,nullable=False,default=0)
     influencer_category=Column(String(20))
     existing_user=Column(TINYINT,default=1) 
+    chime_user_id=Column(String(100))
     # Newly Added
     work_at=Column(String(100))
     studied_at=Column(String(100))
