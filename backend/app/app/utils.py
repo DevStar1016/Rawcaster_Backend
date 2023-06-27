@@ -26,6 +26,8 @@ from celery import Celery
 from moviepy.video.io.VideoFileClip import VideoFileClip
 import shutil
 from pyfcm import FCMNotification
+from api.endpoints import chime_chat
+
 
 celery_app = Celery("tasks", broker="redis://localhost:8000")
 
@@ -1688,7 +1690,18 @@ async def logins(db,username, password, device_type, device_id, push_id,login_fr
             get_user.existing_user = 0
             db.commit()
             
-            return {"status":1,"msg":"Success","salt_token":salt_token,"token":token_text,"email":username,"expirytime":common_date(exptime),"profile_image":profile_image,"name":name,"user_id":user_id,"authcode":new_auth_code,"acc_verify_status":get_user.is_email_id_verified,"first_time":existing_user}
+            # Chime Chat User Create
+            
+            check_chat_id=get_user.chime_user_id if get_user.chime_user_id else None
+            if not check_chat_id:
+                create_chat_user=chime_chat.createchimeuser(get_user.email_id)
+                if create_chat_user['status'] == 1:
+                    check_chat_id=create_chat_user['data']['ChimeUserId']
+                    # Update User Chime ID
+                    update_user=db.query(User).filter(User.id == get_user.id).update({'chime_user_id':check_chat_id})
+                    db.commit() 
+                
+            return {"status":1,"msg":"Success","salt_token":salt_token,"token":token_text,"email":username,"expirytime":common_date(exptime),"profile_image":profile_image,"name":name,"user_id":user_id,"authcode":new_auth_code,"acc_verify_status":get_user.is_email_id_verified,"first_time":existing_user,"chat_user_id":check_chat_id}
         else:
             return {"status":0,"msg" : "Failed to Generate Access Token. try again"}
             

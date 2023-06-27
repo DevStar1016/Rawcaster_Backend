@@ -638,7 +638,7 @@ async def texttoaudio(db:Session=Depends(deps.get_db),token:str=Form(None),messa
     
 # Audio to Text
 @router.post("/nuggetaudiotext")
-async def nugget_audio_convert(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(None)):
+async def nugget_audio_text(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(None)):
     if not token:
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
    
@@ -647,10 +647,20 @@ async def nugget_audio_convert(db:Session=Depends(deps.get_db),token:str=Form(No
     if access_token == False:
         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
     else:
+        get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+        login_user_id = get_token_details.user_id if get_token_details else None
+        
         get_nugget=db.query(Nuggets.id,NuggetsAttachment.path).filter(Nuggets.id == nugget_id,NuggetsAttachment.nugget_id == Nuggets.nuggets_id,NuggetsAttachment.status == 1,NuggetsAttachment.media_type=='audio').first()
    
         if get_nugget:
             query=None 
+            get_user_readout_language=db.query(UserSettings.id.label("user_setting_id"),ReadOutLanguage.id.label("read_out_id"),ReadOutLanguage.language_code).filter(UserSettings.user_id == login_user_id,ReadOutLanguage.id == UserSettings.read_out_language_id).first()
+        
+            target_language=get_user_readout_language.language_code if get_user_readout_language else 'en'
+            
+            supported_language=['ar-AE', "en-US", 'en-IN', 'es-MX', 'en-ZA', 'tr-TR', 'ru-RU', 'ro-RO', 'pt-PT', 'pl-PL', 'nl-NL', 'it-IT', 'is-IS', 'fr-FR', 'fi-FI','es-ES', 'de-DE', 'yue-CN', 'ko-KR', 'en-NZ', 'en-GB-WLS', 'hi-IN', 'arb', 'cy-GB', 'cmn-CN', 'da-DK', 'en-AU', 'pt-BR', 'nb-NO', 'sv-SE', 'ja-JP', 'es-US', 'ca-ES', 'fr-CA', 'en-GB', 'de-AT']        
+            matching_languages = [lang for lang in supported_language if lang.startswith(target_language)]
+            
             try:
                 transcribe = boto3.client('transcribe',aws_access_key_id=config.access_key,
                     aws_secret_access_key=config.access_secret,
@@ -661,11 +671,10 @@ async def nugget_audio_convert(db:Session=Depends(deps.get_db),token:str=Form(No
                 
                 output_bucket = 'rawcaster'
                 output_key = f'transcriptions/converted_text{int(datetime.utcnow().timestamp())}.json'
-                language_code = 'hi-IN'  # Language code of the audio (e.g., en-US for US English)
-            
+                
                 response = transcribe.start_transcription_job(
                         TranscriptionJobName=job_name,
-                        LanguageCode=language_code,
+                        LanguageCode=matching_languages[0] if matching_languages else 'en-IN',
                         Media={'MediaFileUri': get_nugget.path},
                         OutputBucketName=output_bucket,
                         OutputKey=output_key,
@@ -780,26 +789,86 @@ async def validate_qrtoken(db:Session=Depends(deps.get_db),token:str=Form(None),
             return {"status":0,"msg":"Token expired"}
         
         
+        #  transcribe_client = boto3.client('transcribe',aws_access_key_id=config.access_key,
+        #     aws_secret_access_key=config.access_secret,
+        #     region_name='us-west-2')
+        
         
 
-@router.post("/detect_language")
-async def detect_language(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(None)):
-    
+@router.post("/speech_to_text")
+async def speech_to_text(db:Session=Depends(deps.get_db),token:str=Form(None),nugget_id:int=Form(None)):
+    #import library
     import speech_recognition as sr
 
-    def get_audio_language(audio_file):
-        r = sr.Recognizer()
+    # Initialize recognizer class (for recognizing the speech)
+    r = sr.Recognizer()
 
-        with sr.AudioFile(audio_file) as source:
-            audio = r.record(source)
+    # Reading Audio file as source
+    # listening the audio file and store in audio_text variable
 
-        # Specify the language code corresponding to the spoken language
-        text = r.recognize_google(audio, language='en-US')
+    with sr.AudioFile('/home/surya_maestro/Music/Jack Sparrow English Dialogue.wav') as source:
+        
+        audio_text = r.listen(source)
+        
+    # recoginize_() method will throw a request error if the API is unreachable, hence using exception handling
+        try:
+            
+            # using google speech recognition
+            text = r.recognize_google(audio_text)
+            print('Converting audio transcripts into text ...')
+            print(text)
+        
+        except:
+            print('Sorry.. run again...')
+        
+        
+        
+@router.post("/detect_language")
+async def detect_language(db:Session=Depends(deps.get_db)):
+    import speech_recognition as sr
 
-        return text
+    def audio_to_text(file_path):
+        # Create a recognizer object
+        recognizer = sr.Recognizer()
 
-    audio_file_path = '/home/surya_maestro/Music/Jack Sparrow English Dialogue.wav'
-    recognized_text = get_audio_language(audio_file_path)
-    print("Recognized text:", recognized_text)
+        # Load the audio file
+        with sr.AudioFile(file_path) as source:
+            # Read the audio data from the file
+            audio = recognizer.record(source)
+
+        # Perform speech recognition
+        try:
+            text = recognizer.recognize_google(audio)
+            return text
+        except sr.UnknownValueError:
+            print("Speech recognition could not understand audio")
+        except sr.RequestError as e:
+            print("Could not request results from Google Speech Recognition service; {0}".format(e))
+
+    file_path = "/home/surya_maestro/Music/Ringtone_8.wav"
+    text = audio_to_text(file_path)
+    print("Text:", text)
+
+
+
+@router.post("/temp_file_upload")
+async def temp_file_upload(db:Session=Depends(deps.get_db),file:UploadFile=File(None)):
+
+    file_ext = os.path.splitext(file.filename)[1]
+                                
+    uploaded_file_path=await file_upload(file,file_ext,compress=1)
+    # Get Duration of the File
+    try:
+        audio = AudioSegment.from_file(uploaded_file_path)
+        duration_in_seconds = len(audio) / 1000
+        if not duration_in_seconds < 120:
+            return {"status":0,"msg":"Allowed only maximum 2 minutes"}
+    except Exception as e:
+        print(e)
+        return {'status':0,"msg":"Try again later..."}
     
-    
+    # Upload to S3
+    s3_file_path=f'nuggets/audio_{int(datetime.utcnow().timestamp())}{file_ext}'
+                                
+    result=upload_to_s3(uploaded_file_path,s3_file_path)
+    return result
