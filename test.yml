@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: test
-  namespace: sandbox
+  name: user
+  namespace: dev
   labels:
-    app: test
+    app: user
   # namespace: default
 spec:
   selector:
     matchLabels:
-      app: test
+      app: user
   replicas: 1
   template:
     metadata:
       labels:
-        app: test
+        app: user
     spec:
       containers:
-        - name: test
+        - name: user
           image: 562114208112.dkr.ecr.us-east-1.amazonaws.com/rawcaster-python-api:Latest
           imagePullPolicy: Always
           envFrom:
@@ -31,14 +31,14 @@ apiVersion: v1
 kind: Service
 metadata:
   labels:
-    name: test
-  name: test
-  namespace: sandbox
+    name: user
+  name: user
+  namespace: dev
 spec:
   type: NodePort
   ports:
-    - name: test
+    - name: user
       port: 80
       targetPort: 80
   selector:
-    app: test
+    app: user
