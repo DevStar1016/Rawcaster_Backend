@@ -689,7 +689,7 @@ async def nugget_audio_text(db:Session=Depends(deps.get_db),token:str=Form(None)
                     response = transcribe.get_transcription_job(TranscriptionJobName=job_name)
                     status = response['TranscriptionJob']['TranscriptionJobStatus']
                     
-                    if status == 'COMPLETED':
+                    if status == 'COMPLETED': 
                         result_url = response['TranscriptionJob']['Transcript']['TranscriptFileUri']
             
                         # Download the result file
