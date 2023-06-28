@@ -5,6 +5,7 @@ from app.utils import *
 from app.api import deps
 from sqlalchemy.orm import Session
 from app.core import config
+import ast
 
 router = APIRouter() 
 
@@ -60,11 +61,13 @@ async def create_channel(db:Session=Depends(deps.get_db),chime_bearer:str=Form(.
 
 
 @router.post("/addmembers")  # Working
-async def addmembers(channel_arn:str=Form(...),chime_bearer:str=Form(...)):
-    response = chime.batch_create_channel_membership(
+async def addmembers(channel_arn:str=Form(...),chime_bearer:str=Form(...),member_id:Any=Form(...,description="['abc','def']")):
+    group_members = ast.literal_eval(member_id) if member_id else []
+    
+    response = chime.batch_create_channel_membership( 
             ChannelArn=channel_arn,
             Type='DEFAULT',
-            MemberArns=['arn:aws:chime:us-east-1:562114208112:app-instance/6ea8908f-999b-4b3d-9fae-fa1153129087/user/anon_9eb255a5-877d-4122-96e9-4399fb55ad4d'],
+            MemberArns=group_members,
             ChimeBearer=chime_bearer          
         )
     
@@ -78,6 +81,18 @@ async def addmembers(channel_arn:str=Form(...),chime_bearer:str=Form(...)):
     
     return response
 
+@router.post("/list_channel_member")  # Working
+async def list_channel_member(channel_arn:str=Form(...),chime_bearer:str=Form(...)):  
+
+    response = chime.list_channel_memberships(
+            ChannelArn=channel_arn,
+            Type='DEFAULT',
+            Role='ADMINISTRATOR',
+            MaxResults=10,
+            ChimeBearer=chime_bearer
+        )
+        
+    return response
 
 
 @router.post("/send_message")  # Working
@@ -119,4 +134,12 @@ async def delete_channel(channel_arn:str=Form(...),chime_bearer:str=Form(...)):
         ChannelArn=channel_arn,
         ChimeBearer=chime_bearer
     )
+    return response
+
+
+
+@router.post("/messaging_session")  # Working
+async def messaging_session():  
+
+    response = chime.get_messaging_session_endpoint()   
     return response
