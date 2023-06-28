@@ -45,7 +45,7 @@ def createchimeuser(user_name:str=Form(None)):
     
 
 
-@router.post("/create_channel")  # Working
+@router.post("/create_channel")  # Working 
 async def create_channel(db:Session=Depends(deps.get_db),chime_bearer:str=Form(...),group_name:str=Form(...)):
     
     response = chime.create_channel(
@@ -70,15 +70,6 @@ async def addmembers(channel_arn:str=Form(...),chime_bearer:str=Form(...),member
             MemberArns=group_members,
             ChimeBearer=chime_bearer          
         )
-    
-    # response = chime.list_channel_memberships(
-    #     ChannelArn=channel_arn,
-    #     Type='DEFAULT',
-    #     Role='ADMINISTRATOR',
-    #     MaxResults=10,
-    #     ChimeBearer=chime_bearer
-    # )
-    
     return response
 
 @router.post("/list_channel_member")  # Working
