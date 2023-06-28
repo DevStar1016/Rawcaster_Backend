@@ -1664,7 +1664,7 @@ async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(Non
                                             "locked":1
                                             })
                     else:
-                        result_list.append({
+                        result_list.append({ 
                                             "group_id":res.id,
                                             "group_name":groupname,
                                             "locked":0,
