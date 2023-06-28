@@ -1556,7 +1556,7 @@ async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(Non
         if access_token == False:
             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
-            get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+            get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first() 
             
             login_user_id=get_token_details.user_id
             
