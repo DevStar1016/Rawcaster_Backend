@@ -53,7 +53,7 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: rawcaster-python-api
-          tags: latest
+          tags: ai_and_chime
           tag: ${{ steps.date.outputs.date }}-${{ github.sha }}
 
         run: |
