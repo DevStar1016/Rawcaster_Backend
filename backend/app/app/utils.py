@@ -1696,7 +1696,7 @@ async def logins(db,username, password, device_type, device_id, push_id,login_fr
             if not check_chat_id:
                 create_chat_user=chime_chat.createchimeuser(get_user.email_id)
                 if create_chat_user['status'] == 1:
-                    check_chat_id=create_chat_user['data']['ChimeUserId']
+                    check_chat_id=create_chat_user['data']['ChimeAppInstanceUserArn']
                     # Update User Chime ID
                     update_user=db.query(User).filter(User.id == get_user.id).update({'chime_user_id':check_chat_id})
                     db.commit() 
