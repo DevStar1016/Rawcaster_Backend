@@ -20,6 +20,7 @@ import ast
 from mail_templates.mail_template import *
 from moviepy.video.io.VideoFileClip import VideoFileClip
 import subprocess
+from .chime_chat import *
 
 router = APIRouter() 
 
@@ -206,6 +207,27 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(1,descript
                     db.commit()
                     db.refresh(friends_group)
                     
+                    channel_arn=None
+                    user_arn=None
+                    try:
+                        # Add User in Chime Channel
+                        create_chat_user=chime_chat.createchimeuser(add_user.email_id)
+                        if create_chat_user['status'] == 1:
+                            user_arn=create_chat_user['data']['ChimeAppInstanceUserArn']
+                            # Update User Chime ID
+                            update_user=db.query(User).filter(User.id == get_user.id).update({'chime_user_id':user_arn})
+                            db.commit() 
+                        
+                            # Add Channels
+                            chime_bearer=user_arn
+                            group_name='My Fans'
+                            channel_response=create_channel(chime_bearer,group_name)
+                            
+                            channel_arn=channel_response['ChannelArn'] if channel_response else None
+                            
+                    except Exception as e:
+                        print(e)
+                                         
                     referred_id=0
                     # Add Friend Automatically From Referral
                     
@@ -240,6 +262,15 @@ async def signup(db:Session=Depends(deps.get_db),signup_type:str=Form(1,descript
                                         db.add(add_friend_group_member)
                                         db.commit()
                                         
+                                        # Add Members in Channel
+                                        channel_arn=channel_arn
+                                        chime_bearer=user_arn
+                                        member_id=list(referred_user.chime_user_id) if referred_user.chime_user_id else None
+                                        try:
+                                            addmembers(channel_arn,chime_bearer,member_id)
+                                        except Exception as e:
+                                            print(f"Referrer:{e}")
+                                                                                
                     # Referral Auto Add Friend Ends  
                     type=2
                     rawcaster_support_id= GetRawcasterUserID(db,type)  
@@ -950,6 +981,7 @@ def user_profile(db,id):
                             "account_verify_type": (2 if get_verify_details.verify_status == 1 else 1) if get_verify_details else 0,  # 0 -Request not send , 1- Pending ,2 - Verified
                             "saved_nugget_count":get_saved_nuggets,
                             "nugget_content_length":get_user.user_status_master.max_nugget_char if get_user.user_status_id else 0,
+                            "chime_user_id":get_user.chime_user_id if get_user.chime_user_id else None,
                             "ai_content_length":100
                             
                         })
@@ -1542,8 +1574,157 @@ async def respondtofriendrequests(db:Session=Depends(deps.get_db),token:str=Form
 
 
                         
+# # 18 List all Friend Groups
+# @router.post("/listallfriendgroups")
+# async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(None),search_key:str=Form(None),page_number:str=Form(default=1),flag:str=Form(None)):
+    
+#     if token == None or token.strip() == "":
+#         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+#     elif not str(page_number).isnumeric():
+#         return {"status":0,"msg":"Invalid page Number"}
+#     else:
+#         access_token=checkToken(db,token)
+        
+#         if access_token == False:
+#             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+#         else:
+#             get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first() 
+            
+#             login_user_id=get_token_details.user_id
+            
+#             current_page_no=int(page_number)
+            
+#             flag= flag if flag else 0
+            
+#             my_friend_group=db.query(FriendGroups).join(FriendGroupMembers,FriendGroupMembers.group_id == FriendGroups.id,isouter=True)
+            
+#             my_friend_group=my_friend_group.group_by(FriendGroups.id).filter(FriendGroups.status == 1,or_(FriendGroups.created_by == login_user_id,FriendGroupMembers.user_id == login_user_id))
+            
+#             if search_key and search_key.strip() == "":
+#                 my_friend_group=my_friend_group.filter(FriendGroups.group_name.ilike(search_key+"%"))
+                
+#             get_row_count=my_friend_group.count()
+            
+#             if get_row_count < 1:
+#                 return {"status":0,"msg":"No Result found"}
+            
+#             else:
+#                 default_page_size=1000
+                
+#                 limit,offset,total_pages=get_pagination(get_row_count,current_page_no,default_page_size)
+                
+#                 my_friend_group=my_friend_group.order_by(FriendGroups.group_name.asc()).limit(limit).offset(offset).all()
+#                 result_list=[]
+#                 for res in my_friend_group:
+#                     get_user=db.query(User).filter(User.id == res.created_by).first()
+                   
+#                     gte_frnd_group_count=db.query(FriendGroupMembers).filter(FriendGroupMembers.group_id == res.id).count()
+#                     grouptype=1
+#                     groupname=res.group_name
+                    
+#                     # View Access
+#                     group_access=0
+#                     check_influencer_category=db.query(User.id,UserStatusMaster.type,UserSettings.lock_my_connection).filter(User.id == res.created_by,UserSettings.user_id == User.id).first()
+#                     if check_influencer_category and check_influencer_category.type == 2 and check_influencer_category.lock_my_connection == 1:
+                        
+#                         is_friend=db.query(MyFriends).filter(or_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == login_user_id),or_(MyFriends.sender_id == res.created_by,MyFriends.receiver_id == res.created_by),MyFriends.status == 1).first()
+#                         if is_friend:
+#                             group_access=0
+#                         else:
+#                             group_access=1
+                            
+#                     elif check_influencer_category and check_influencer_category.type == 1 and check_influencer_category.lock_my_connection == 1:
+#                         group_access=1
+                           
+#                     group_category=None
+#                     if groupname == "My Fans":
+#                         grouptype=2
+#                         group_category=1
+                    
+#                     if groupname == "My Fans" and res.created_by != login_user_id:
+#                         grouptype=1
+#                         group_category=2
+#                         groupname=f"Influencer: {(res.user.display_name if res.user.display_name else '') if res.created_by else ''}"
+                    
+#                     if res.created_by == login_user_id and  groupname != "My Fans":
+#                         grouptype=2
+#                         group_category = 3
+                               
+                        
+#                     get_group_chat=db.query(GroupChat).filter(GroupChat.status == 1,GroupChat.group_id == res.id).order_by(GroupChat.id.desc()).first()
+#                     memberlist=[]
+#                     members=[]               
+                        
+#                     if grouptype == 2:
+                       
+#                         members.append(res.created_by)
+#                         memberlist.append({
+#                                             "user_id":res.created_by,
+#                                             "email_id":get_user.email_id,
+#                                             "first_name":get_user.first_name,
+#                                             "last_name":get_user.last_name,
+#                                             "display_name":get_user.display_name,
+#                                             "gender":get_user.gender,
+#                                             "profile_img":get_user.profile_img,
+#                                             "online":get_user.online,
+#                                             "last_seen":get_user.last_seen,
+#                                             "typing":0
+#                                             })
+                        
+#                     get_friend_group_member=db.query(FriendGroupMembers).filter(FriendGroupMembers.group_id == res.id).all()
+#                     for group_member in get_friend_group_member:
+#                         members.append(group_member.user_id)
+#                         memberlist.append({
+#                                             "user_id":group_member.user_id,
+#                                             "email_id":group_member.user.email_id if group_member.user_id else "",
+#                                             "first_name":group_member.user.first_name if group_member.user_id else "",
+#                                             "last_name":group_member.user.last_name if group_member.user_id else "",
+#                                             "display_name":group_member.user.display_name if group_member.user_id else "",
+#                                             "gender":group_member.user.gender if group_member.user_id else "",
+#                                             "profile_img":group_member.user.profile_img if group_member.user_id else "",
+#                                             "online":group_member.user.online if group_member.user_id else "",
+#                                             "last_seen":group_member.user.last_seen if group_member.user_id else "",
+#                                             "typing":0
+#                                             })
+                    
+#                     if group_access == 1 and get_user.user_status_id == 4 and grouptype == 2:
+#                         result_list.append({
+#                                             "group_id":res.id,
+#                                             "group_name":groupname,
+#                                             "group_icon":res.group_icon if res.group_icon else defaultimage('group_icon'),
+#                                             "group_member_count":(gte_frnd_group_count + 1 if grouptype == 1 else gte_frnd_group_count)  if gte_frnd_group_count else 0,
+#                                             "locked":1
+#                                             })
+#                     else:
+#                         result_list.append({ 
+#                                             "group_id":res.id,
+#                                             "group_name":groupname,
+#                                             "locked":0,
+#                                             "owner_membership_type":get_user.user_status_id,
+#                                             "group_icon":res.group_icon if res.group_icon else defaultimage('group_icon'),
+#                                             "group_member_count":(gte_frnd_group_count + 1 if grouptype == 1 else gte_frnd_group_count)  if gte_frnd_group_count else 0,
+#                                             "group_owner":res.created_by if res.created_by else 0,
+#                                             "typing":0,
+#                                             "chat_enabled":res.chat_enabled,
+#                                             "group_type":grouptype,
+#                                             "group_access":1 if group_access == 1 else 0,
+#                                             "group_category":group_category if group_category else 3,
+#                                             "last_msg":get_group_chat.message if get_group_chat else "",
+#                                             "last_msg_datetime":(common_date(get_group_chat.sent_datetime) if get_group_chat.sent_datetime else "") if get_group_chat else "",
+#                                             "result_list":3,
+#                                             "group_member_ids":members,
+#                                             "group_members_list":memberlist
+#                                             })
+                      
+#                 return {"status":1,"msg":"Success","group_count":get_row_count,"total_pages":total_pages,"current_page_no":current_page_no,"friend_group_list":result_list}
+            
+                       
+              
+              
+            
+                        
 # 18 List all Friend Groups
-@router.post("/listallfriendgroups")
+@router.post("/listallfriendgroups") # Chime Chat 
 async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(None),search_key:str=Form(None),page_number:str=Form(default=1),flag:str=Form(None)):
     
     if token == None or token.strip() == "":
@@ -1614,16 +1795,15 @@ async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(Non
                         group_category=2
                         groupname=f"Influencer: {(res.user.display_name if res.user.display_name else '') if res.created_by else ''}"
                     
-                    if res.created_by == login_user_id and  groupname != "My Fans":
+                    if groupname != "My Fans":
                         grouptype=2
                         group_category = 3
-                               
                         
                     get_group_chat=db.query(GroupChat).filter(GroupChat.status == 1,GroupChat.group_id == res.id).order_by(GroupChat.id.desc()).first()
                     memberlist=[]
                     members=[]               
                         
-                    if grouptype == 1:
+                    if grouptype == 2:
                        
                         members.append(res.created_by)
                         memberlist.append({
@@ -1645,6 +1825,7 @@ async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(Non
                         memberlist.append({
                                             "user_id":group_member.user_id,
                                             "email_id":group_member.user.email_id if group_member.user_id else "",
+                                            "member_arn":group_member.user.chime_user_id if group_member.user_id else "",
                                             "first_name":group_member.user.first_name if group_member.user_id else "",
                                             "last_name":group_member.user.last_name if group_member.user_id else "",
                                             "display_name":group_member.user.display_name if group_member.user_id else "",
@@ -1668,6 +1849,7 @@ async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(Non
                                             "group_id":res.id,
                                             "group_name":groupname,
                                             "locked":0,
+                                            'group_arn':res.group_arn if res.group_arn else None,
                                             "owner_membership_type":get_user.user_status_id,
                                             "group_icon":res.group_icon if res.group_icon else defaultimage('group_icon'),
                                             "group_member_count":(gte_frnd_group_count + 1 if grouptype == 1 else gte_frnd_group_count)  if gte_frnd_group_count else 0,
@@ -1686,8 +1868,7 @@ async def listallfriendgroups(db:Session=Depends(deps.get_db),token:str=Form(Non
                       
                 return {"status":1,"msg":"Success","group_count":get_row_count,"total_pages":total_pages,"current_page_no":current_page_no,"friend_group_list":result_list}
             
-                       
-                    
+                 
            
 # 19 List all Friends
 @router.post("/listallfriends")
@@ -1832,7 +2013,8 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
                                                 "login_from":friend_login_from,  #  1 - WEB, 2 - APP
                                                 "login_from_app":friend_requests.user2.app_online if friend_requests.receiver_id else "",  # 1 - true, 0 - False
                                                 "login_from_web":friend_requests.user2.web_online if friend_requests.receiver_id else "",   # 1 - true, 0 - False
-                                                "friend_status":friend_status
+                                                "friend_status":friend_status,
+                                                "chime_user_id":friend_requests.user2.chime_user_id if friend_requests.user2.chime_user_id else None
                                             })
                     else:
                         friendid=friend_requests.sender_id
@@ -1862,7 +2044,9 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
                                                 "login_from":friend_login_from,  #  1 - WEB, 2 - APP
                                                 "login_from_app":friend_requests.user1.app_online if friend_requests.sender_id else "",  # 1 - true, 0 - False
                                                 "login_from_web":friend_requests.user1.web_online if friend_requests.sender_id else "",   # 1 - true, 0 - False
-                                                "friend_status":friend_status
+                                                "friend_status":friend_status,
+                                                "chime_user_id":friend_requests.user1.chime_user_id if friend_requests.user1.chime_user_id else None
+                                                
                                             })
                         
                         
@@ -1876,9 +2060,96 @@ async def listallfriends(db:Session=Depends(deps.get_db),token:str=Form(None),se
             
                 return {"status":1,"msg":"Success","friends_count":get_my_friends_count,"total_pages":0,"current_page_no":0,"friends_list":request_frnds}
                                
-                                         
+        #  ---------------------------- Working -----                                
 # 20 Add Friend Group
-@router.post("/addfriendgroup")
+# @router.post("/addfriendgroup")
+# async def addfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),group_name:str=Form(None),group_members:str=Form(None,description=" User ids Like ['12','13','14']"),
+#                          group_icon:UploadFile=File(None)):
+                         
+#     if token == None or token.strip() == "":
+#         return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+#     # elif group_name == None or group_name.strip() == "":
+#     #     return {"status":0,"msg":"Sorry! Group name can not be empty."}
+        
+#     else:
+#         access_token=checkToken(db,token)
+        
+#         if access_token == False:
+#             return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+#         else:
+#             get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+#             login_user_id=get_token_details.user_id
+            
+#             get_row_count=db.query(FriendGroups).filter(FriendGroups.status == 1,FriendGroups.created_by == login_user_id,FriendGroups.group_name == group_name).count()
+#             if get_row_count:
+#                 return {"status":0,"msg":"Group name already exists"}
+                
+#             else:
+#                 # Add Friend Group
+#                 add_friend_group=FriendGroups(group_name = group_name.strip(),group_icon=defaultimage('group_icon'),created_by=login_user_id,created_at=datetime.datetime.utcnow(),status =1)
+#                 db.add(add_friend_group)
+#                 db.commit()
+                
+#                 if add_friend_group:
+#                     if group_members:
+#                         group_members=json.loads(group_members) if group_members else []
+                        
+#                         for member in group_members:
+#                             get_user=db.query(User).filter(User.id == member).first()
+                            
+#                             if get_user:
+#                                 # add Friend Group member
+#                                 add_member=FriendGroupMembers(group_id = add_friend_group.id,user_id=member,added_date=datetime.datetime.utcnow(),added_by=login_user_id,is_admin=0,disable_notification=0,status=1)
+#                                 db.add(add_member)
+#                                 db.commit()
+                                
+#                                 # add Notification
+#                                 add_group_noty=Insertnotification(db,member,login_user_id,17,add_member.id)
+                                
+#                     # Profile Image
+#                     if group_icon:
+#                         # file_name=group_icon.filename
+#                         # file_temp=group_icon.content_type
+#                         file_ext = os.path.splitext(group_icon.filename)[1]
+                        
+#                         extensions=[".jpeg", ".jpg", ".png"]
+                        
+#                         if file_ext not in extensions:
+#                             return {"status":0,"msg":"Profile Image format does not support"}                        
+                        
+#                         s3_file_path=f'groupicon/groupicon_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}'
+                        
+#                         uploaded_file_path=await file_upload(group_icon,file_ext,compress=1)
+
+#                         result=upload_to_s3(uploaded_file_path,s3_file_path)
+#                         if result['status'] == 1:
+#                             add_friend_group.group_icon = result['url']
+#                             db.commit()
+
+#                         else:
+#                             return result
+                           
+                        
+#                     group_details= GetGroupDetails(db,login_user_id,add_friend_group.id)
+                        
+#                     message_detail={"message":f"{add_friend_group.user.display_name} : created new group",
+#                                     "title":add_friend_group.group_name,
+#                                     "data":{"refer_id":add_friend_group.id,"type":"add_group"},
+#                                     "type":"callend"
+#                                     }
+#                     notify_members=group_details['group_member_ids']
+                    
+#                     if add_friend_group.created_by in notify_members:
+#                         notify_members.remove(add_friend_group.created_by) 
+                    
+#                     push_notification=pushNotify(db,notify_members,message_detail,login_user_id)
+                    
+#                     return {"status":1,"msg":"Successfully created group","group_details":group_details}
+#                 else:
+#                     return {"status":0,"msg":"Failed to create group"}
+
+
+@router.post("/addfriendgroup")   # Chime Chat
 async def addfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),group_name:str=Form(None),group_members:str=Form(None,description=" User ids Like ['12','13','14']"),
                          group_icon:UploadFile=File(None)):
                          
@@ -1902,18 +2173,27 @@ async def addfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),gr
                 
             else:
                 # Add Friend Group
-                add_friend_group=FriendGroups(group_name = group_name.strip(),group_icon=defaultimage('group_icon'),created_by=login_user_id,created_at=datetime.datetime.utcnow(),status =1)
+                add_friend_group=FriendGroups(group_name = group_name.strip(),group_icon=defaultimage('group_icon'),created_by=login_user_id,created_at=datetime.datetime.utcnow(),status =0)
                 db.add(add_friend_group)
                 db.commit()
                 
                 if add_friend_group:
+                    # Add Friend Group
+                    chime_bearer=get_token_details.user.chime_user_id if get_token_details.user.chime_user_id else None
+                    channel_response=create_channel(chime_bearer,group_name)
+                    add_friend_group.status = 1
+                    # Update Groups ARN
+                    add_friend_group.group_arn = channel_response['ChannelArn'] if channel_response else None
+                    db.commit()
+                    
                     if group_members:
                         group_members=json.loads(group_members) if group_members else []
-                        
+                        member_id=[]
                         for member in group_members:
                             get_user=db.query(User).filter(User.id == member).first()
                             
                             if get_user:
+                                member_id.append(get_user.chime_user_id if get_user.chime_user_id else None)
                                 # add Friend Group member
                                 add_member=FriendGroupMembers(group_id = add_friend_group.id,user_id=member,added_date=datetime.datetime.utcnow(),added_by=login_user_id,is_admin=0,disable_notification=0,status=1)
                                 db.add(add_member)
@@ -1921,6 +2201,11 @@ async def addfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),gr
                                 
                                 # add Notification
                                 add_group_noty=Insertnotification(db,member,login_user_id,17,add_member.id)
+                        
+                        # Add Members to Channel 
+                        channel_arn=channel_response['ChannelArn'] if channel_response else None
+                        
+                        addmembers(channel_arn,chime_bearer,member_id)
                                 
                     # Profile Image
                     if group_icon:
@@ -2000,9 +2285,6 @@ async def editfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),g
                 get_group=db.query(FriendGroups).filter(FriendGroups.status == 1,FriendGroups.created_by == login_user_id,FriendGroups.id == group_id).first()
                 if not get_group:
                     return {"status":0,"msg":"Invlaid Group"}
-
-                elif get_group.group_name == "My Fans":
-                    return {"status":0,"msg":"You can't edit the My Fans group."}
                     
                 else:
                     img_path=get_group.group_icon if get_group.group_icon else None
@@ -2030,24 +2312,42 @@ async def editfriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None),g
                             
                         else:
                             return result
-                      
+                    
+                    if get_group.group_name == "My Fans":
+                        if group_icon:
+                            update_frnd_group=db.query(FriendGroups).filter(FriendGroups.id == get_group.id).update({"group_icon":img_path})               
+                            db.commit()
+                            group_details=GetGroupDetails(db,login_user_id,get_group.id)
+                            return {"status":1,"msg":"Successfully updated","group_details":group_details}
+                        
+                        else:
+                            return {"status":0,"msg":"You can't edit the My Fans group."}
                     
                     if group_members:
                         group_members = ast.literal_eval(group_members) if group_members else None
-                        
+                        member_id=[]
                         for member in group_members:
                             if member == get_group.created_by:
                                 continue
+                            
                             get_user=db.query(User).filter(User.id == member).first()
                             
                             if get_user:
+                                
                                 check_member=db.query(FriendGroupMembers).filter(FriendGroupMembers.status == 1,FriendGroupMembers.group_id == group_id,FriendGroupMembers.user_id == member).first()
                                 
                                 if not check_member:
+                                    member_id.append(get_user.chime_user_id if get_user.chime_user_id else None)
+                                    
                                     add_frnd_group=FriendGroupMembers(group_id = group_id,user_id = member,added_date=datetime.datetime.utcnow(),added_by=login_user_id,is_admin=0,disable_notification=1,status=1)
                                     db.add(add_frnd_group)
                                     db.commit()
-                    
+                        
+                        # Add Member in Channel
+                        channel_arn=get_group.group_arn if get_group else None
+                        chime_bearer=get_group.user.chime_user_id if get_group.user.chime_user_id else None
+                        addmembers(channel_arn,chime_bearer,member_id)
+                        
                     update_frnd_group=db.query(FriendGroups).filter(FriendGroups.id == get_group.id).update({"group_name":group_name,"group_icon":img_path})               
                     db.commit()
                     
@@ -2092,7 +2392,7 @@ async def addfriendstogroup(db:Session=Depends(deps.get_db),token:str=Form(None)
             else:
                 memberdetails=[]
                 if group_members != []:
-                    
+                    member_id=[]
                     for member in group_members:
                         get_user=db.query(User).filter(User.id == member).first()
                         
@@ -2100,6 +2400,8 @@ async def addfriendstogroup(db:Session=Depends(deps.get_db),token:str=Form(None)
                             check_member=db.query(FriendGroupMembers).filter(FriendGroupMembers.status == 1,FriendGroupMembers.group_id == group_id,FriendGroupMembers.user_id == member).first()
                             
                             if not check_member:
+                                member_id.append(get_user.chime_user_id if get_user.chime_user_id else None)
+                                
                                 add_frnd_group_member=FriendGroupMembers(group_id = group_id,user_id = member,added_date=datetime.datetime.utcnow(),added_by=login_user_id,is_admin=0,disable_notification=1,status=1)
                                 db.add(add_frnd_group_member)
                                 db.commit()
@@ -2117,6 +2419,11 @@ async def addfriendstogroup(db:Session=Depends(deps.get_db),token:str=Form(None)
                                                         "typing":0,
                                                         "user_id":add_frnd_group_member.user_id
                                                         })
+                    
+                    # Add Member in Chime Channel Group
+                    channel_arn=get_group.group_arn if get_group.group_arn else None
+                    chime_bearer=get_group.user.chime_user_id if get_group.user.chime_user_id else None
+                    addmembers(channel_arn,chime_bearer,member_id)
                                     
                     group_details=GetGroupDetails(db,login_user_id,get_group.id)
                     
@@ -2173,7 +2480,18 @@ async def removefriendsfromgroup(db:Session=Depends(deps.get_db),token:str=Form(
                 if group_members:
                     for member in group_members:
                         delete_members=db.query(FriendGroupMembers).filter_by(group_id =group_id,user_id =member).delete()
-                        db.commit()
+                        
+                        # Remove Member in Channel
+                        channel_arn=get_group.group_arn if get_group.group_arn else None
+                        chime_bearer=get_group.user.chime_user_id if get_group.user.chime_user_id else None
+                        member_id=delete_members.user.chime_user_id if delete_members.user.chime_user_id else None
+                        
+                        try:
+                            delete_channel_membership(channel_arn,chime_bearer,member_id)
+                        except Exception as e:
+                            print(e)
+                            
+                        db.commit()  
                 
                 return {"status":1,"msg":"Successfully updated"}
 
@@ -2209,8 +2527,15 @@ async def deletefriendgroup(db:Session=Depends(deps.get_db),token:str=Form(None)
                 update_friends_group=db.query(FriendGroups).filter_by(id=group_id).update({"status":0})
                 
                 db.commit()
-                
+                    
                 if update_friends_group:
+                    # Delete Chime Channel
+                    channel_arn=get_group.group_arn if get_group.group_arn else None
+                    chime_bearer=get_group.user.chime_user_id if get_group.user.chime_user_id else None
+                    try:
+                        delete_channel(channel_arn,chime_bearer)
+                    except Exception as e:
+                        print(e)
                     return {"status":1,"msg":"Successfully deleted"}
                 
                 else:
@@ -5988,7 +6313,9 @@ async def getothersprofile(db:Session=Depends(deps.get_db),token:str=Form(None),
                                         "lock_my_connection":(settings.lock_my_connection if settings.lock_my_connection else 0) if settings else "",
                                         "lock_my_influencer":(settings.lock_my_influencer if settings.lock_my_influencer else 0) if settings else "",
                                         "unclaimed_status":(1 if check_claim_account else 0) if get_unclaimed_account else 1,
-                                        "account_verify_type":(2 if account_verify_status.verify_status == 1 else 1) if account_verify_status else 0
+                                        "account_verify_type":(2 if account_verify_status.verify_status == 1 else 1) if account_verify_status else 0,
+                                        "chime_user_id":get_user.chime_user_id if get_user.chime_user_id else None,
+                                        
                                 }
                     
                         return {"status":1,"msg":"Success","profile":result_list}
@@ -7535,7 +7862,7 @@ async def followandunfollow(db:Session=Depends(deps.get_db),token:str=Form(None)
                 
                 friend_groups=db.query(FriendGroups).filter(FriendGroups.group_name == "My Fans",FriendGroups.created_by == follow_userid).first()
                 
-                if type == 1 and get_user_detail and not follow_user and login_user_id != follow_userid :
+                if type == 1 and get_user_detail and not follow_user and login_user_id != follow_userid : # Follow
                     
                     add_follow_user=FollowUser(follower_userid = login_user_id,following_userid = follow_userid,created_date = datetime.datetime.utcnow())
                     db.add(add_follow_user)
@@ -7551,8 +7878,16 @@ async def followandunfollow(db:Session=Depends(deps.get_db),token:str=Form(None)
                             
                             notification_type=15
                             add_notification=Insertnotification(db,follow_userid,login_user_id,notification_type,add_frnd_group.id)
-                    
-                    
+
+                            # Add Member in Channel
+                            channel_arn=friend_groups.group_arn if friend_groups.group_arn else None
+                            chime_bearer=friend_groups.user.chime_user_id if friend_groups.user.chime_user_id else None
+                            member_id=list(add_frnd_group.user.chime_user_id) if add_frnd_group.user.chime_user_id else None
+                            try:
+                                addmembers(channel_arn,chime_bearer,member_id)
+                            except Exception as e:
+                                print(f"Follow:{e}")
+                            
                     get_influence_count=croninfluencemember(db,get_user.id)
                     
                     # insert notification
@@ -7563,7 +7898,17 @@ async def followandunfollow(db:Session=Depends(deps.get_db),token:str=Form(None)
                 elif type == 2:
                     if friend_groups:
                         del_friend_group_member=db.query(FriendGroupMembers).filter(FriendGroupMembers.group_id == friend_groups.id,FriendGroupMembers.user_id == login_user_id).delete()
-                        db.commit()
+                        
+                        #  Remove Member in Channel
+                        channel_arn=friend_groups.group_arn if friend_groups.group_arn else None
+                        chime_bearer=friend_groups.user.chime_user_id if friend_groups.user.chime_user_id else None
+                        member_id=del_friend_group_member.user.chime_user_id if del_friend_group_member.user.chime_user_id else None
+                        try:
+                            delete_channel_membership(channel_arn,chime_bearer,member_id)
+                        except Exception as e:
+                            print(f"UnFollow:{e}")
+                            
+                        db.commit() # Remove member in Friend group member table
                     
                     msg=f"{follow_user.user2.display_name if follow_user else ''} not influencing you"
                     get_influence_count=croninfluencemember(db,get_user.id)
@@ -8539,6 +8884,28 @@ async def socialmedialogin(db:Session=Depends(deps.get_db),signin_type:str=Form(
                     db.add(friends_group)
                     db.commit()
 
+                    # Add Channel 
+                    channel_arn=None
+                    user_arn=None
+                    try:
+                        # Add User in Chime Channel
+                        create_chat_user=chime_chat.createchimeuser(model.email_id)
+                        if create_chat_user['status'] == 1:
+                            user_arn=create_chat_user['data']['ChimeAppInstanceUserArn']
+                            # Update User Chime ID
+                            update_user=db.query(User).filter(User.id == model.id).update({'chime_user_id':user_arn})
+                            db.commit() 
+                        
+                            # Add Channels
+                            chime_bearer=user_arn
+                            group_name='My Fans'
+                            channel_response=create_channel(chime_bearer,group_name)
+                            
+                            channel_arn=channel_response['ChannelArn'] if channel_response else None
+                            
+                    except Exception as e:
+                        print(e)
+                    
                     referred_id=0
                     if friend_ref_code:
                         friend_ref_code = base64.b64decode(friend_ref_code)
@@ -8550,8 +8917,8 @@ async def socialmedialogin(db:Session=Depends(deps.get_db),signin_type:str=Form(
                                 referred_id=referred_user.id
                                 
                                 update_user=db.query(User).filter_by(id=model.id).update({'referrer_id': referred_user.id, 'invited_date': datetime.strptime(referrer_ref_id[1], '%Y-%m-%d %H:%M:%S')})
-
                                 db.commit()
+                                
                                 ref_friend=MyFriends(sender_id=referred_user.id,receiver_id=model.id,request_date=datetime.datetime.utcnow(),request_status=1,status_date=None,status=1)
                                 db.add(ref_friend)
                                 db.commit()
@@ -8567,6 +8934,15 @@ async def socialmedialogin(db:Session=Depends(deps.get_db),signin_type:str=Form(
                                         friend_model=FriendGroupMembers(group_id=group.id,user_id=model.id,added_date=datetime.datetime.utcnow(),added_by=referred_user.id,is_admin=0,disable_notification=1,status=1)
                                         db.add(friend_model)
                                         db.commit()
+                                        
+                                        # Add Member in Channel
+                                        channel_arn=channel_arn
+                                        chime_bearer=user_arn
+                                        member_id=list(friend_model.user.chime_user_id) if referred_user.chime_user_id else None
+                                        try:
+                                            addmembers(channel_arn,chime_bearer,member_id)
+                                        except Exception as e:
+                                            print(f"Referrer:{e}")
                                         
                     #Referral Auto Add Friend Ends
                     rawcaster_support_id=GetRawcasterUserID(db,2)  # Type = 2

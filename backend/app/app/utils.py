@@ -1314,6 +1314,7 @@ def GetGroupDetails(db,user_id,id):
         
         memberlist.append({
                             "user_id":friendGroup.created_by if friendGroup.created_by else "",
+                            "member_arn":friendGroup.user.chime_user_id if friendGroup.created_by else "",
                             "email_id":friendGroup.user.email_id if friendGroup.created_by else "",
                             "first_name":friendGroup.user.first_name if friendGroup.created_by else "",
                             "last_name":friendGroup.user.last_name if friendGroup.created_by else "",
@@ -1328,6 +1329,7 @@ def GetGroupDetails(db,user_id,id):
                 
                 memberlist.append({
                             "user_id":frnd_group.user_id if frnd_group.user_id else "",
+                            "member_arn":frnd_group.user.chime_user_id if frnd_group.user.chime_user_id else "",
                             "email_id":frnd_group.user.email_id if frnd_group.user_id else "",
                             "first_name":frnd_group.user.first_name if frnd_group.user_id else "",
                             "last_name":frnd_group.user.last_name if frnd_group.user_id else "",
@@ -1343,6 +1345,7 @@ def GetGroupDetails(db,user_id,id):
         group_details={
                         "group_id":friendGroup.id,
                         "group_name":friendGroup.group_name,
+                        "group_arn":friendGroup.group_arn if friendGroup.group_arn else None,
                         "group_icon":friendGroup.group_icon,
                         "group_member_count":friend_group_count,
                         "group_owner":friendGroup.created_by,
@@ -1701,7 +1704,7 @@ async def logins(db,username, password, device_type, device_id, push_id,login_fr
                     update_user=db.query(User).filter(User.id == get_user.id).update({'chime_user_id':check_chat_id})
                     db.commit() 
                 
-            return {"status":1,"msg":"Success","salt_token":salt_token,"token":token_text,"email":username,"expirytime":common_date(exptime),"profile_image":profile_image,"name":name,"user_id":user_id,"authcode":new_auth_code,"acc_verify_status":get_user.is_email_id_verified,"first_time":existing_user,"chat_user_id":check_chat_id}
+            return {"status":1,"msg":"Success","salt_token":salt_token,"token":token_text,"email":username,"expirytime":common_date(exptime),"profile_image":profile_image,"name":name,"user_id":user_id,"authcode":new_auth_code,"acc_verify_status":get_user.is_email_id_verified,"first_time":existing_user,"chime_user_id":check_chat_id}
         else:
             return {"status":0,"msg" : "Failed to Generate Access Token. try again"}
             

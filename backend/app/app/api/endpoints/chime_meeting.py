@@ -150,7 +150,7 @@ async def list_channel_message():
             for message in messages:
                 message_id = message['MessageId']
                 content = message['Content']
-                print(f"Message ID: {message_id}, Content: {content}")
+                # print(f"Message ID: {message_id}, Content: {content}")
         return message_list
     # Usage example
     channel_arn = 'arn:aws:chime:us-east-1:562114208112:app-instance/adb4ff7b-38bc-42fd-b93f-9c3144677ea4/channel/9d4fd6c2-e252-4c9b-ab8c-96df1da313e2'
