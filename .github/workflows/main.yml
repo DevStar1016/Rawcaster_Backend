@@ -15,14 +15,14 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
- #     - name: Get current date
- #       id: date
- #       run: echo "::set-output name=date::$(date +'%Y-%m-%d-%H-%M-%S')"
- #     - name: Test with environment variables
- #       run: echo $TAG_NAME - $RELEASE_NAME
- #       env:
- #         TAG_NAME: tag-${{ steps.date.outputs.date }}
- #         RELEASE_NAME: release-${{ steps.date.outputs.date }}
+      - name: Get current date
+        id: date
+        run: echo "::set-output name=date::$(date +'%Y-%m-%d-%H-%M-%S')"
+      - name: Test with environment variables
+        run: echo $TAG_NAME - $RELEASE_NAME
+        env:
+          TAG_NAME: tag-${{ steps.date.outputs.date }}
+          RELEASE_NAME: release-${{ steps.date.outputs.date }}
 
       - name: Checkout code
         uses: actions/checkout@v2
@@ -40,6 +40,8 @@ jobs:
           chmod +x kubectl
           sudo mv kubectl /usr/local/bin/
       - name: Update kubeconfig
+        env:
+          EKS_CLUSTER_ROLE_ARN: arn:aws:iam::562114208112:role/AWS-EKS-Worker-Node
         run: |
           aws eks update-kubeconfig --name rawcaster-eks --region us-east-1
           kubectl get ns
@@ -51,14 +53,13 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: rawcaster-python-api
-          tag: ai_and_chime
-          #tags: ${{ steps.date.outputs.date }}
+          tags: latest
+          tag: ${{ steps.date.outputs.date }}
 
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$tag backend/
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$tags -t $ECR_REGISTRY/$ECR_REPOSITORY:$tag backend/
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$tags
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$tag
-        #  docker push $ECR_REGISTRY/$ECR_REPOSITORY:$tags
-
       - name: Deploy to EKS
         run: |
           kubectl apply -f test.yml -n dev
