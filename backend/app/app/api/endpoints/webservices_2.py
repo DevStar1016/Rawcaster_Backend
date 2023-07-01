@@ -850,25 +850,34 @@ async def detect_language(db:Session=Depends(deps.get_db)):
     print("Text:", text)
 
 
+# @router.post("/temp_file_upload")
+# async def temp_file_upload(db:Session=Depends(deps.get_db),file:UploadFile=File(None)):
 
-@router.post("/temp_file_upload")
-async def temp_file_upload(db:Session=Depends(deps.get_db),file:UploadFile=File(None)):
-
-    file_ext = os.path.splitext(file.filename)[1]
+#     file_ext = os.path.splitext(file.filename)[1]
                                 
-    uploaded_file_path=await file_upload(file,file_ext,compress=1)
-    # Get Duration of the File
-    try:
-        audio = AudioSegment.from_file(uploaded_file_path)
-        duration_in_seconds = len(audio) / 1000
-        if not duration_in_seconds < 120:
-            return {"status":0,"msg":"Allowed only maximum 2 minutes"}
-    except Exception as e:
-        print(e)
-        return {'status':0,"msg":"Try again later..."}
+#     uploaded_file_path=await file_upload(file,file_ext,compress=1)
+#     # Get Duration of the File
+#     try:
+#         audio = AudioSegment.from_file(uploaded_file_path)
+#         duration_in_seconds = len(audio) / 1000
+#         if not duration_in_seconds < 120:
+#             return {"status":0,"msg":"Allowed only maximum 2 minutes"}
+#     except Exception as e:
+#         print(e)
+#         return {'status':0,"msg":"Try again later..."}
     
-    # Upload to S3
-    s3_file_path=f'nuggets/audio_{int(datetime.utcnow().timestamp())}{file_ext}'
+#     # Upload to S3
+#     s3_file_path=f'nuggets/audio_{int(datetime.utcnow().timestamp())}{file_ext}'
+#     bucket_name='rawcaster-chat-chatattachmentsbucket-xs6qyh9g0yv1'
+    
+#     client_s3 = boto3.client('s3',aws_access_key_id=access_key,aws_secret_access_key=access_secret) # Connect to S3
+        
+#     with open(uploaded_file_path, 'rb') as data:  # Upload File To S3
+#         upload=client_s3.upload_fileobj(data, bucket_name, s3_file_path)
+    
+#     os.remove(uploaded_file_path)
+    
+#     url_location=client_s3.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
+#     url = f'https://{bucket_name}.s3.{url_location}.amazonaws.com/{s3_file_path}'
+#     return {"status":1,"url":url}
                                 
-    result=upload_to_s3(uploaded_file_path,s3_file_path)
-    return result
