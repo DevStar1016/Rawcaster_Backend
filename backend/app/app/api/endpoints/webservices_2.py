@@ -26,7 +26,7 @@ bucket_name=config.bucket_name
 @router.post("/addeventabusereport")
 async def add_event_abuse_report(db:Session=Depends(deps.get_db),token:str=Form(None),event_id:str=Form(None),message:str=Form(None),attachment:UploadFile=File(None)):
     if token == None or token.strip() == "":
-        return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
+        return {"status":-1,"msg":"Sorry! your login session expired. please login again."} 
     
     elif event_id == None or not event_id.isnumeric():
         return {"status":0,"msg":"Event id is missing"}
@@ -39,7 +39,7 @@ async def add_event_abuse_report(db:Session=Depends(deps.get_db),token:str=Form(
         access_token=checkToken(db,token)
         
         if access_token == False:
-            return {"status":-1,"msg":"Sorry! your login session expired. please login again."} 
+            return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
         else:
             event_id=int(event_id)
             get_token_details=db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
