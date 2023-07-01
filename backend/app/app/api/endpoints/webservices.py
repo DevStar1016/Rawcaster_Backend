@@ -950,7 +950,8 @@ def user_profile(db,id):
                             "account_verify_type": (2 if get_verify_details.verify_status == 1 else 1) if get_verify_details else 0,  # 0 -Request not send , 1- Pending ,2 - Verified
                             "saved_nugget_count":get_saved_nuggets,
                             "nugget_content_length":get_user.user_status_master.max_nugget_char if get_user.user_status_id else 0,
-                            "ai_content_length":100
+                            "ai_content_length":100,
+                            "deploy":1
                             
                         })
         token_text=(str(get_user.user_ref_id) + str(datetime.datetime.utcnow().timestamp())).encode("ascii")
