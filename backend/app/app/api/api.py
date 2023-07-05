@@ -1,10 +1,16 @@
 from fastapi import APIRouter
-from .endpoints import chime_meeting, webservices,webservices_2,chime_meeting,chime_chat,samples,socket
+from .endpoints import (
+    chime_meeting,
+    webservices,
+    webservices_2,
+    chime_meeting,
+    chime_chat,
+    socket,
+)
+
 api_router = APIRouter()
 
-api_router.include_router(socket.router, tags=["Socket"])
-
-api_router.include_router(samples.router, tags=["Work File"])
+# api_router.include_router(socket.router, tags=["Socket"])
 
 api_router.include_router(chime_chat.router, tags=["Chime Chat"])
 
