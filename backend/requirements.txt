@@ -20,3 +20,4 @@ translate
 googletrans
 SpeechRecognition
 pydub
+better-profanity

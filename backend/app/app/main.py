@@ -2,7 +2,8 @@ from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
 import sys
-sys.path.append('../')
+
+sys.path.append("../")
 # sys.path.append('app/app/')
 # sys.path.append("/app/")
 
@@ -10,7 +11,8 @@ from app.api.api import api_router
 from app.core.config import settings
 
 app = FastAPI(
-    title=settings.PROJECT_NAME, openapi_url=f"{settings.API_V1_STR}/rawcaster/openapi.json"
+    title=settings.PROJECT_NAME,
+    openapi_url=f"{settings.API_V1_STR}/rawcaster/openapi.json",
 )
 
 

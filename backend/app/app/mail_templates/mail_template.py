@@ -1,13 +1,13 @@
-from  app import utils
+from app import utils
 import datetime
 
 today = datetime.date.today()
 
 year = today.year
 
+
 def mail_content(content):
-    
-    message_content=f'''<html>
+    message_content = f"""<html>
 
             <head>
                 <title></title>
@@ -57,10 +57,11 @@ def mail_content(content):
 
             </body>
 
-            </html>'''
+            </html>"""
     return message_content
 
-sharer_event_style='''<style type="text/css">
+
+sharer_event_style = """<style type="text/css">
                         body {
                             width: 100%;
                             margin: 0;
@@ -208,11 +209,11 @@ sharer_event_style='''<style type="text/css">
                         p {
                             color: #000;
                         }
-                    </style>'''
+                    </style>"""
 
-def event_shared(eventCreatorName,coverImg,eventTitle,eventStartTime,meetingUrl):
 
-    html_message=f'''
+def event_shared(eventCreatorName, coverImg, eventTitle, eventStartTime, meetingUrl):
+    html_message = f"""
             <!doctype html>
             <html xmlns="http://www.w3.org/1999/xhtml">
 
@@ -276,12 +277,13 @@ def event_shared(eventCreatorName,coverImg,eventTitle,eventStartTime,meetingUrl)
 
             </body>
 
-            </html>'''
-    
+            </html>"""
+
     return html_message
 
+
 def event_mail_template(content):
-    html_message=f'''<html>
+    html_message = f"""<html>
                     <head>
                         <title></title>
                     </head>
@@ -289,14 +291,12 @@ def event_mail_template(content):
                         {content}
 
                     </body>
-                    </html>'''
+                    </html>"""
     return html_message
 
 
-
 def welcome_mail():
-    
-    html_message=f'''<div style=" width:100%;">
+    html_message = f"""<div style=" width:100%;">
             <div style="width:100%; background:#fff; padding:0; max-width:700px; margin:auto; ">
 
 
@@ -345,11 +345,11 @@ def welcome_mail():
 
 
             </div>
-        </div> '''
+        </div> """
     return html_message
 
 
-invite_mail_style='''<style type="text/css">
+invite_mail_style = """<style type="text/css">
                     body {
                         width: 100%;
                         margin: 0;
@@ -372,10 +372,11 @@ invite_mail_style='''<style type="text/css">
                             padding: 0;
                         }
                     }
-                </style>'''
+                </style>"""
+
 
 def invite_mail(invite_content):
-    html_code=f'''<!doctype html>
+    html_code = f"""<!doctype html>
             <html xmlns="http://www.w3.org/1999/xhtml">
 
             <head>
@@ -804,6 +805,6 @@ def invite_mail(invite_content):
                     </table>
                 </div>
             </div>
-            </body>'''
-    
+            </body>"""
+
     return html_code

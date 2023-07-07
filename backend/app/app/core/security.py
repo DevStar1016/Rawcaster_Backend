@@ -10,8 +10,3 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 ALGORITHM = "HS256"
-
-
-
-
-
