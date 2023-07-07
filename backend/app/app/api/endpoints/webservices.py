@@ -3418,7 +3418,11 @@ async def addfriendgroup(
                         if get_token_details.user.chime_user_id
                         else None
                     )
-                    channel_response = create_channel(chime_bearer, group_name)
+                    try:
+                        channel_response = create_channel(chime_bearer, group_name)
+                    except Exception as e:
+                        print(e)
+                        
                     add_friend_group.status = 1
                     # Update Groups ARN
                     add_friend_group.group_arn = (
@@ -5528,8 +5532,8 @@ async def listnuggets(
                     )
 
                 if category:  # Influencer Category
+                    
                     get_nuggets = get_nuggets.filter(
-                        User.id != login_user_id,
                         User.influencer_category.like("%" + category + "%"),
                     )
 
@@ -7599,7 +7603,7 @@ async def addevent(
     event_invite_friends = (
         json.loads(event_invite_friends) if event_invite_friends else None
     )
-    event_invite_custom = json.loads(event_invite_mails) if event_invite_mails else None
+    event_invite_custom = event_invite_mails if event_invite_mails else None
     event_invite_groups = (
         json.loads(event_invite_groups) if event_invite_groups else None
     )
@@ -7990,13 +7994,14 @@ async def addevent(
                         sms_message, body = eventPostNotifcationEmail(db, new_event.id)
 
                     if event_invite_custom:
+                        event_invite_custom=event_invite_custom.split(',')
                         for value in event_invite_custom:
                             # check if e-mail address is well-formed
                             if check_mail(value):
                                 invite_custom = EventInvitations(
                                     type=3,
                                     event_id=new_event.id,
-                                    user_id=value,
+                                    invite_mail=value,
                                     invite_sent=0,
                                     created_at=datetime.datetime.utcnow(),
                                     created_by=login_user_id,
@@ -9163,11 +9168,14 @@ async def editevent(
 
                     body = event_mail_template(content)
                     if event_invite_mails:
-                        event_invite_mails = (
-                            ast.literal_eval(event_invite_mails)
-                            if event_invite_mails
-                            else None
-                        )
+                        print(event_invite_mails)
+                        event_invite_mails=event_invite_mails.split(",")
+                        
+                        # event_invite_mails = (
+                        #     ast.literal_eval(event_invite_mails)
+                        #     if event_invite_mails
+                        #     else None
+                        # )
 
                         for invite_mail in event_invite_mails:
                             invite_friends = EventInvitations(
