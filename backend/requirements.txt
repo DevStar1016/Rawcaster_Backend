@@ -21,3 +21,4 @@ googletrans
 SpeechRecognition
 pydub
 better-profanity
+pyttsx3
