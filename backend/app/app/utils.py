@@ -466,9 +466,10 @@ def addNotificationSmsEmail(db, user, email_detail, login_user_id):
             elif (
                 len(permission_arr) > 2
                 and permission_arr[2] == "1"
-                and user["mobile_no"]
+                and user["mobile_no"] != ''
+                and user['mobile_no'] != None
             ):
-                mobile_nos += user["country_code"] + str(user["mobile_no"]) + ","
+                mobile_nos += f"{user['country_code']}{str(user['mobile_no'])},"
     # Type 1- Phone number 2- Email
     if email:
         add_notification = NotificationSmsEmail(
