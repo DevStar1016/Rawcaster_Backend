@@ -7957,11 +7957,11 @@ async def addevent(
                                 totalfriends.append(value)
 
                     if event_invite_groups:
-                        for value in event_invite_friends:
+                        for value in event_invite_groups:
                             invite_groups = EventInvitations(
                                 type=2,
                                 event_id=new_event.id,
-                                user_id=value,
+                                group_id=value,
                                 invite_sent=0,
                                 created_at=datetime.datetime.utcnow(),
                                 created_by=login_user_id,
@@ -9133,7 +9133,7 @@ async def editevent(
                             invite_friends = EventInvitations(
                                 type=2,
                                 event_id=event_id,
-                                user_id=invite_frnds,
+                                group_id=invite_frnds,
                                 invite_sent=0,
                                 created_at=datetime.datetime.utcnow(),
                                 created_by=login_user_id,
@@ -12666,6 +12666,7 @@ async def geteventdetails(
             {
                 "event_name": event.title if event.title else "",
                 "reference_id": event.ref_id if event.ref_id else "",
+                "chime_meeting_id":event.chime_meeting_id if event.chime_meeting_id else "",
                 "message": event.description if event.description else "",
                 "start_date_time": common_date(event.start_date_time)
                 if event.start_date_time

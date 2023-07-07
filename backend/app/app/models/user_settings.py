@@ -40,7 +40,7 @@ class UserSettings(Base):
         comment="language table reference",
         default=1,
     )
-    time_zone = Column(String(25), default="Canada/Eastern (-05:00)")
+    time_zone = Column(String(25), default="Canada/Eastern (-04:00)")
     date_format = Column(String(25), default=" MM/DD/YYYY ")
     mobile_default_page = Column(TINYINT, default=1)
     default_event_type = Column(TINYINT, default=1)

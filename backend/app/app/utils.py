@@ -1764,9 +1764,8 @@ def get_event_detail(db, event_id, login_user_id):
                         "default_guest_video": defaultav.default_guest_video,
                     }
                 )
-        event_invitations = (
-            db.query(EventInvitations).filter_by(event_id=event_id, status=1).all()
-        )
+        event_invitations = db.query(EventInvitations).filter_by(event_id=event_id, status=1).all()
+        
         invite_groups_id = []
         invite_friends_id = []
         invite_mails = []
@@ -1780,13 +1779,14 @@ def get_event_detail(db, event_id, login_user_id):
                 elif invite.type == 3:
                     if invite.invite_mail != "":
                         invite_mails.append(invite.invite_mail)
-        event.update(
-            {
-                "invite_groups_id": invite_groups_id,
-                "invite_friends_id": invite_friends_id,
-                "invite_mails": invite_mails,
-            }
-        )
+                        
+            event.update(
+                {
+                    "invite_groups_id": invite_groups_id,
+                    "invite_friends_id": invite_friends_id,
+                    "invite_mails": invite_mails,
+                }
+            )
     return event
 
 
