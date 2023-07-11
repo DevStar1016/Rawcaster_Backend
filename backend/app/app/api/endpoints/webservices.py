@@ -5461,9 +5461,9 @@ async def listnuggets(
                         FriendGroupMembers,
                         Nuggets.user_id == FriendGroupMembers.user_id,
                         isouter=True,
-                    ).filter(Nuggets.user_id == FriendGroupMembers.user_id)
-                    get_nuggets = get_nuggets.filter(
-                        FriendGroups, FriendGroupMembers.group_id == FriendGroups.id
+                    )
+                    get_nuggets = get_nuggets.join(
+                        FriendGroups, FriendGroupMembers.group_id == FriendGroups.id,isouter=True
                     ).filter(FriendGroups.status == 1)
                     get_nuggets = get_nuggets.filter(
                         or_(
@@ -9112,20 +9112,22 @@ async def editevent(
                         )
 
                         for invite_frnds in event_invite_friends:
-                            invite_friends = EventInvitations(
-                                type=1,
-                                event_id=event_id,
-                                user_id=invite_frnds,
-                                invite_sent=0,
-                                created_at=datetime.datetime.utcnow(),
-                                created_by=login_user_id,
-                            )
-                            db.add(invite_friends)
-                            db.commit()
-                            db.refresh(invite_friends)
+                            check_invited_user=db.query(EventInvitations).filter(EventInvitations.event_id == event_id,EventInvitations.user_id == invite_frnds).first()
+                            if not check_invited_user:
+                                invite_friends = EventInvitations(
+                                    type=1,
+                                    event_id=event_id,
+                                    user_id=invite_frnds,
+                                    invite_sent=0,
+                                    created_at=datetime.datetime.utcnow(),
+                                    created_by=login_user_id,
+                                )
+                                db.add(invite_friends)
+                                db.commit()
+                                db.refresh(invite_friends)
 
-                            if invite_frnds not in totalfriends:
-                                totalfriends.append(invite_frnds)
+                                if invite_frnds not in totalfriends:
+                                    totalfriends.append(invite_frnds)
 
                     if event_invite_groups:
                         event_invite_groups = (
@@ -9135,27 +9137,29 @@ async def editevent(
                         )
 
                         for invite_frnds in event_invite_groups:
-                            invite_friends = EventInvitations(
-                                type=2,
-                                event_id=event_id,
-                                group_id=invite_frnds,
-                                invite_sent=0,
-                                created_at=datetime.datetime.utcnow(),
-                                created_by=login_user_id,
-                            )
-                            db.add(invite_friends)
-                            db.commit()
-                            db.refresh(invite_friends)
+                            check_invited_group=db.query(EventInvitations).filter(EventInvitations.event_id == event_id,EventInvitations.group_id == invite_frnds).first()
+                            if not check_invited_group:
+                                invite_friends = EventInvitations(
+                                    type=2,
+                                    event_id=event_id,
+                                    group_id=invite_frnds,
+                                    invite_sent=0,
+                                    created_at=datetime.datetime.utcnow(),
+                                    created_by=login_user_id,
+                                )
+                                db.add(invite_friends)
+                                db.commit()
+                                db.refresh(invite_friends)
 
-                            getgroupmember = (
-                                db.query(FriendGroupMembers)
-                                .filter(FriendGroupMembers.group_id == invite_frnds)
-                                .all()
-                            )
-                            if getgroupmember:
-                                for member in getgroupmember:
-                                    if member.user_id in totalfriends:
-                                        totalfriends.append(member.user_id)
+                                getgroupmember = (
+                                    db.query(FriendGroupMembers)
+                                    .filter(FriendGroupMembers.group_id == invite_frnds)
+                                    .all()
+                                )
+                                if getgroupmember:
+                                    for member in getgroupmember:
+                                        if member.user_id in totalfriends:
+                                            totalfriends.append(member.user_id)
 
                     invite_url = inviteBaseurl()
                     link = f"{invite_url}join/event/{edit_event.ref_id}"
@@ -9168,34 +9172,35 @@ async def editevent(
 
                     body = event_mail_template(content)
                     if event_invite_mails:
-                        print(event_invite_mails)
-                        event_invite_mails=event_invite_mails.split(",")
+                        invite_mails=event_invite_mails.split(",")
                         
                         # event_invite_mails = (
                         #     ast.literal_eval(event_invite_mails)
                         #     if event_invite_mails
                         #     else None
                         # )
+                        print(invite_mails)
+                        for invite_mail in invite_mails:
+                            check_invite_mail=db.query(EventInvitations).filter(EventInvitations.event_id == event_id,EventInvitations.invite_mail == invite_mail).first()
+                            if not check_invite_mail:
+                                invite_friends = EventInvitations(
+                                    type=3,
+                                    event_id=event_id,
+                                    invite_mail=invite_mail,
+                                    invite_sent=0,
+                                    created_at=datetime.datetime.utcnow(),
+                                    created_by=login_user_id,
+                                )
+                                db.add(invite_friends)
+                                db.commit()
+                                db.refresh(invite_friends)
 
-                        for invite_mail in event_invite_mails:
-                            invite_friends = EventInvitations(
-                                type=3,
-                                event_id=event_id,
-                                invite_mail=invite_mail,
-                                invite_sent=0,
-                                created_at=datetime.datetime.utcnow(),
-                                created_by=login_user_id,
-                            )
-                            db.add(invite_friends)
-                            db.commit()
-                            db.refresh(invite_friends)
-
-                            if invite_friends:
-                                to = invite_mail
-                                try:
-                                    send_mail = await send_email(db, to, subject, body)
-                                except:
-                                    pass
+                                if invite_friends:
+                                    to = invite_mail
+                                    try:
+                                        send_mail = await send_email(db, to, subject, body)
+                                    except:
+                                        pass
 
                     event = get_event_detail(db, event_id, login_user_id)
                     if totalfriends:
@@ -9735,6 +9740,7 @@ async def listnotifications(
                                 "friend_request_id": friend_request_id,
                                 "friend_request_status": friend_request_status,
                                 "ref_id": res.ref_id if res.ref_id else None,
+                                "group_id":get_group_details.group_id if get_group_details else None,
                                 "is_read": res.is_read if res.is_read else None,
                                 "read_datetime": common_date(res.read_datetime)
                                 if res.read_datetime
@@ -11771,7 +11777,7 @@ async def blockmultipleuser(
             )
             login_user_id = get_token_details.user_id
             # return user_id
-            userlist = ast.literal_eval(user_id) if user_id else None
+            userlist = ast.literal_eval(user_id) if user_id and user_id != None and user_id != 'null' else None
 
             if userlist:
                 # userlist = json.loads(user_id)
@@ -14276,7 +14282,7 @@ async def editliveevent(
                         if value not in totalfriend:
                             totalfriend.append(value)
 
-                if len(event_invite_groups) > 0:
+                if event_invite_groups:
                     for value in event_invite_groups:
                         invite_friends = EventInvitations(
                             type=2,

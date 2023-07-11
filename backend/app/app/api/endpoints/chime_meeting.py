@@ -18,166 +18,210 @@ access_secret = config.access_secret
 bucket_name = config.bucket_name
 
 
-@router.post("/create_meeting")
-async def create_meeting(
-    db: Session = Depends(deps.get_db), host_name: str = Form(None)
-):
-    if not host_name:
-        return {"status": 0, "msg": "Name is missing"}
-
-    # Create an instance of the Chime client
-    chime_client = boto3.client(
-        "chime",
-        aws_access_key_id="AKIAYFYE6EFYG6RJOPMF",
-        aws_secret_access_key="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",
-        region_name="us-east-1",
-    )
-
-    meeting_id = str(uuid.uuid4())  # Generate a unique meeting ID
-
-    try:
-        response = chime_client.create_meeting(
-            ClientRequestToken=str(uuid.uuid4()),  # Generate a unique request token
-            MediaRegion="us-east-1",  # Specify the AWS region for the meeting
-            ExternalMeetingId=meeting_id,  # Use the generated meeting ID as the external ID
-            MeetingHostId=str(uuid.uuid4()),  # Generate a unique host ID
-        )
-
-        attendee_response = chime_client.create_attendee(
-            MeetingId=response["Meeting"]["MeetingId"], ExternalUserId=host_name
-        )
-
-        result = {
-            "attendeeResponse": {"Attendee": attendee_response["Attendee"]},
-            "meetingResponse": {"Meeting": response["Meeting"]},
-        }
-
-        return {"status": 1, "msg": "Success", "data": result}
-
-    except Exception as e:
-        return {"status": 0, "msg": f"Failed to Create Meeting.Error:{str(e)}"}
 
 
-@router.post("/attendee_meeting")
-async def attendee_meeting(
-    db: Session = Depends(deps.get_db),
-    meeting_id: str = Form(None),
-    attendee_name: str = Form(None),
-):
+@router.post("/join_meeting")
+def join_meeting(db: Session = Depends(deps.get_db),
+        token: str = Form(None),meeting_id: str = Form(None)):
+    if not token:
+        return {"status": -1, "msg": "Sorry! your login session expired. please login again."}
+    
     if not meeting_id:
-        return {"status": 0, "msg": "Meeting id Required"}
-    if not attendee_name:
-        return {"status": 0, "msg": "Attendee Name Required"}
+        return {"status": 0, "msg": "User name required"}
+    
+    access_token = checkToken(db, token)
 
-    chime_client = boto3.client(
-        "chime",
-        aws_access_key_id="AKIAYFYE6EFYG6RJOPMF",
-        aws_secret_access_key="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",
-        region_name="us-east-1",
-    )
-
-    # Check Meeting is Active or Not
-    try:
-        response = chime_client.get_meeting(MeetingId=meeting_id)
-        # Call the CreateAttendee API to create an attendee for the meeting
-        attendee_response = chime_client.create_attendee(
-            MeetingId=meeting_id, ExternalUserId=attendee_name
-        )
-
-        # # Participants
-        # participants_response = chime_client.list_attendees(
-        #     MeetingId=meeting_id
-        # )
-
-        # attendees = participants_response['Attendees']
-
-        result = {
-            "attendeeResponse": {"Attendee": attendee_response["Attendee"]},
-            "meetingResponse": {"Meeting": response["Meeting"]},
-        }
-        # return result
-        return result
-        return {"status": 1, "msg": "Success", "data": result}
-
+    if access_token == False:
         return {
-            "status": 1,
-            "msg": "Success",
-            "data": result,
-            "participants": attendees,
-            "participants_count": len(attendees),
+            "status": -1,
+            "msg": "Sorry! your login session expired. please login again.",
         }
-
-    except chime_client.exceptions.NotFoundException:
-        return {"status": 0, "msg": "Meeting Expired"}
-
-
-@router.post("/end_meeting")
-async def end_meeting(db: Session = Depends(deps.get_db), meeting_id: str = Form(None)):
-    if not meeting_id:
-        return {"status": 0, "msg": "Meeting Id missing"}
-
-    chime_client = boto3.client(
-        "chime",
-        aws_access_key_id="AKIAYFYE6EFYG6RJOPMF",
-        aws_secret_access_key="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",
-        region_name="us-east-1",
-    )
-    try:
-        # End the meeting
-        response = chime_client.delete_meeting(MeetingId=meeting_id)
-        return {"status": 1, "msg": "Success", "data": response}
-    except:
-        return {"status": 0, "msg": "Meeting id Not Found"}
-
-    #   ---------------------------------  Chime Chat ----------------------------
-
-
-chime = boto3.client(
-    "chime",
-    aws_access_key_id="AKIAYFYE6EFYG6RJOPMF",
-    aws_secret_access_key="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",
-    region_name="us-east-1",
-)
-
-
-@router.post("/list_channel_message")  # Working
-async def list_channel_message():
-    def list_channel_messages(channel_arn):
-        # List channel messages
-        response = chime.list_channel_messages(
-            ChannelArn=channel_arn,
-            SortOrder="ASCENDING",  # Set Assending or Decending
-            MaxResults=10,  # Maximum number of messages to retrieve
-            ChimeBearer="arn:aws:chime:us-east-1:562114208112:app-instance/adb4ff7b-38bc-42fd-b93f-9c3144677ea4/user/my-user-id",
-        )
-
-        # Process the response
-        message_list = []
-        messages = response["ChannelMessages"]
-        for message in messages:
-            message_id = message["MessageId"]
-            content = message["Content"]
-            # print(f"Message ID: {message_id}, Content: {content}")
-            message_list.append({"message_id": message_id, "content": content})
-
-        # Check if there are more messages
-        while "NextToken" in response:
-            next_token = response["NextToken"]
-            response = chime.list_channel_messages(
-                ChannelArn=channel_arn, NextToken=next_token, MaxResults=10
+    else:
+        get_token_details = (
+            db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
             )
+        login_user_id = get_token_details.user_id
+        
+        headers = {'Content-Type': 'application/json'}
+        url = "https://devchimeapi.rawcaster.com/joinmeeting"
+        
+        data={'userId': login_user_id,'MeetingId':meeting_id}
+        try:
+            res = requests.post(url, data = json.dumps(data),headers=headers)
+            
+        except Exception as e:
+            return {'status':0,"msg":f"Unable to connect:{e}"}
+        
+        if res.status_code == 200:
+            response = json.loads(res.text)
+            return {"status": 1, "mgs": "Success", "attendee": response['result']['Attendee'],"meeting":response['result']['meeting']}
+        else:
+            # Request failed
+            print("Error:", (response.text))
+            return {"status": 0, "msg": f"Failed:{response.text}"}
 
-            messages = response["ChannelMessages"]
-            for message in messages:
-                message_id = message["MessageId"]
-                content = message["Content"]
-                # print(f"Message ID: {message_id}, Content: {content}")
-        return message_list
 
-    # Usage example
-    channel_arn = "arn:aws:chime:us-east-1:562114208112:app-instance/adb4ff7b-38bc-42fd-b93f-9c3144677ea4/channel/9d4fd6c2-e252-4c9b-ab8c-96df1da313e2"
-    message_list_response = list_channel_messages(channel_arn)
-    return message_list_response
+
+# @router.post("/create_meeting")
+# async def create_meeting(
+#     db: Session = Depends(deps.get_db), host_name: str = Form(None)
+# ):
+#     if not host_name:
+#         return {"status": 0, "msg": "Name is missing"}
+
+#     # Create an instance of the Chime client
+#     chime_client = boto3.client(
+#         "chime",
+#         aws_access_key_id="AKIAYFYE6EFYG6RJOPMF",
+#         aws_secret_access_key="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",
+#         region_name="us-east-1",
+#     )
+
+#     meeting_id = str(uuid.uuid4())  # Generate a unique meeting ID
+
+#     try:
+#         response = chime_client.create_meeting(
+#             ClientRequestToken=str(uuid.uuid4()),  # Generate a unique request token
+#             MediaRegion="us-east-1",  # Specify the AWS region for the meeting
+#             ExternalMeetingId=meeting_id,  # Use the generated meeting ID as the external ID
+#             MeetingHostId=str(uuid.uuid4()),  # Generate a unique host ID
+#         )
+
+#         attendee_response = chime_client.create_attendee(
+#             MeetingId=response["Meeting"]["MeetingId"], ExternalUserId=host_name
+#         )
+
+#         result = {
+#             "attendeeResponse": {"Attendee": attendee_response["Attendee"]},
+#             "meetingResponse": {"Meeting": response["Meeting"]},
+#         }
+
+#         return {"status": 1, "msg": "Success", "data": result}
+
+#     except Exception as e:
+#         return {"status": 0, "msg": f"Failed to Create Meeting.Error:{str(e)}"}
+
+
+# @router.post("/attendee_meeting")
+# async def attendee_meeting(
+#     db: Session = Depends(deps.get_db),
+#     meeting_id: str = Form(None),
+#     attendee_name: str = Form(None),
+# ):
+#     if not meeting_id:
+#         return {"status": 0, "msg": "Meeting id Required"}
+#     if not attendee_name:
+#         return {"status": 0, "msg": "Attendee Name Required"}
+
+#     chime_client = boto3.client(
+#         "chime",
+#         aws_access_key_id="AKIAYFYE6EFYG6RJOPMF",
+#         aws_secret_access_key="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",
+#         region_name="us-east-1",
+#     )
+
+#     # Check Meeting is Active or Not
+#     try:
+#         response = chime_client.get_meeting(MeetingId=meeting_id)
+#         # Call the CreateAttendee API to create an attendee for the meeting
+#         attendee_response = chime_client.create_attendee(
+#             MeetingId=meeting_id, ExternalUserId=attendee_name
+#         )
+
+#         # # Participants
+#         # participants_response = chime_client.list_attendees(
+#         #     MeetingId=meeting_id
+#         # )
+
+#         # attendees = participants_response['Attendees']
+
+#         result = {
+#             "attendeeResponse": {"Attendee": attendee_response["Attendee"]},
+#             "meetingResponse": {"Meeting": response["Meeting"]},
+#         }
+#         # return result
+#         return result
+#         return {"status": 1, "msg": "Success", "data": result}
+
+#         return {
+#             "status": 1,
+#             "msg": "Success",
+#             "data": result,
+#             "participants": attendees,
+#             "participants_count": len(attendees),
+#         }
+
+#     except chime_client.exceptions.NotFoundException:
+#         return {"status": 0, "msg": "Meeting Expired"}
+
+
+# @router.post("/end_meeting")
+# async def end_meeting(db: Session = Depends(deps.get_db), meeting_id: str = Form(None)):
+#     if not meeting_id:
+#         return {"status": 0, "msg": "Meeting Id missing"}
+
+#     chime_client = boto3.client(
+#         "chime",
+#         aws_access_key_id="AKIAYFYE6EFYG6RJOPMF",
+#         aws_secret_access_key="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",
+#         region_name="us-east-1",
+#     )
+#     try:
+#         # End the meeting
+#         response = chime_client.delete_meeting(MeetingId=meeting_id)
+#         return {"status": 1, "msg": "Success", "data": response}
+#     except:
+#         return {"status": 0, "msg": "Meeting id Not Found"}
+
+#     #   ---------------------------------  Chime Chat ----------------------------
+
+
+# chime = boto3.client(
+#     "chime",
+#     aws_access_key_id="AKIAYFYE6EFYG6RJOPMF",
+#     aws_secret_access_key="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",
+#     region_name="us-east-1",
+# )
+
+
+# @router.post("/list_channel_message")  # Working
+# async def list_channel_message():
+#     def list_channel_messages(channel_arn):
+#         # List channel messages
+#         response = chime.list_channel_messages(
+#             ChannelArn=channel_arn,
+#             SortOrder="ASCENDING",  # Set Assending or Decending
+#             MaxResults=10,  # Maximum number of messages to retrieve
+#             ChimeBearer="arn:aws:chime:us-east-1:562114208112:app-instance/adb4ff7b-38bc-42fd-b93f-9c3144677ea4/user/my-user-id",
+#         )
+
+#         # Process the response
+#         message_list = []
+#         messages = response["ChannelMessages"]
+#         for message in messages:
+#             message_id = message["MessageId"]
+#             content = message["Content"]
+#             # print(f"Message ID: {message_id}, Content: {content}")
+#             message_list.append({"message_id": message_id, "content": content})
+
+#         # Check if there are more messages
+#         while "NextToken" in response:
+#             next_token = response["NextToken"]
+#             response = chime.list_channel_messages(
+#                 ChannelArn=channel_arn, NextToken=next_token, MaxResults=10
+#             )
+
+#             messages = response["ChannelMessages"]
+#             for message in messages:
+#                 message_id = message["MessageId"]
+#                 content = message["Content"]
+#                 # print(f"Message ID: {message_id}, Content: {content}")
+#         return message_list
+
+#     # Usage example
+#     channel_arn = "arn:aws:chime:us-east-1:562114208112:app-instance/adb4ff7b-38bc-42fd-b93f-9c3144677ea4/channel/9d4fd6c2-e252-4c9b-ab8c-96df1da313e2"
+#     message_list_response = list_channel_messages(channel_arn)
+#     return message_list_response
 
 
 # @router.post("/chec_owner")
