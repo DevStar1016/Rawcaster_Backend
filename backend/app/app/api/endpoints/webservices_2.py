@@ -658,8 +658,8 @@ async def aichat(
 
 
 # 92  Text To Audio Conversion (Nugget Content)
-@router.post("/nuggetcontentaudio")
-async def nuggetcontentaudio(
+@router.post("/nuggetcontentaudio1")
+async def nuggetcontentaudio1(
     db: Session = Depends(deps.get_db),
     token: str = Form(None),
     nugget_id: str = Form(None),
@@ -1326,219 +1326,157 @@ async def temp_file_upload(
 
 
 import pyttsx3
-from googletrans import Translator
-
+import googletrans
 @router.post("/text_to_speech")
 async def text_to_speech(
     db: Session = Depends(deps.get_db)
 ):
-   
-    translator = Translator()
-    text = 'இலக்கண அடிப்படையில் தமிழ் ஒரு ஒட்டுநிலை மொழியாகும்.'
-    translated = translator.translate(text, dest='fr')
+    
+    translator = googletrans.Translator()
+    text = 'La grammaire est une langue scintillante.'
+    translated = translator.translate(text, dest='ta')
     engine = pyttsx3.init()
+    return translated.text
+
+    # rate = engine.getProperty('rate')
+    # engine.setProperty('rate', rate - 50) 
     
-    rate = engine.getProperty('rate')
-    engine.setProperty('rate', rate - 50) 
+    # voices = engine.getProperty('voices')
     
-    voices = engine.getProperty('voices')
-    
-    for voice in voices:
-        if 'fr' in voice.id:
-            print(voice.id)
-            engine.setProperty('voice', voice.id)
-            break
+    # for voice in voices:
+    #     if 'fr' in voice.id:
+    #         print(voice.id)
+    #         engine.setProperty('voice', voice.id)
+    #         break
         
-    # Save the audio to a file
-    print(translated.text)
-    output_file = "output.wav"
-    engine.save_to_file(translated.text, output_file)
+    # # Save the audio to a file
+    # print(translated.text)
+    # output_file = "output.wav"
+    # engine.save_to_file(translated.text, output_file)
 
-    engine.runAndWait()
+    # engine.runAndWait()
 
-   
+
+def audio_file(text,local_file_path):
     
+    engine = pyttsx3.init()
+                    
+    rate = engine.getProperty('rate')
+    engine.setProperty('rate', rate - 60) 
     
-# # # 92  Text To Audio Conversion (Nugget Content)
-# @router.post("/nuggetcontentaudion1")
-# async def nuggetcontentaudion1(
-#     db: Session = Depends(deps.get_db),
-#     token: str = Form(None),
-#     nugget_id: str = Form(None),
-#     translation_type: str = Form(None, description="1-audio,2-text"),
-# ):
-#     if token == None or token.strip() == "":
-#         return {
-#             "status": -1,
-#             "msg": "Sorry! your login session expired. please login again.",
-#         }
-#     if not nugget_id or not nugget_id.isnumeric():
-#         return {"status": 0, "msg": "Check your nugget id"}
+    engine.save_to_file(text, local_file_path)
+     
+  
 
-#     if translation_type and not translation_type.isnumeric():
-#         return {"status": 0, "msg": "Check transalation type"}
-#     # Check token
-#     access_token = checkToken(db, token)
+    
+# # 92  Text To Audio Conversion (Nugget Content)
+@router.post("/nuggetcontentaudio")
+def nuggetcontentaudio(
+    db: Session = Depends(deps.get_db),
+    token: str = Form(None),
+    nugget_id: str = Form(None),
+    translation_type: str = Form(None, description="1-audio,2-text"),
+):
+    if token == None or token.strip() == "":
+        return {
+            "status": -1,
+            "msg": "Sorry! your login session expired. please login again.",
+        }
+    if not nugget_id or not nugget_id.isnumeric():
+        return {"status": 0, "msg": "Check your nugget id"}
 
-#     if access_token == False:
-#         return {
-#             "status": -1,
-#             "msg": "Sorry! your login session expired. please login again.",
-#         }
-#     else:
-#         translation_type = int(translation_type) if translation_type else 1
-#         # check Read Out Language
-#         get_token_details = (
-#             db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
-#         )
-#         login_user_id = get_token_details.user_id if get_token_details else None
+    if translation_type and not translation_type.isnumeric():
+        return {"status": 0, "msg": "Check transalation type"}
+    # Check token
+    access_token = checkToken(db, token)
 
-#         get_user_readout_language = (
-#             db.query(
-#                 UserSettings.id.label("user_setting_id"),
-#                 ReadOutLanguage.id.label("read_out_id"),
-#                 ReadOutLanguage.language_code,
-#             )
-#             .filter(
-#                 UserSettings.user_id == login_user_id,
-#                 ReadOutLanguage.id == UserSettings.read_out_language_id,
-#             )
-#             .first()
-#         )
+    if access_token == False:
+        return {
+            "status": -1,
+            "msg": "Sorry! your login session expired. please login again.",
+        }
+    else:
+        translation_type = int(translation_type) if translation_type else 1
+        # check Read Out Language
+        get_token_details = (
+            db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+        )
+        login_user_id = get_token_details.user_id if get_token_details else None
 
-#         target_language = (
-#             get_user_readout_language.language_code
-#             if get_user_readout_language
-#             else "en"
-#         )
-#         # Get nuggets
-#         get_nugget = (
-#             db.query(Nuggets)
-#             .filter(Nuggets.id == nugget_id, Nuggets.status == 1)
-#             .first()
-#         )
-#         if get_nugget:
-#             text_contnet = get_nugget.nuggets_master.content if get_nugget else None
+        get_user_readout_language = (
+            db.query(
+                UserSettings.id.label("user_setting_id"),
+                ReadOutLanguage.id.label("read_out_id"),
+                ReadOutLanguage.language_code,
+            )
+            .filter(
+                UserSettings.user_id == login_user_id,
+                ReadOutLanguage.id == UserSettings.read_out_language_id,
+            )
+            .first()
+        )
+
+        target_language = (
+            get_user_readout_language.language_code
+            if get_user_readout_language
+            else "en"
+        )
+        # Get nuggets
+        get_nugget = (
+            db.query(Nuggets)
+            .filter(Nuggets.id == nugget_id, Nuggets.status == 1)
+            .first()
+        )
+        if get_nugget:
+            text_contnet = get_nugget.nuggets_master.content if get_nugget else None
             
-#             if text_contnet:
+            if text_contnet:
                 
-#                 translator = Translator()
-#                 translated = translator.translate(text_contnet, dest=target_language)
-#                 # engine = pyttsx3.init()
+                translator = googletrans.Translator()
+                translated = translator.translate(text_contnet, dest=target_language)   
                 
-#                 # voices = engine.getProperty('voices')
-                
-#                 # for voice in voices:
-#                 #     if target_language in voice.id:
-#                 #         engine.setProperty('voice', voice.id)
-#                 #         break                
-                
-#                 if translation_type == 2:
-#                     return {
-#                         "status": 1,
-#                         "msg": "success",
-#                         "translation": translated.text,
-#                     }
-#                 else:
-#                     polly_client = boto3.Session(
-#                         aws_access_key_id=access_key,
-#                         aws_secret_access_key=access_secret,
-#                         region_name="us-west-2",  # Replace with your desired AWS region
-#                     ).client("polly")
+                if translation_type == 2:
+                    return {
+                        "status": 1,
+                        "msg": "success",
+                        "translation": translated.text
+                    }
+                else:
                     
-#                     voice_id = "Joanna"
-#                     output_format = "mp3"
+                    text=translated.text
                     
-#                     response = polly_client.synthesize_speech(
-#                         Text=translated.text,
-#                         VoiceId=voice_id,
-#                         OutputFormat=output_format
-#                     )
-#                     # Upload File
-#                     base_dir = "rawcaster_uploads"
+                    from gtts import gTTS
+                    myobj = gTTS(text=text)
+                    base_dir = "rawcaster_uploads"
 
-#                     try:
-#                         os.makedirs(base_dir, mode=0o777, exist_ok=True)
-#                     except OSError as e:
-#                         sys.exit(
-#                             "Can't create {dir}: {err}".format(dir=base_dir, err=e)
-#                         )
+                    try:
+                        os.makedirs(base_dir, mode=0o777, exist_ok=True)
+                    except OSError as e:
+                        sys.exit(
+                            "Can't create {dir}: {err}".format(dir=base_dir, err=e)
+                        )
 
-#                     output_dir = base_dir + "/"
+                    output_dir = base_dir + "/"
 
-#                     filename = f"converted_{int(datetime.now().timestamp())}.mp3"
+                    filename = f"converted_{int(datetime.now().timestamp())}.mp3"
 
-#                     save_full_path = f"{output_dir}{filename}"
-
-#                     with open(save_full_path, "wb") as file:
-#                         file.write(response["AudioStream"].read())
-
-#                     s3_file_path = f"nuggets/converted_audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
-
-#                     result = upload_to_s3(save_full_path, s3_file_path)
-
-#                     if result["status"] == 1:
-#                         # add_audio_file = NuggetContentAudio(
-#                         #     nugget_master_id=get_nugget.nuggets_id,
-#                         #     path=result["url"],
-#                         #     created_at=datetime.utcnow(),
-#                         #     status=1,
-#                         # )
-#                         # db.add(add_audio_file)
-#                         # db.commit()
-#                         # db.refresh(add_audio_file)
-#                         return {
-#                             "status": 1,
-#                             "msg": "success",
-#                             "file_path": result["url"],
-#                         }
+                    save_full_path = f"{output_dir}{filename}"
                     
-#                     # # # Upload File
-#                     # base_dir = "rawcaster_uploads"
+                    myobj.save(save_full_path)
 
-#                     # try:
-#                     #     os.makedirs(base_dir, mode=0o777, exist_ok=True)
-#                     # except OSError as e:
-#                     #     sys.exit(
-#                     #         "Can't create {dir}: {err}".format(dir=base_dir, err=e)
-#                     #     )
+                    s3_file_path = f"nuggets/converted_audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
 
-#                     # output_dir = base_dir + "/"
+                    result = upload_to_s3(save_full_path, s3_file_path)
 
-#                     # filename = f"converted_{int(datetime.now().timestamp())}.wav"
-#                     # save_full_path = f"{output_dir}{filename}"
-                    
-#                     # rate = engine.getProperty('rate')
-#                     # engine.setProperty('rate', rate - 60) 
-                    
-#                     # engine.save_to_file(translated.text, save_full_path)
-#                     # engine.runAndWait()
+                    if result["status"] == 1:
+                        return {
+                            "status": 1,
+                            "msg": "success",
+                            "file_path": result["url"]
+                        }
+                    else:
+                        return {"status":0,"msg":"Unable to convert"}
 
-#                     # s3_file_path = f"nuggets/converted_audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
-
-#                     # result = upload_to_s3(save_full_path, s3_file_path)
-
-#                     # if result["status"] == 1:
-#                     #     add_audio_file = NuggetContentAudio(
-#                     #         nugget_master_id=get_nugget.nuggets_id,
-#                     #         path=result["url"],
-#                     #         created_at=datetime.utcnow(),
-#                     #         status=1,
-#                     #     )
-#                     #     db.add(add_audio_file)
-#                     #     db.commit()
-#                     #     db.refresh(add_audio_file)
-#                     #     return {
-#                     #         "status": 1,
-#                     #         "msg": "success",
-#                     #         "file_path": result["url"]
-#                     #     }
-
-#                     else:
-#                         return result
-#                 # except:
-#                 #     return {"status":0,"msg":"Unable to convert"}
-
-#         else:
-#             return {"status": 0, "msg": "Invalid Nugget"}
+        else:
+            return {"status": 0, "msg": "Invalid Nugget"}
 
