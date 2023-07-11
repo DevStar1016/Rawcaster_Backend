@@ -12,6 +12,9 @@ import openai
 import json
 from pydub import AudioSegment
 from better_profanity import profanity
+from gtts import gTTS
+import pyttsx3
+import googletrans
 
 router = APIRouter()
 
@@ -1327,9 +1330,6 @@ async def temp_file_upload(
 
 
 
-
-import pyttsx3
-import googletrans
 @router.post("/text_to_speech")
 async def text_to_speech(
     db: Session = Depends(deps.get_db)
@@ -1358,18 +1358,6 @@ async def text_to_speech(
     # engine.save_to_file(translated.text, output_file)
 
     # engine.runAndWait()
-
-
-def audio_file(text,local_file_path):
-    
-    engine = pyttsx3.init()
-                    
-    rate = engine.getProperty('rate')
-    engine.setProperty('rate', rate - 60) 
-    
-    engine.save_to_file(text, local_file_path)
-     
-  
 
     
 # # 92  Text To Audio Conversion (Nugget Content)
@@ -1448,7 +1436,6 @@ def nuggetcontentaudio(
                     
                     text=translated.text
                     
-                    from gtts import gTTS
                     myobj = gTTS(text=text)
                     base_dir = "rawcaster_uploads"
 

@@ -17,7 +17,7 @@ chime
 celery
 openai
 translate
-googletrans
+googletrans==4.0.0rc1
 SpeechRecognition
 pydub
 better-profanity
