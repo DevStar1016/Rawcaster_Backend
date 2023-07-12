@@ -33,7 +33,7 @@ bucket_name = config.bucket_name
 
 
 @router.post("/test")
-async def test():
+async def test(db: Session = Depends(deps.get_db)):
     return 'Done'
 
 
