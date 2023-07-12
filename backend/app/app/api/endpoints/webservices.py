@@ -36,6 +36,11 @@ bucket_name = config.bucket_name
 async def test(db: Session = Depends(deps.get_db)):
     return 'Done'
 
+@router.post("/fetch_data")
+async def fetch_data(db: Session = Depends(deps.get_db)):
+    user=db.query(User).filter(User.status == 1).first()
+    return user
+
 
 # 1 Signup User
 @router.post("/signup")
