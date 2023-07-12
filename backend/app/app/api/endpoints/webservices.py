@@ -32,6 +32,11 @@ access_secret = config.access_secret
 bucket_name = config.bucket_name
 
 
+@router.post("/test")
+async def test():
+    return 'Done'
+
+
 # 1 Signup User
 @router.post("/signup")
 async def signup(
