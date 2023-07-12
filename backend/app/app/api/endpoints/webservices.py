@@ -3910,12 +3910,14 @@ async def removefriendsfromgroup(
             else:
                 if group_members:
                     for member in group_members:
-                        delete_members = (
+                        # Delete Member
+                        
+                        get_members = (
                             db.query(FriendGroupMembers)
                             .filter_by(group_id=group_id, user_id=member)
-                            .delete()
                         )
-
+                        member_details=get_members.first()
+                        
                         # Remove Member in Channel
                         channel_arn = (
                             get_group.group_arn if get_group.group_arn else None
@@ -3926,8 +3928,8 @@ async def removefriendsfromgroup(
                             else None
                         )
                         member_id = (
-                            delete_members.user.chime_user_id
-                            if delete_members.user.chime_user_id
+                            member_details.user.chime_user_id
+                            if member_details.user.chime_user_id
                             else None
                         )
 
@@ -3936,8 +3938,9 @@ async def removefriendsfromgroup(
                                 channel_arn, chime_bearer, member_id
                             )
                         except Exception as e:
-                            print(e)
-
+                            return {"status":0,"msg":e}
+                        
+                        delete_member=get_members.delete()
                         db.commit()
 
                 return {"status": 1, "msg": "Successfully updated"}
@@ -4414,6 +4417,7 @@ async def addnuggets(
 
                 nugget_details = []
                 for i in range(looping_count):
+                    
                     add_nuggets_master = NuggetsMaster(
                         user_id=login_user_id,
                         content=(profanity.censor(content, "*") if content else None) if content_location == 0 else None,
@@ -4457,6 +4461,9 @@ async def addnuggets(
                             uploaded_file_path = await file_upload(
                                 nuggets_media[i - 1], file_ext, compress=1
                             )
+                            
+                            # uploaded_file_path=upload_file_using_ffmpeg(uploaded_file_path,file_ext)
+                            
                             file_stat = os.stat(uploaded_file_path)
                             file_size = file_stat.st_size
 
@@ -4524,6 +4531,7 @@ async def addnuggets(
                                             return result
 
                                     else:
+                                        
                                         background_tasks.add_task(
                                             process_data,
                                             db,
@@ -4533,14 +4541,15 @@ async def addnuggets(
                                             share_type,
                                             share_with,
                                         )
-                                        return {
-                                            "status": 1,
-                                            "msg": "Success",
-                                            "nugget_status": 0,
-                                        }
+                                        continue
+                                        # return {
+                                        #     "status": 1,
+                                        #     "msg": "Success",
+                                        #     "nugget_status": 0,
+                                        # }
 
                                 elif type == "audio":
-                                    s3_file_path = f"nuggets/audio_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp3"
+                                    s3_file_path = f"nuggets/audio_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
 
                                     result = upload_to_s3(
                                         uploaded_file_path, s3_file_path
@@ -15253,6 +15262,7 @@ async def influencerfollow(
         None, description='["RA286164941105720824",”RA286164941105720957”]'
     ),
     select_all: str = Form(None, description="1-all,0-not select"),
+    category:str=Form(None)
 ):
     if token == None or token.strip() == "":
         return {
@@ -15263,6 +15273,8 @@ async def influencerfollow(
         return {"status": 0, "msg": "Auth code is missing"}
     if select_all and not select_all.isnumeric():
         return {"status": 0, "msg": "Invalid key"}
+    if category and not category.isnumeric():
+        return {"status": 0, "msg": "Invalid Category id"}
 
     else:
         auth_code = auth_code
@@ -15315,6 +15327,9 @@ async def influencerfollow(
 
                     if blocked_users:
                         criteria = criteria.filter(User.id.not_in(blocked_users))
+                        
+                    if category:
+                        criteria=criteria.filter(User.influencer_category.like("%"+category+"%"))
 
                     follow_userids = [ref_id.user_ref_id for ref_id in criteria]
 

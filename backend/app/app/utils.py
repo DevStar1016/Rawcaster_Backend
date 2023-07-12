@@ -66,8 +66,26 @@ def EncryptandDecrypt(otp, flag=1):
         decrypted = f.decrypt(message)
         return decrypted
 
+def upload_file_using_ffmpeg(input_file,ext):
+    # base_dir = f"{st.BASE_DIR}rawcaster_uploads"
+    base_dir = f"rawcaster_uploads/uploadfile_{random.randint(1111,9999)}{ext}"
+
+    try:
+        os.makedirs(base_dir, mode=0o777, exist_ok=True)
+    except OSError as e:
+        sys.exit("Can't create {dir}: {err}".format(dir=base_dir, err=e))
+
+    
+    save_full_path = base_dir
+    print(save_full_path)
+    ffmpeg_command = ['ffmpeg', '-i', input_file, '-f', 'ftp', save_full_path]
+    subprocess.run(ffmpeg_command)
+    os.remove(input_file)
+    return save_full_path
+
 
 async def file_upload(file_name, ext, compress):
+    
     # base_dir = f"{st.BASE_DIR}rawcaster_uploads"
     base_dir = "rawcaster_uploads"
 
@@ -159,7 +177,7 @@ def upload_to_s3(local_file_pth, s3_bucket_path):
                 data, bucket_name, s3_bucket_path, ExtraArgs={"ACL": "public-read"}
             )
 
-        os.remove(local_file_pth)
+        # os.remove(local_file_pth)
 
         url_location = client_s3.get_bucket_location(Bucket=bucket_name)[
             "LocationConstraint"
