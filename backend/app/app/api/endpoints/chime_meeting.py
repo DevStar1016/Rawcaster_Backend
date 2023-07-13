@@ -54,6 +54,7 @@ def join_meeting(db: Session = Depends(deps.get_db),
         
         if res.status_code == 200:
             response = json.loads(res.text)
+            
             return {"status": 1, "mgs": "Success", "attendee": response['result']['Attendee'],"meeting":response['result']['meeting']}
         else:
             # Request failed

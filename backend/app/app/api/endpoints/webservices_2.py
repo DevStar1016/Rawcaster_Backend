@@ -5,7 +5,7 @@ from app.utils import *
 from app.api import deps
 from sqlalchemy.orm import Session
 from sqlalchemy import extract
-from datetime import datetime, date
+from datetime import datetime
 from typing import List
 from app.core import config
 import openai
