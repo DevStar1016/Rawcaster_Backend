@@ -5,12 +5,8 @@ from app.utils import *
 from app.api import deps
 from sqlalchemy.orm import Session
 from app.core import config
-import datetime
 
 router = APIRouter()
-from pydantic import BaseModel, Field
-
-import uuid
 import json
 
 access_key = config.access_key
@@ -54,11 +50,109 @@ def join_meeting(db: Session = Depends(deps.get_db),
         
         if res.status_code == 200:
             response = json.loads(res.text)
-            return {"status": 1, "mgs": "Success", "attendee": response['result']['Attendee'],"meeting":response['result']['meeting']}
+            try:
+                return {"status": 1, "msg": "Success", "attendee": response['result']['Attendee'],"meeting":response['result']['meeting']}
+            except:
+                return {"status":0,"msg":"Something went wrong"}
         else:
             # Request failed
             print("Error:", (response.text))
             return {"status": 0, "msg": f"Failed:{response.text}"}
+
+
+
+
+
+@router.post("/attendees")
+def attendees(db: Session = Depends(deps.get_db),
+        token: str = Form(None),meeting_id: str = Form(None)):
+    if not token:
+        return {"status": -1, "msg": "Sorry! your login session expired. please login again."}
+    
+    if not meeting_id:
+        return {"status": 0, "msg": "User name required"}
+    
+    access_token = checkToken(db, token)
+
+    if access_token == False:
+        return {
+            "status": -1,
+            "msg": "Sorry! your login session expired. please login again.",
+        }
+    else:
+        get_token_details = (
+            db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+            )
+        login_user_id = get_token_details.user_id
+        
+        headers = {'Content-Type': 'application/json'}
+        
+        # data={'meetingId':meeting_id}
+        url = f"https://devchimeapi.rawcaster.com/getattendeelist/{meeting_id}"
+        
+        try:
+            res = requests.get(url)
+            
+        except Exception as e:
+            return {'status':0,"msg":f"Unable to connect:{e}"}
+        
+        if res.status_code == 200:
+            response = json.loads(res.text)
+            try:
+                return {"status": 1, "msg": "Success", "Attendees": response['result']['Attendees']}
+            except:
+                return {"status":0,"msg":"Something went wrong"}
+        else:
+            # Request failed
+            print("Error:", (response.text))
+            return {"status": 0, "msg": f"Failed:{response.text}"}
+
+
+
+
+@router.post("/delete_meeting")
+def delete_meeting(db: Session = Depends(deps.get_db),
+        token: str = Form(None),meeting_id: str = Form(None)):
+    if not token:
+        return {"status": -1, "msg": "Sorry! your login session expired. please login again."}
+    
+    if not meeting_id:
+        return {"status": 0, "msg": "User name required"}
+    
+    access_token = checkToken(db, token)
+
+    if access_token == False:
+        return {
+            "status": -1,
+            "msg": "Sorry! your login session expired. please login again.",
+        }
+    else:
+        get_token_details = (
+            db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+            )
+        login_user_id = get_token_details.user_id
+        
+        headers = {'Content-Type': 'application/json'}
+        url = "https://devchimeapi.rawcaster.com/endmeeting"
+        
+        data={'meetingId':meeting_id}
+        try:
+            res = requests.post(url, data = json.dumps(data),headers=headers)
+            
+        except Exception as e:
+            return {'status':0,"msg":f"Unable to connect:{e}"}
+        
+        if res.status_code == 200:
+            response = json.loads(res.text)
+            try:
+                return {"status": 1, "msg": "Success"}
+            except:
+                return {"status":0,"msg":"Something went wrong"}
+        else:
+            # Request failed
+            print("Error:", (response.text))
+            return {"status": 0, "msg": f"Failed:{response.text}"}
+
 
 
 
