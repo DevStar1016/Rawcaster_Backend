@@ -39,7 +39,7 @@ RUN bash -c "pip3 install pytz"
 RUN bash -c "pip3 install pybase64"
 RUN bash -c "pip3 install regex"
 RUN bash -c "pip3 install --force-reinstall httpcore==0.15"
-
+RUN bash -c "pip3 uninstall sqlalchemy"
 RUN apt-get update && apt-get install -y ffmpeg
 
 COPY requirements.txt .
