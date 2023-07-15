@@ -1,6 +1,6 @@
 fastapi
 pydantic[email]
-sqlalchemy<2.0
+SQLAlchemy==1.4.49
 python-jose
 fastapi_pagination
 passlib
@@ -22,3 +22,4 @@ SpeechRecognition
 pydub
 better-profanity
 pyttsx3
+psycopg2-binary
