@@ -22,7 +22,7 @@ router = APIRouter()
 import aioredis
 
 async def connect_to_redis():
-    redis_pool = await aioredis.create_redis_pool('redis://your-elasticache-endpoint:your-elasticache-port')
+    redis_pool = await aioredis.create_redis_pool('redis://raew7no6l92n8p4-001.raew7no6l92n8p4.rljwzo.use1.cache.amazonaws.com:6379')
 
 @router.on_event("startup")
 async def startup_event():
