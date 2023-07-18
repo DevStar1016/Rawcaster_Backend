@@ -22,4 +22,3 @@ SpeechRecognition
 pydub
 better-profanity
 pyttsx3
-redis
