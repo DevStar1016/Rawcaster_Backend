@@ -23,7 +23,6 @@ from mail_templates.mail_template import *
 from cryptography.fernet import Fernet
 from app.core import config
 from celery import Celery
-from moviepy.video.io.VideoFileClip import VideoFileClip
 import shutil
 from pyfcm import FCMNotification
 from api.endpoints import chime_chat

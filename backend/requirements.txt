@@ -1,5 +1,6 @@
 fastapi
 pydantic[email]
+fastapi_mail
 sqlalchemy<2.0.18
 python-jose
 fastapi_pagination
