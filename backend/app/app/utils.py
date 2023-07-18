@@ -2419,7 +2419,11 @@ async def logins(
 
             check_chat_id = get_user.chime_user_id if get_user.chime_user_id else None
             if not check_chat_id:
-                create_chat_user = chime_chat.createchimeuser(get_user.email_id)
+                try:
+                    create_chat_user = chime_chat.createchimeuser(get_user.email_id)
+                except Exception as e:
+                    print(f'Chime User:{e}')
+                    
                 if create_chat_user["status"] == 1:
                     check_chat_id = create_chat_user["data"]["ChimeAppInstanceUserArn"]
                     # Update User Chime ID
