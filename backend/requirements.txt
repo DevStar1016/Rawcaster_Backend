@@ -22,4 +22,4 @@ SpeechRecognition
 pydub
 better-profanity
 pyttsx3
-psycopg2-binary
+redis
