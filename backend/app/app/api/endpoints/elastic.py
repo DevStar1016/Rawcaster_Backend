@@ -18,3 +18,9 @@ def elastic_connection():
         print('I am Redis. Try me. I can remember things, only for a short time though :)')
     except Exception as e:
         print('EXCEPTION: host could not be accessed ---> ', repr(e))
+
+
+
+@router.get("/elastic_connection1")
+def elastic_connection1():
+    return "Success"
