@@ -33,8 +33,8 @@ bucket_name = config.bucket_name
 
 
 @router.post("/test")
-async def test(db: Session = Depends(deps.get_db)):
-    return 'Done'
+async def test():
+    return 'Done,Without db connection'
 
 @router.post("/fetch_data")
 async def fetch_data(db: Session = Depends(deps.get_db)):
