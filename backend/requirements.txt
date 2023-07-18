@@ -23,4 +23,3 @@ pydub
 better-profanity
 pyttsx3
 redis
-aioredis
