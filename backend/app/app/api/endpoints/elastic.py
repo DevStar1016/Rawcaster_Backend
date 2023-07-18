@@ -8,7 +8,9 @@ cache = redis.Redis(host='raew7no6l92n8p4-001.raew7no6l92n8p4.rljwzo.use1.cache.
 
 @router.get("/test11")
 def get_data():
+    print('test')
     value = cache.get("key")
+    print(value)
     if value is None:
         # Value not found in cache, fetch from the database
         value = fetch_data_from_database()
