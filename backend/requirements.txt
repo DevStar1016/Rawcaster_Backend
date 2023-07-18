@@ -1,6 +1,7 @@
 fastapi
-pydantic
-SQLAlchemy==1.4.49
+pydantic[email]
+fastapi_mail
+sqlalchemy<2.0.18
 python-jose
 fastapi_pagination
 passlib
