@@ -1,5 +1,5 @@
 fastapi
-pydantic[email]
+pydantic
 SQLAlchemy==1.4.49
 python-jose
 fastapi_pagination
