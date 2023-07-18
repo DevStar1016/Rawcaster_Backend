@@ -1936,6 +1936,168 @@ async def searchrawcasterusers(
                     }
 
 
+# @router.post("/newsearchrawcasterusers")
+# async def newsearchrawcasterusers(
+#     db: Session = Depends(deps.get_db),
+#     token: str = Form(None),
+#     auth_code: str = Form(None, description="SALT + token"),
+#     search_key: str = Form(None),
+#     page_number: str = Form(default=1),
+# ):
+#     if token == None or token.strip() == "":
+#         return {
+#             "status": -1,
+#             "msg": "Sorry! your login session expired. please login again.",
+#         }
+#     elif auth_code == None or auth_code.strip() == "":
+#         return {"status": -1, "msg": "Auth Code is missing"}
+#     elif not str(page_number).isnumeric():
+#         return {"status": 0, "msg": "Invalid page Number"}
+
+#     else:
+#         access_token = checkToken(db, token.strip())
+#         auth_text = token.strip()
+#         if checkAuthCode(auth_code.strip(), auth_text) == False:
+#             return {"status": 0, "msg": "Authentication failed!"}
+#         else:
+#             if access_token == False:
+#                 return {
+#                     "status": -1,
+#                     "msg": "Sorry! your login session expired. please login again.",
+#                 }
+#             else:
+#                 login_user_email = ""
+#                 get_token_details = (
+#                     db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+#                 )
+
+#                 login_user_id = get_token_details.user_id if get_token_details else None
+#                 login_user_email = (
+#                     get_token_details.user.email_id if get_token_details else None
+#                 )
+
+#                 current_page_no = int(page_number)
+
+#                 get_user = db.query(User).filter(
+#                     User.status == 1, User.id != login_user_id
+#                 )
+
+#                 # Omit blocked users --
+#                 request_status = 3
+#                 response_type = 1
+#                 requested_by = None
+#                 get_all_blocked_users = get_friend_requests(
+#                     db, login_user_id, requested_by, request_status, response_type
+#                 )
+#                 blocked_users = get_all_blocked_users["blocked"]
+
+#                 if blocked_users:
+#                     get_user = get_user.filter(User.id.not_in(blocked_users))
+
+#                 if search_key:
+#                     get_user = get_user.filter(
+#                         or_(
+#                             User.email_id.ilike(search_key + "%"),
+#                             User.mobile_no.ilike(search_key + "%"),
+#                             User.display_name.ilike("%" + search_key + "%"),
+#                             User.first_name.ilike("%" + search_key + "%"),
+#                             User.last_name.ilike("%" + search_key + "%"),
+#                         )
+#                     )
+
+#                 get_row_count = get_user.count()
+
+#                 if get_row_count < 1:
+#                     if login_user_email == search_key:
+#                         return {"status": 0, "msg": "No Result found", "invite_flag": 0}
+#                     else:
+#                         return {"status": 0, "msg": "No Result found", "invite_flag": 1}
+#                 else:
+#                     default_page_size = 25
+#                     limit, offset, total_pages = get_pagination(
+#                         get_row_count, current_page_no, default_page_size
+#                     )
+
+#                     get_user = (
+#                         get_user.order_by(User.first_name.asc())
+#                         .limit(limit)
+#                         .offset(offset)
+#                         .all()
+#                     )
+
+#                     user_list = []
+#                     for user in get_user:
+#                         get_my_friends = (
+#                             db.query(MyFriends)
+#                             .filter(
+#                                 or_(
+#                                     MyFriends.sender_id == user.id,
+#                                     MyFriends.receiver_id == user.id,
+#                                 ),
+#                                 or_(
+#                                     MyFriends.sender_id == login_user_id,
+#                                     MyFriends.receiver_id == login_user_id,
+#                                 ),
+#                                 MyFriends.status == 1,
+#                             )
+#                             .first()
+#                         )
+
+#                         get_follow_user_details = db.query(FollowUser).filter(
+#                             FollowUser.following_userid == user.id
+#                         )
+
+#                         get_follow_user = get_follow_user_details.filter(
+#                             FollowUser.follower_userid == login_user_id
+#                         ).first()
+
+#                         follow_count = get_follow_user_details.count()
+
+#                         mutual_friends = MutualFriends(db, login_user_id, user.id)
+
+#                         user_list.append(
+#                             {
+#                                 "user_id": user.id,
+#                                 "user_ref_id": user.user_ref_id,
+#                                 "email_id": user.email_id if user.email_id else "",
+#                                 "first_name": user.first_name
+#                                 if user.first_name
+#                                 else "",
+#                                 "last_name": user.last_name if user.last_name else "",
+#                                 "display_name": user.display_name
+#                                 if user.display_name
+#                                 else "",
+#                                 "gender": user.gender if user.gender else "",
+#                                 "profile_img": user.profile_img
+#                                 if user.profile_img
+#                                 else "",
+#                                 "friend_request_status": get_my_friends.request_status
+#                                 if get_my_friends
+#                                 else "",
+#                                 "follow": True if get_follow_user else False,
+#                                 "follow_count": follow_count,
+#                                 "location": user.geo_location
+#                                 if user.geo_location
+#                                 else "",
+#                                 "mutual_friends": mutual_friends,
+#                                 "bio_data": ProfilePreference(
+#                                     db,
+#                                     login_user_id,
+#                                     user.id,
+#                                     "bio_display_status",
+#                                     user.bio_data,
+#                                 ),
+#                             }
+#                         )
+#                     return {
+#                         "status": 1,
+#                         "msg": "Success",
+#                         "total_pages": total_pages,
+#                         "current_page_no": current_page_no,
+#                         "users_list": user_list,
+#                     }
+
+
 # 14 Invite to Rawcaster
 @router.post("/invitetorawcaster")
 async def invitetorawcaster(
@@ -4088,7 +4250,10 @@ def process_data(
         file_paths.append(file_path)
 
     splited_file_path = file_paths
-
+    
+    #remove local file path
+    os.remove(uploaded_file_path)
+    
     client_s3 = boto3.client(
         "s3", aws_access_key_id=access_key, aws_secret_access_key=access_secret
     )  # Connect to S3
@@ -4476,9 +4641,7 @@ async def addnuggets(
                             uploaded_file_path = await file_upload(
                                 nuggets_media[i - 1], file_ext, compress=1
                             )
-                            
-                            # uploaded_file_path=upload_file_using_ffmpeg(uploaded_file_path,file_ext)
-                            
+                                                        
                             file_stat = os.stat(uploaded_file_path)
                             file_size = file_stat.st_size
 
@@ -4518,37 +4681,40 @@ async def addnuggets(
                                 s3_file_path = f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
 
                                 if type == "video":
-                                   
-                                    result = upload_to_s3(
-                                        uploaded_file_path, s3_file_path
+                                    
+                                    # Direct file Upload
+                                    
+                                    # result = upload_to_s3(
+                                    #     uploaded_file_path, s3_file_path
+                                    # )
+                                    
+                                    # if result["status"] == 1:
+                                    #     add_nugget_attachment = NuggetsAttachment(
+                                    #         user_id=login_user_id,
+                                    #         nugget_id=add_nuggets_master.id,
+                                    #         media_type=type,
+                                    #         media_file_type=file_ext,
+                                    #         file_size=file_size,
+                                    #         path=result["url"],
+                                    #         created_date=datetime.datetime.utcnow(),
+                                    #         status=1,
+                                    #     )
+                                    #     db.add(add_nugget_attachment)
+                                    #     db.commit()
+                                    #     db.refresh(add_nugget_attachment)
+                                        
+                                    splites_flag=1
+                                    splited_video_reposne=process_data(
+                                        db,
+                                        uploaded_file_path,
+                                        login_user_id,
+                                        master_id,
+                                        share_type,
+                                        share_with
                                     )
-                                    if result["status"] == 1:
-                                        add_nugget_attachment = NuggetsAttachment(
-                                            user_id=login_user_id,
-                                            nugget_id=add_nuggets_master.id,
-                                            media_type=type,
-                                            media_file_type=file_ext,
-                                            file_size=file_size,
-                                            path=result["url"],
-                                            created_date=datetime.datetime.utcnow(),
-                                            status=1,
-                                        )
-                                        db.add(add_nugget_attachment)
-                                        db.commit()
-                                        db.refresh(add_nugget_attachment)
-                                        # splites_flag=1
-                                        # splited_video_reposne=process_data(
-                                        #     db,
-                                        #     uploaded_file_path,
-                                        #     login_user_id,
-                                        #     master_id,
-                                        #     share_type,
-                                        #     share_with
-                                        # )
-                                        # nugget_ids += splited_video_reposne
-
-                                    else:
-                                        return result
+                                    nugget_ids += splited_video_reposne
+                                    # else:
+                                    #     return result
                                     
                                 elif type == "audio":
                                     s3_file_path = f"nuggets/audio_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
@@ -4758,6 +4924,7 @@ async def addnuggets(
                             else:
                                 
                                 for nugt in nugget_ids:
+                                    print(nugt)
                                     nugget_detail = get_nugget_detail(
                                         db, nugt, login_user_id
                                     ) 
@@ -4912,7 +5079,7 @@ async def addnuggets(
 
                                 nugget_detail = get_nugget_detail(
                                     db, add_nuggets.id, login_user_id
-                                )  # Pending
+                                )
 
                                 # Update Nugget Master
                                 update_nuggets_master = (
