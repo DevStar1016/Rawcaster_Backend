@@ -1204,9 +1204,9 @@ def CheckMobileNumber(db, mobile_no, geo_location):
             found = 0
 
             for place in country:
-                cty = (place.replace(".", "")).strip()
-
-                user_country = db.query(Country).filter(Country.name == cty).first()
+                cty = str(place.replace(".", "")).strip()
+                print(cty)
+                user_country = db.query(Country).filter(Country.name.like("%"+cty+"%")).first()
 
                 if user_country and user_country.mobile_no_length != "":
                     mobileno = str(mobile_no).replace("+", "")
