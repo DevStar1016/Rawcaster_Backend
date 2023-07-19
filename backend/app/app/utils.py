@@ -1206,7 +1206,7 @@ def CheckMobileNumber(db, mobile_no, geo_location):
             for place in country:
                 cty = str(place.replace(".", "")).strip()
                 print(cty)
-                user_country = db.query(Country).filter(Country.name.like("%"+cty+"%")).first()
+                user_country = db.query(Country).filter(Country.name.ilike(cty)).first()
 
                 if user_country and user_country.mobile_no_length != "":
                     mobileno = str(mobile_no).replace("+", "")
@@ -2005,14 +2005,20 @@ async def SendOtp(db, user_id, signup_type):
     content += "</td></tr></table>"
 
     body = mail_content(content)
-
+    
     if int(signup_type) == 1:
-        mail_send = await send_email(db, to_mail, subject, body)
-
+        try:
+            mail_send = await send_email(db, to_mail, subject, body)
+        except Exception as e:
+            print(e)
+            
     elif int(signup_type) == 2:
         mobile_no = f"{get_user.country_code}{get_user.mobile_no}"
         message = f"{otp} is your One Time Password. Do not share this OTP with anyone"
-        send_sms = sendSMS(mobile_no, message)
+        try:
+            send_sms = sendSMS(mobile_no, message)
+        except Exception as e:
+            print(e)
     else:
         pass
     return otp_ref_id
