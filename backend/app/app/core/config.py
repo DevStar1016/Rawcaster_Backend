@@ -26,7 +26,7 @@ base_url_segment = "/rawcaster"
 base_upload_folder = "local_uploads"
 
 # Elastic Cache
-data_base ='Admin:bZ9CG8GIpDUIyBzz@replica.raew7no6l92n8p4.rljwzo.use1.cache.amazonaws.com:6379/rawcasterdev'
+data_base ='Admin:bZ9CG8GIpDUIyBzz@master.raew7no6l92n8p4.rljwzo.use1.cache.amazonaws.com:6379'
 
 # Dev
 # data_base ='mysql+pymysql://Admin:Rawcaster2240422@rawcasterdev.c3xecvdvxfvf.us-east-1.rds.amazonaws.com/rawcasterdev'
