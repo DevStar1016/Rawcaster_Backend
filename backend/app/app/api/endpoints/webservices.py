@@ -57,7 +57,7 @@ def read_root1():
 
 @router.post("/test")
 async def test(db: Session = Depends(deps.get_db)):
-    return 'Done'
+    return 'Done,Without db connection'
 
 @router.post("/fetch_data")
 async def fetch_data(db: Session = Depends(deps.get_db)):
