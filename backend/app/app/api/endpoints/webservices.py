@@ -8608,7 +8608,7 @@ async def listevents(
                                 else "",
                                 # "banner_image":event.cover_img if event.cover_img else "",
                                 "banner_image": banner_image,  # Event Images displayed event type wise
-                                "is_host": 1 if event.created_by else 0,
+                                "is_host": 1 if event.created_by == login_user_id else 0,
                                 "created_at": common_date(event.created_at)
                                 if event.created_at
                                 else "",

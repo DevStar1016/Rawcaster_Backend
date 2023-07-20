@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
+import logging
 
 import sys
 
@@ -23,6 +24,20 @@ if settings.BACKEND_CORS_ORIGINS:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    
+    uvicorn_logger = logging.getLogger("uvicorn")
+    access_logger = logging.getLogger("uvicorn.access")
+
+    # Set up a custom formatter for both the uvicorn and access loggers
+    formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] %(message)s')
+
+    # Set the formatter for the uvicorn logger (error logs)
+    for handler in uvicorn_logger.handlers:
+        handler.setFormatter(formatter)
+
+    # Set the formatter for the access logger
+    for handler in access_logger.handlers:
+        handler.setFormatter(formatter)
 
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
