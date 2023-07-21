@@ -8,7 +8,7 @@ from app.api import deps
 import datetime
 from sqlalchemy.orm import Session,aliased
 from datetime import datetime, date
-from sqlalchemy import func, case, text, Date, extract
+from sqlalchemy import func, case, text, extract,distinct,true
 import re
 import base64
 import json
@@ -22,7 +22,6 @@ from moviepy.video.io.VideoFileClip import VideoFileClip
 import subprocess
 from .chime_chat import *
 from better_profanity import profanity
-import redis
 
 router = APIRouter()
 
@@ -30,29 +29,6 @@ router = APIRouter()
 access_key = config.access_key
 access_secret = config.access_secret
 bucket_name = config.bucket_name
-
-
-
-# Replace 'your_elasticache_endpoint' and 'your_elasticache_port' with your actual ElastiCache endpoint and port
-elasticache_endpoint = 'raew7no6l92n8p4-001.raew7no6l92n8p4.rljwzo.use1.cache.amazonaws.com'
-elasticache_port = 6379
-
-# Create a Redis client
-redis_client = redis.StrictRedis(host=elasticache_endpoint, port=elasticache_port, decode_responses=True)
-
-@router.post("/read_root")
-def read_root():
-    # Write data to Redis
-    redis_client.set("key", "value")
-
-    # Read data from Redis
-    value = redis_client.get("key")
-    return {"message": f"Value in Redis: {value}"}
-
-
-@router.post("/read_root1")
-def read_root1():
-    return "Success"
 
 
 @router.post("/test")
@@ -1796,7 +1772,6 @@ async def updatemyprofile(
 
 # 13 Search Rawcaster Users (for friends)
 
-
 @router.post("/searchrawcasterusers")
 async def searchrawcasterusers(
     db: Session = Depends(deps.get_db),
@@ -1838,11 +1813,29 @@ async def searchrawcasterusers(
                 )
 
                 current_page_no = int(page_number)
-
-                get_user = db.query(User).filter(
-                    User.status == 1, User.id != login_user_id
-                )
-
+                
+                get_user = db.query(
+                    User.id,
+                    User.email_id,
+                    User.user_ref_id,
+                    User.first_name,
+                    User.last_name,
+                    User.display_name,
+                    User.gender,
+                    User.profile_img,
+                    User.geo_location,
+                    User.bio_data,
+                    MyFriends.request_status.label('friend_request_status'),
+                    FollowUser.id.label('follow_id')
+                ).select_from(User).outerjoin(MyFriends, 
+                    ((MyFriends.sender_id == User.id) | (MyFriends.receiver_id == User.id))
+                    & (MyFriends.status == 1)
+                    & ((MyFriends.sender_id == login_user_id) | (MyFriends.receiver_id == login_user_id))
+                ).outerjoin(FollowUser,
+                    (FollowUser.following_userid == User.id)
+                    & (FollowUser.follower_userid == login_user_id)
+                ).filter(User.status == 1, User.id != login_user_id)
+                
                 # Omit blocked users --
                 request_status = 3
                 response_type = 1
@@ -1878,7 +1871,7 @@ async def searchrawcasterusers(
                     limit, offset, total_pages = get_pagination(
                         get_row_count, current_page_no, default_page_size
                     )
-
+                    # Apply Pagination
                     get_user = (
                         get_user.order_by(User.first_name.asc())
                         .limit(limit)
@@ -1887,22 +1880,8 @@ async def searchrawcasterusers(
                     )
 
                     user_list = []
+                    
                     for user in get_user:
-                        get_my_friends = (
-                            db.query(MyFriends)
-                            .filter(
-                                or_(
-                                    MyFriends.sender_id == user.id,
-                                    MyFriends.receiver_id == user.id,
-                                ),
-                                or_(
-                                    MyFriends.sender_id == login_user_id,
-                                    MyFriends.receiver_id == login_user_id,
-                                ),
-                                MyFriends.status == 1,
-                            )
-                            .first()
-                        )
 
                         get_follow_user_details = db.query(FollowUser).filter(
                             FollowUser.following_userid == user.id
@@ -1932,8 +1911,8 @@ async def searchrawcasterusers(
                                 "profile_img": user.profile_img
                                 if user.profile_img
                                 else "",
-                                "friend_request_status": get_my_friends.request_status
-                                if get_my_friends
+                                "friend_request_status": user.friend_request_status
+                                if user.friend_request_status
                                 else "",
                                 "follow": True if get_follow_user else False,
                                 "follow_count": follow_count,
@@ -1958,7 +1937,7 @@ async def searchrawcasterusers(
                         "users_list": user_list,
                     }
 
-
+         
 # 14 Invite to Rawcaster
 @router.post("/invitetorawcaster")
 async def invitetorawcaster(
@@ -5225,10 +5204,9 @@ async def addnuggets(
 #                     return {"status":0,"msg":"Failed to create Nugget master"}
 
 
-# 26. List Nuggets
 @router.post("/listnuggets")
-async def listnuggets(
-    db: Session = Depends(deps.get_db),
+async def list_nuggets(
+    db:Session= Depends(deps.get_db),
     token: str = Form(None),
     my_nuggets: str = Form(None),
     filter_type: str = Form(None, description="1-Influencer"),
@@ -5238,17 +5216,18 @@ async def listnuggets(
     search_key: str = Form(None),
     page_number: str = Form(default=1),
     nugget_type: str = Form(None, description="1-video,2-Other than video,0-all"),
-):
+    ):
+    
     if token == None or token.strip() == "":
         return {
             "status": -1,
-            "msg": "Sorry! your login session expired. please login again.",
+            "msg": "Sorry! your login db expired. please login again.",
         }
     elif nugget_type and not nugget_type.isnumeric():
-        return {"status": 0, "msg": "Invalid Nugget Type"}
+        return {"status": 0, "msg": "Invalid Nuggets Type"}
 
     elif nugget_type and not 0 <= int(nugget_type) <= 2:
-        return {"status": 0, "msg": "Invalid Nugget Type"}
+        return {"status": 0, "msg": "Invalid Nuggets Type"}
     elif not str(page_number).isnumeric():
         return {"status": 0, "msg": "Invalid page Number"}
     else:
@@ -5260,49 +5239,57 @@ async def listnuggets(
         if access_token == False:
             return {
                 "status": -1,
-                "msg": "Sorry! your login session expired. please login again.",
+                "msg": "Sorry! your login db expired. please login again.",
             }
         else:
             status = 0
             msg = "Invalid nugget id"
             get_token_details = (
-                db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+                db.query(ApiTokens.user_id,UserSettings.public_nugget_display).join(User,User.id == ApiTokens.user_id).outerjoin(UserSettings,UserSettings.user_id == User.id ).filter(ApiTokens.token == access_token).first()
             )
 
             user_public_nugget_display_setting = 1
             login_user_id = 0
             if get_token_details:
                 login_user_id = get_token_details.user_id
-
-                get_user_settings = (
-                    db.query(UserSettings)
-                    .filter(UserSettings.user_id == login_user_id)
-                    .first()
-                )
-                if get_user_settings:
-                    user_public_nugget_display_setting = (
-                        get_user_settings.public_nugget_display
-                    )
-
+                user_public_nugget_display_setting=get_token_details.public_nugget_display
+            
             current_page_no = int(page_number)
             user_id = int(user_id) if user_id else None
-
-            group_ids = getGroupids(db, login_user_id)
+            
+            group_ids=getGroupids(db,login_user_id)
             requested_by = None
             request_status = 1  # Pending
             response_type = 1
-            my_frnds = get_friend_requests(
-                db, login_user_id, requested_by, request_status, response_type
-            )
+            my_frnds = get_friend_requests(db, login_user_id, requested_by, request_status, response_type)
+            
             my_friends = my_frnds["accepted"]
-
             my_followings = getFollowings(db, login_user_id)
-            type = None
+            
+            type=None
             raw_id = GetRawcasterUserID(db, type)
-
+            
             get_nuggets = (
-                db.query(Nuggets)
-                .select_from(Nuggets)
+                db.query(Nuggets.id,
+                         Nuggets.nuggets_id,
+                         Nuggets.user_id,
+                         Nuggets.type,
+                         Nuggets.share_type,
+                         Nuggets.created_date,
+                         Nuggets.nugget_status,
+                         Nuggets.status,
+                         NuggetsMaster.content,
+                         NuggetsMaster._metadata,
+                         User.user_ref_id,
+                         User.user_status_id,
+                         User.display_name,
+                         User.profile_img,
+                         NuggetsMaster.poll_duration,
+                         func.count(distinct(NuggetsLikes.id)).label('tot_likes'),
+                         func.count(distinct(NuggetView.id)).label('total_views'),
+                         func.count(distinct(NuggetPollVoted.id)).label("total_vote"),
+                         func.count(distinct(NuggetsSave.id)).label('is_saved'),
+                         func.count(distinct(NuggetsComments.id)).label('total_comments'))
                 .join(User, Nuggets.user_id == User.id, isouter=True)
                 .join(
                     NuggetsMaster, Nuggets.nuggets_id == NuggetsMaster.id, isouter=True
@@ -5334,8 +5321,8 @@ async def listnuggets(
                 .filter(Nuggets.nugget_status == 1)
                 .filter(NuggetsMaster.status == 1)
                 .group_by(Nuggets.id)
-            )
-
+            )    
+            
             if search_key:
                 get_nuggets = get_nuggets.filter(
                     or_(
@@ -5345,7 +5332,8 @@ async def listnuggets(
                         User.last_name.ilike("%" + search_key + "%"),
                     )
                 )
-
+            
+            # Criteria for nuggets permission
             if access_token == "RAWCAST":  # When Customer not login
                 get_nuggets = get_nuggets.filter(Nuggets.share_type == 1)
 
@@ -5601,37 +5589,10 @@ async def listnuggets(
 
                 get_nuggets = get_nuggets.limit(limit).offset(offset).all()
                 nuggets_list = []
-
                 for nuggets in get_nuggets:
                     attachments = []
                     poll_options = []
                     is_downloadable = 0
-                    tot_likes = (
-                        db.query(NuggetsLikes)
-                        .filter(
-                            NuggetsLikes.nugget_id == nuggets.id,
-                            NuggetsLikes.status == 1,
-                        )
-                        .count()
-                    )
-
-                    total_comments = (
-                        db.query(NuggetsComments)
-                        .filter(NuggetsComments.nugget_id == nuggets.id)
-                        .count()
-                    )
-
-                    total_views = (
-                        db.query(NuggetView)
-                        .filter(NuggetView.nugget_id == nuggets.id)
-                        .count()
-                    )
-
-                    total_vote = (
-                        db.query(NuggetPollVoted)
-                        .filter(NuggetPollVoted.nugget_id == nuggets.id)
-                        .count()
-                    )
 
                     img_count = 0
                     shared_detail = []
@@ -5756,15 +5717,6 @@ async def listnuggets(
                         )
                         .first()
                     )
-                    saved = (
-                        db.query(NuggetsSave)
-                        .filter(
-                            NuggetsSave.nugget_id == nuggets.id,
-                            NuggetsSave.user_id == login_user_id,
-                            NuggetsSave.status == 1,
-                        )
-                        .count()
-                    )
 
                     if nuggets.share_type == 1:
                         if following == 1:
@@ -5810,42 +5762,42 @@ async def listnuggets(
                     nuggets_list.append(
                         {
                             "nugget_id": nuggets.id,
-                            "content": nuggets.nuggets_master.content,
-                            "metadata": nuggets.nuggets_master._metadata,
+                            "content": nuggets.content,
+                            "metadata": nuggets._metadata,
                             "created_date": common_date(nuggets.created_date)
                             if nuggets.created_date
                             else "",
                             "user_id": nuggets.user_id,
-                            "user_ref_id": nuggets.user.user_ref_id
+                            "user_ref_id": nuggets.user_ref_id
                             if nuggets.user_id
                             else "",
                             "account_verify_type": 1 if check_verify else 0,
                             "type": nuggets.type,
-                            "original_user_id": nuggets.nuggets_master.user.id
+                            "original_user_id": nuggets.user_id
                             if nuggets.user_id
                             else "",
-                            "original_user_name": nuggets.nuggets_master.user.display_name
+                            "original_user_name": nuggets.display_name
                             if nuggets.user_id
                             else "",
-                            "original_user_image": nuggets.nuggets_master.user.profile_img
+                            "original_user_image": nuggets.profile_img
                             if nuggets.user_id
                             else "",
-                            "user_name": nuggets.user.display_name
+                            "user_name": nuggets.display_name
                             if nuggets.user_id
                             else "",
-                            "user_image": nuggets.user.profile_img
+                            "user_image": nuggets.profile_img
                             if nuggets.user_id
                             else "",
-                            "user_status_id": nuggets.user.user_status_id
+                            "user_status_id": nuggets.user_status_id
                             if nuggets.user_id
                             else "",
                             "liked": nugget_like,
                             "viewed": 0,
                             "following": True if following > 0 else False,
                             "follow_count": follow_count,
-                            "total_likes": tot_likes,
-                            "total_comments": total_comments,
-                            "total_views": total_views,
+                            "total_likes": nuggets.tot_likes,
+                            "total_comments": nuggets.total_comments,
+                            "total_views": nuggets.total_views,
                             "total_media": img_count,
                             "share_type": nuggets.share_type,
                             "media_list": attachments,
@@ -5853,17 +5805,17 @@ async def listnuggets(
                             if nuggets.user_id == login_user_id
                             else 0,
                             "is_master_nugget_owner": 1
-                            if nuggets.nuggets_master.user_id == login_user_id
+                            if nuggets.user_id == login_user_id
                             else 0,
                             "shared_detail": shared_detail,
                             "shared_with": [],
                             "is_downloadable": is_downloadable,
                             "poll_option": poll_options,
-                            "poll_duration": nuggets.nuggets_master.poll_duration,
+                            "poll_duration": nuggets.poll_duration,
                             "voted": 1 if voted else 0,
                             "voted_option": voted.poll_option_id if voted else None,
-                            "total_vote": total_vote,
-                            "saved": True if saved == 1 else False,
+                            "total_vote": nuggets.total_vote if nuggets.total_vote else 0,
+                            "saved": True if nuggets.is_saved == 1 else False,
                         }
                     )
 
@@ -5875,8 +5827,7 @@ async def listnuggets(
                     "current_page_no": current_page_no,
                     "nuggets_list": nuggets_list,
                 }
-
-
+            
 # 27. Like And Unlike Nugget
 @router.post("/likeandunlikenugget")
 async def likeandunlikenugget(
@@ -8503,7 +8454,7 @@ async def listevents(
                         user_screenshare = 1
 
                         settings = (
-                            db.query(UserSettings)
+                            db.query(UserSettings.waiting_room,UserSettings.join_before_host,UserSettings.participant_join_sound,UserSettings.screen_share_status)
                             .filter_by(user_id=event.created_by)
                             .first()
                         )
@@ -8608,7 +8559,7 @@ async def listevents(
                                 else "",
                                 # "banner_image":event.cover_img if event.cover_img else "",
                                 "banner_image": banner_image,  # Event Images displayed event type wise
-                                "is_host": 1 if event.created_by else 0,
+                                "is_host": 1 if event.created_by == login_user_id else 0,
                                 "created_at": common_date(event.created_at)
                                 if event.created_at
                                 else "",

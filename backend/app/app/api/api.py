@@ -4,7 +4,7 @@ from .endpoints import (
     webservices,
     webservices_2,
     chime_meeting,
-    chime_chat,
+    chime_chat
 )
 
 api_router = APIRouter()
