@@ -5597,7 +5597,7 @@ async def list_nuggets(
                     img_count = 0
                     shared_detail = []
                     get_nugget_share = (
-                        db.query(NuggetsShareWith)
+                        db.query(NuggetsShareWith.type,NuggetsShareWith.share_with)
                         .filter(NuggetsShareWith.nuggets_id == nuggets.id)
                         .all()
                     )
@@ -5611,7 +5611,7 @@ async def list_nuggets(
 
                         if type == 1:
                             friend_groups = (
-                                db.query(FriendGroups)
+                                db.query(FriendGroups.id,FriendGroups.group_name,FriendGroups.group_icon)
                                 .filter(FriendGroups.id.in_(shared_group_ids))
                                 .all()
                             )
@@ -5625,7 +5625,7 @@ async def list_nuggets(
                                 )
                         elif type == 2:
                             friend_groups = (
-                                db.query(User)
+                                db.query(User.display_name,User.profile_img)
                                 .filter(User.id.in_(shared_group_ids))
                                 .all()
                             )
@@ -5659,7 +5659,7 @@ async def list_nuggets(
                             )
 
                     get_nugget_poll_option = (
-                        db.query(NuggetPollOption)
+                        db.query(NuggetPollOption.id,NuggetPollOption.option_name,NuggetPollOption.poll_vote_percentage,NuggetPollOption.votes,NuggetPollOption.status)
                         .filter(
                             NuggetPollOption.nuggets_master_id == nuggets.nuggets_id,
                             NuggetPollOption.status == 1,
@@ -7733,11 +7733,18 @@ async def addevent(
                 
                 # Create Meeting (Chime API Call)
                 chime_meeting_id=None
-                chime_meeting_response = requests.get('https://devchimeapi.rawcaster.com/createmeeting')
-                if chime_meeting_response.status_code == 200:
-                    response=json.loads(chime_meeting_response.text)
-                    chime_meeting_id=response['result']['Meeting']['MeetingId'] if response['status'] == 200 else None
-
+                try:
+                    chime_meeting_response = requests.get('https://devchimeapi.rawcaster.com/createmeeting')
+                    if chime_meeting_response.status_code == 200:
+                        response=json.loads(chime_meeting_response.text)
+                        chime_meeting_id=response['result']['Meeting']['MeetingId'] if response['status'] == 200 else None
+                        print(chime_meeting_id)
+                    
+                        
+                except Exception as e:
+                    print(e)
+                    return {"status":0,"msg":"Something went wrong"}
+                
                 # Parse the strings into datetime objects
                 date_obj = datetime.datetime.strptime(event_start_date, "%Y-%m-%d")
                 time_obj = datetime.datetime.strptime(event_start_time, "%H:%M").time()
@@ -14123,18 +14130,16 @@ async def editliveevent(
             event_invite_friends = (
                 ast.literal_eval(event_invite_friends) if event_invite_friends else None
             )
-            # event_invite_friends=json.loads(event_invite_friends) if event_invite_friends else []
 
             delete_invite_custom = (
                 ast.literal_eval(delete_invite_mails) if delete_invite_mails else None
             )
-
+            
             delete_invite_groups = (
-                json.loads(delete_invite_groups) if delete_invite_groups else []
+                ast.literal_eval(delete_invite_groups) if delete_invite_groups else None
             )
-
             delete_invite_friends = (
-                json.loads(delete_invite_friends) if delete_invite_friends else []
+                ast.literal_eval(delete_invite_friends) if delete_invite_friends else None
             )
 
             event_exist = (
@@ -14156,18 +14161,20 @@ async def editliveevent(
                     ).delete()
                     db.commit()
                 if delete_invite_groups:
+                    
                     db.query(EventInvitations).filter(
                         and_(
                             EventInvitations.event_id == event_id,
-                            EventInvitations.user_id.in_(delete_invite_groups),
+                            EventInvitations.group_id.in_(delete_invite_groups),
                         )
                     ).delete()
                     db.commit()
                 if delete_invite_custom:
-                    db.query(EventInvitations).filter(
+                    
+                    deleteUser=db.query(EventInvitations).filter(
                         and_(
                             EventInvitations.event_id == event_id,
-                            EventInvitations.user_id.in_(delete_invite_custom),
+                            EventInvitations.invite_mail.in_(delete_invite_custom),
                         )
                     ).delete()
                     db.commit()
@@ -14255,45 +14262,51 @@ async def editliveevent(
                     db.commit()
                 if event_invite_friends and len(event_invite_friends) > 0:
                     for value in event_invite_friends:
-                        invite_friends = EventInvitations(
-                            type=1,
-                            event_id=event_id,
-                            user_id=int(value),
-                            invite_sent=0,
-                            created_at=datetime.datetime.utcnow().strftime(
-                                "%Y-%m-%d %H:%M:%S"
-                            ),
-                            created_by=login_user_id,
-                        )
-                        db.add(invite_friends)
-                        db.commit()
-                        if value not in totalfriend:
-                            totalfriend.append(value)
+                        checkEventFriends=db.query(EventInvitations).filter(EventInvitations.event_id == event_id,EventInvitations.user_id == int(value)).first()
+                        if not checkEventFriends:
+                            
+                            invite_friends = EventInvitations(
+                                type=1,
+                                event_id=event_id,
+                                user_id=int(value),
+                                invite_sent=0,
+                                created_at=datetime.datetime.utcnow().strftime(
+                                    "%Y-%m-%d %H:%M:%S"
+                                ),
+                                created_by=login_user_id,
+                            )
+                            db.add(invite_friends)
+                            db.commit()
+                            if value not in totalfriend:
+                                totalfriend.append(value)
 
                 if event_invite_groups:
                     for value in event_invite_groups:
-                        invite_friends = EventInvitations(
-                            type=2,
-                            event_id=event_id,
-                            group_id=int(value),
-                            invite_sent=0,
-                            created_at=datetime.datetime.utcnow().strftime(
-                                "%Y-%m-%d %H:%M:%S"
-                            ),
-                            created_by=login_user_id,
-                        )
-                        db.add(invite_friends)
-                        db.commit()
+                        # check event group
+                        checkEventGroup=db.query(EventInvitations).filter(EventInvitations.event_id == event_id,EventInvitations.group_id == int(value)).first()
+                        if not checkEventGroup:
+                            invite_friends = EventInvitations(
+                                type=2,
+                                event_id=event_id,
+                                group_id=int(value),
+                                invite_sent=0,
+                                created_at=datetime.datetime.utcnow().strftime(
+                                    "%Y-%m-%d %H:%M:%S"
+                                ),
+                                created_by=login_user_id,
+                            )
+                            db.add(invite_friends)
+                            db.commit()
 
-                        getgroupmember = (
-                            db.query(FriendGroupMembers)
-                            .filter(FriendGroupMembers.group_id == int(value))
-                            .all()
-                        )
-                        if getgroupmember:
-                            for member in getgroupmember:
-                                if member.user_id not in totalfriend:
-                                    totalfriend.append(member.user_id)
+                            getgroupmember = (
+                                db.query(FriendGroupMembers)
+                                .filter(FriendGroupMembers.group_id == int(value))
+                                .all()
+                            )
+                            if getgroupmember:
+                                for member in getgroupmember:
+                                    if member.user_id not in totalfriend:
+                                        totalfriend.append(member.user_id)
 
                 link = inviteBaseurl() + "" + "join/talkshow/" + edit_event.ref_id
                 subject = "Rawcaster - Event Invitation"
@@ -14307,24 +14320,27 @@ async def editliveevent(
 
                 if event_invite_custom and len(event_invite_custom) > 0:
                     for value in event_invite_custom:
-                        if value.strip() != "":
-                            invite_friends = EventInvitations(
-                                type=3,
-                                event_id=event_id,
-                                invite_mail=value,
-                                invite_sent=0,
-                                created_at=datetime.datetime.utcnow().strftime(
-                                    "%Y-%m-%d %H:%M:%S"
-                                ),
-                                created_by=login_user_id,
-                            )
-                            db.add(invite_friends)
-                            db.commit()
-                            to = value
-                            try:
-                                send_mail = await send_email(db, to, subject, body)
-                            except:
-                                pass
+                        # check exist mail
+                        check_mail=db.query(EventInvitations).filter(EventInvitations.event_id == event_id,EventInvitations.invite_mail.like(value)).first()
+                        if not check_mail:
+                            if value.strip() != "":
+                                invite_friends = EventInvitations(
+                                    type=3,
+                                    event_id=event_id,
+                                    invite_mail=value,
+                                    invite_sent=0,
+                                    created_at=datetime.datetime.utcnow().strftime(
+                                        "%Y-%m-%d %H:%M:%S"
+                                    ),
+                                    created_by=login_user_id,
+                                )
+                                db.add(invite_friends)
+                                db.commit()
+                                to = value
+                                try:
+                                    send_mail = await send_email(db, to, subject, body)
+                                except:
+                                    pass
 
                 event = get_event_detail(db, event_id, login_user_id)
                 message_detail = []

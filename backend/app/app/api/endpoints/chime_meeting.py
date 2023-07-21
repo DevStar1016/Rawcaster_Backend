@@ -24,7 +24,7 @@ def join_meeting(db: Session = Depends(deps.get_db),
         return {"status": -1, "msg": "Sorry! your login session expired. please login again."}
     
     if not meeting_id:
-        return {"status": 0, "msg": "User name required"}
+        return {"status": 0, "msg": "Meeting id required"}
     
     access_token = checkToken(db, token)
 
