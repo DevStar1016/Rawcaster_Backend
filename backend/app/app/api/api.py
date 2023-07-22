@@ -4,12 +4,13 @@ from .endpoints import (
     webservices,
     webservices_2,
     chime_meeting,
-    chime_chat
+    chime_chat,
+    elastic
 )
 
 api_router = APIRouter()
 
-# api_router.include_router(elastic.router, tags=["DB"])
+api_router.include_router(elastic.router, tags=["DB"])
 
 api_router.include_router(chime_chat.router, tags=["Chime Chat"])
 
