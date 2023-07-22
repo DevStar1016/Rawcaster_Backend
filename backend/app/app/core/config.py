@@ -32,7 +32,7 @@ base_upload_folder = "local_uploads"
 data_base ='mysql+pymysql://Admin:Rawcaster2240422@rawcasterdev.c3xecvdvxfvf.us-east-1.rds.amazonaws.com/rawcasterdev'
 
 # Local
-# data_base = "mysql+pymysql://maemysqluser:%s@192.168.1.109/rawcasterdev" % quote("MaeNewMysql2@2@")
+# data_base = "mysql+pymysql://maemysqluser:%s@192.168.1.109/rawcaster" % quote("MaeNewMysql2@2@")
 
 api_doc_path = "/docs"
 

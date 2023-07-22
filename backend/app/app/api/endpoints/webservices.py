@@ -5205,7 +5205,7 @@ async def addnuggets(
 
 
 @router.post("/listnuggets")
-async def list_nuggets(
+async def listnuggets(
     db:Session= Depends(deps.get_db),
     token: str = Form(None),
     my_nuggets: str = Form(None),
@@ -5268,7 +5268,7 @@ async def list_nuggets(
             
             type=None
             raw_id = GetRawcasterUserID(db, type)
-            
+            db
             get_nuggets = (
                 db.query(Nuggets.id,
                          Nuggets.nuggets_id,
@@ -5625,7 +5625,7 @@ async def list_nuggets(
                                 )
                         elif type == 2:
                             friend_groups = (
-                                db.query(User.display_name,User.profile_img)
+                                db.query(User.display_name,User.profile_img,User.id)
                                 .filter(User.id.in_(shared_group_ids))
                                 .all()
                             )
