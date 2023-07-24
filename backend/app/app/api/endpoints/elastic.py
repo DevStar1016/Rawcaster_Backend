@@ -888,7 +888,7 @@ async def buffer():
     
     
     
-@router.post("/list_nuggets")
+@router.post("/listnuggets")
 async def list_nuggets(
     db:Session= Depends(deps.get_db),
     token: str = Form(None),
@@ -1316,7 +1316,7 @@ async def list_nuggets(
                                 )
                         elif type == 2:
                             friend_groups = (
-                                db.query(User.display_name,User.profile_img)
+                                db.query(User.display_name,User.profile_img,User.id)
                                 .filter(User.id.in_(shared_group_ids))
                                 .all()
                             )
