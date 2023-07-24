@@ -28,7 +28,7 @@ base_upload_folder = "local_uploads"
 # Elastic Cache
 # data_base ='mysql+pymysql://Admin:Rawcaster2240422@raew7no6l92n8p4-001.raew7no6l92n8p4.rljwzo.use1.cache.amazonaws.com:6379/rawcasterdev'
 
-# Dev (RDS)
+# Dev
 data_base ='mysql+pymysql://Admin:Rawcaster2240422@rawcasterdev.c3xecvdvxfvf.us-east-1.rds.amazonaws.com/rawcasterdev'
 
 # Local
