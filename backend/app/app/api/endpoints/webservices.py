@@ -5204,7 +5204,7 @@ async def addnuggets(
 #                     return {"status":0,"msg":"Failed to create Nugget master"}
 
 
-@router.post("/listnuggets")
+@router.post("/list_nuggets")
 async def listnuggets(
     db:Session= Depends(deps.get_db),
     token: str = Form(None),
@@ -9531,7 +9531,7 @@ async def listnotifications(
                 ).order_by(Nuggets.id.desc())
 
             if notification_type == 1:  # Nugget
-                filters = [3, 4, 5, 6, 7, 8, 18]
+                filters = [1,3, 4, 5, 6, 7, 8, 18]
 
                 get_notification = get_notification.filter(
                     Notification.notification_type.in_(filters)
@@ -15257,7 +15257,8 @@ async def influencerfollow(
         None, description='["RA286164941105720824",”RA286164941105720957”]'
     ),
     select_all: str = Form(None, description="1-all,0-not select"),
-    category:str=Form(None)
+    category:str=Form(None),
+    search_key:str=Form(None)
 ):
     if token == None or token.strip() == "":
         return {
@@ -15309,6 +15310,19 @@ async def influencerfollow(
                         User.id != login_user_id, User.status == 1
                     )
                     criteria = criteria.filter(FollowUser.id == None)
+                    
+                    if search_key:
+                        criteria = criteria.filter(
+                                and_(
+                                    or_(
+                                        User.email_id.ilike(search_key + "%"),
+                                        User.mobile_no.ilike(search_key + "%"),
+                                        User.display_name.ilike(search_key + "%"),
+                                        User.first_name.ilike(search_key + "%"),
+                                        User.last_name.ilike(search_key + "%"),
+                                    )
+                                )
+                            )
 
                     # Omit blocked users
                     get_all_blocked_users = get_friend_requests(
