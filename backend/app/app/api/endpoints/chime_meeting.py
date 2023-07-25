@@ -155,6 +155,52 @@ def delete_meeting(db: Session = Depends(deps.get_db),
             return {"status": 0, "msg": f"Failed:{response.text}"}
 
 
+@router.post("/exit_meeting")
+def exit_meeting(db: Session = Depends(deps.get_db),
+        token: str = Form(None),meeting_id: str = Form(None),attendeeId:str=Form(None)):
+    if not token:
+        return {"status": -1, "msg": "Sorry! your login session expired. please login again."}
+    
+    if not attendeeId:
+        return {"status": 0, "msg": "Attendee id required"}
+    
+    if not meeting_id:
+        return {"status": 0, "msg": "Meeting id required"}
+    
+    access_token = checkToken(db, token)
+
+    if access_token == False:
+        return {
+            "status": -1,
+            "msg": "Sorry! your login session expired. please login again.",
+        }
+    else:
+        get_token_details = (
+            db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+            )
+        login_user_id = get_token_details.user_id
+        
+        headers = {'Content-Type': 'application/json'}
+        url = "https://devchimeapi.rawcaster.com/exitmeeting"
+        
+        data={'meetingId':meeting_id,'attendeeId':attendeeId,"userId":login_user_id}
+        try:
+            res = requests.post(url, data = json.dumps(data),headers=headers)
+            
+        except Exception as e:
+            return {'status':0,"msg":f"Unable to connect:{e}"}
+        
+        if res.status_code == 200:
+            response = json.loads(res.text)
+            try:
+                return {"status": 1, "msg": "Success"}
+            except:
+                return {"status":0,"msg":"Something went wrong"}
+        else:
+            # Request failed
+            print("Error:", (response.text))
+            return {"status": 0, "msg": f"Failed:{response.text}"}
+
 
 
 # @router.post("/create_meeting")

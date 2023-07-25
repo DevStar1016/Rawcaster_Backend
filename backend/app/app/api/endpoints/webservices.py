@@ -7734,6 +7734,13 @@ async def addevent(
                 # Create Meeting (Chime API Call)
                 chime_meeting_id=None
                 try:
+                    headers = {'Content-Type': 'application/json'}
+                    url = "https://devchimeapi.rawcaster.com/createmeeting"
+                    
+                    data={'userId': login_user_id,'MeetingId':meeting_id}
+                    
+                    res = requests.post(url, data = json.dumps(data),headers=headers)
+                    
                     chime_meeting_response = requests.get('https://devchimeapi.rawcaster.com/createmeeting')
                     if chime_meeting_response.status_code == 200:
                         response=json.loads(chime_meeting_response.text)
