@@ -1458,6 +1458,7 @@ def user_profile(db, id):
                 if get_user.chime_user_id
                 else None,
                 "ai_content_length": 100,
+                'test':1
             }
         )
         token_text = (
@@ -5204,7 +5205,7 @@ async def addnuggets(
 #                     return {"status":0,"msg":"Failed to create Nugget master"}
 
 
-@router.post("/list_nuggets")
+@router.post("/listnuggets")
 async def listnuggets(
     db:Session= Depends(deps.get_db),
     token: str = Form(None),
@@ -7734,20 +7735,18 @@ async def addevent(
                 # Create Meeting (Chime API Call)
                 chime_meeting_id=None
                 try:
+                    user_id=11 if login_user_id == 88 else 22 if login_user_id == 67 else 33
+                    data={'joinApprovalRequired': True,'allowOtherToShareScreen':True,'userId':user_id}
                     headers = {'Content-Type': 'application/json'}
-                    url = "https://devchimeapi.rawcaster.com/createmeeting"
+                    url='https://devchimeapi.rawcaster.com/createmeeting'
                     
-                    data={'userId': login_user_id,'MeetingId':meeting_id}
+                    chime_meeting_response = requests.post(url, data = json.dumps(data),headers=headers)
                     
-                    res = requests.post(url, data = json.dumps(data),headers=headers)
-                    
-                    chime_meeting_response = requests.get('https://devchimeapi.rawcaster.com/createmeeting')
                     if chime_meeting_response.status_code == 200:
                         response=json.loads(chime_meeting_response.text)
                         chime_meeting_id=response['result']['Meeting']['MeetingId'] if response['status'] == 200 else None
                         print(chime_meeting_id)
                     
-                        
                 except Exception as e:
                     print(e)
                     return {"status":0,"msg":"Something went wrong"}
