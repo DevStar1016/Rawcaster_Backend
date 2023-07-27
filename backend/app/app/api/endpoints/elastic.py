@@ -194,8 +194,8 @@ router = APIRouter()
                     
            
 # 26. List Nuggets   OLD-API
-@router.post("/list_nuggets")  
-async def list_nuggets(
+@router.post("/listnuggets")  
+async def listnuggets(
     db: Session = Depends(deps.get_db),
     token: str = Form(None),
     my_nuggets: str = Form(None),
@@ -849,47 +849,47 @@ async def list_nuggets(
  
  
  
-@router.post("/show_buffer")
-async def buffer():
-    import mysql.connector
+# @router.post("/show_buffer")
+# async def buffer():
+#     import mysql.connector
 
-    # Replace 'your_username', 'your_password', 'your_host', and 'your_database' with your actual MySQL credentials
-    connection = mysql.connector.connect(
-        user='maemysqluser',
-        password='MaeNewMysql2@2@',
-        host='192.168.1.109',
-        database='rawcaster'
-    )
+#     # Replace 'your_username', 'your_password', 'your_host', and 'your_database' with your actual MySQL credentials
+#     connection = mysql.connector.connect(
+#         user='maemysqluser',
+#         password='MaeNewMysql2@2@',
+#         host='192.168.1.109',
+#         database='rawcaster'
+#     )
 
-    cursor = connection.cursor()
+#     cursor = connection.cursor()
 
-    # new_sort_buffer_size_mb = 5
-    # new_sort_buffer_size_bytes = new_sort_buffer_size_mb * 1024 * 1024
+#     # new_sort_buffer_size_mb = 5
+#     # new_sort_buffer_size_bytes = new_sort_buffer_size_mb * 1024 * 1024
 
-    # Set the new sort_buffer_size using SQL
-    # print(new_sort_buffer_size_bytes)
-    # cursor.execute(f"SET sort_buffer_size = {new_sort_buffer_size_bytes};")
+#     # Set the new sort_buffer_size using SQL
+#     # print(new_sort_buffer_size_bytes)
+#     # cursor.execute(f"SET sort_buffer_size = {new_sort_buffer_size_bytes};")
 
-    # Commit the changes to the database
-    cursor.execute("SHOW VARIABLES LIKE 'sort_buffer_size'")
-    result = cursor.fetchone()
+#     # Commit the changes to the database
+#     cursor.execute("SHOW VARIABLES LIKE 'sort_buffer_size'")
+#     result = cursor.fetchone()
     
-    connection.commit()
+#     connection.commit()
 
-    if result:
-        print(f"sort_buffer_size: {result[1]}")
-    else:
-        print("sort_buffer_size not found.")
+#     if result:
+#         print(f"sort_buffer_size: {result[1]}")
+#     else:
+#         print("sort_buffer_size not found.")
 
-    cursor.close()
-    connection.close()
-    
-    
+#     cursor.close()
+#     connection.close()
     
     
     
-@router.post("/listnuggets")
-async def list_nuggets(
+    
+    
+@router.post("/list__nuggets")
+async def list__nuggets(
     db:Session= Depends(deps.get_db),
     token: str = Form(None),
     my_nuggets: str = Form(None),
@@ -964,10 +964,6 @@ async def list_nuggets(
                          Nuggets.status,
                          NuggetsMaster.content,
                          NuggetsMaster._metadata,
-                         User.user_ref_id,
-                         User.user_status_id,
-                         User.display_name,
-                         User.profile_img,
                          NuggetsMaster.poll_duration,
                         #  func.count(distinct(NuggetsLikes.id)).label('tot_likes'),
                         #  func.count(distinct(NuggetView.id)).label('total_views'),
@@ -975,7 +971,6 @@ async def list_nuggets(
                         #  func.count(distinct(NuggetsSave.id)).label('is_saved'),
                         #  func.count(distinct(NuggetsComments.id)).label('total_comments')
                         )
-                .join(User, Nuggets.user_id == User.id, isouter=True)
                 .join(
                     NuggetsMaster, Nuggets.nuggets_id == NuggetsMaster.id, isouter=True
                 )
@@ -1460,7 +1455,7 @@ async def list_nuggets(
                             if nuggets.created_date
                             else "",
                             "user_id": nuggets.user_id,
-                            "user_ref_id": nuggets.user_ref_id
+                            "user_ref_id": nuggets.user.user_ref_id
                             if nuggets.user_id
                             else "",
                             "account_verify_type": 1 if check_verify else 0,
@@ -1468,19 +1463,19 @@ async def list_nuggets(
                             "original_user_id": nuggets.user_id
                             if nuggets.user_id
                             else "",
-                            "original_user_name": nuggets.display_name
+                            "original_user_name": nuggets.user.display_name
                             if nuggets.user_id
                             else "",
-                            "original_user_image": nuggets.profile_img
+                            "original_user_image": nuggets.user.profile_img
                             if nuggets.user_id
                             else "",
-                            "user_name": nuggets.display_name
+                            "user_name": nuggets.user.display_name
                             if nuggets.user_id
                             else "",
-                            "user_image": nuggets.profile_img
+                            "user_image": nuggets.user.profile_img
                             if nuggets.user_id
                             else "",
-                            "user_status_id": nuggets.user_status_id
+                            "user_status_id": nuggets.user.user_status_id
                             if nuggets.user_id
                             else "",
                             "liked": nugget_like,

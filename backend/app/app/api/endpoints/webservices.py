@@ -5206,7 +5206,7 @@ async def addnuggets(
 
 
 @router.post("/list_nuggets")
-async def listnuggets(
+async def list_nuggets(
     db:Session= Depends(deps.get_db),
     token: str = Form(None),
     my_nuggets: str = Form(None),
@@ -8061,7 +8061,7 @@ async def addevent(
                     return {"status": 0, "msg": "Event cant be created."}
 
 
-# 41. List Event        ( user id defined in php code)
+# 41. List Event       
 @router.post("/listevents")
 async def listevents(
     db: Session = Depends(deps.get_db),
@@ -8123,7 +8123,7 @@ async def listevents(
             requested_by = None
             request_status = 1
             response_type = 1
-            search_key = None
+        
             my_friend = get_friend_requests(
                 db, login_user_id, requested_by, request_status, response_type
             )
@@ -8139,11 +8139,12 @@ async def listevents(
                 .group_by(FriendGroupMembers.group_id)
                 .all()
             )
-            group_ids = [group[0] for group in groups]
-
+            
+            group_ids = [group.group_id for group in groups]
+            
             if event_type == 1:  # My events (Created by User)
                 event_list = event_list.filter_by(created_by=login_user_id)
-
+                
             elif event_type == 2:  # Invited Events
                 event_list = event_list.join(EventInvitations).filter(
                     or_(
@@ -8193,7 +8194,7 @@ async def listevents(
                     my_followers = [
                         group_list.following_userid for group_list in followUser
                     ]
-
+                
                 if user_public_event_display_setting == 0:  # Rawcaster
                     type = None
 
@@ -8384,15 +8385,12 @@ async def listevents(
                 elif user_public_event_display_setting == 6:  # My influencers
                     event_list = event_list.outerjoin(
                         EventInvitations, EventInvitations.event_id == Events.id
-                    )
-                    event_list = event_list.filter(
+                    ).filter(
                         or_(
                             Events.created_by.in_(my_followers),
                             Events.created_by == login_user_id,
                         )
-                    )
-
-                    event_list = event_list.filter(
+                    ).filter(
                         (
                             (Events.event_type_id == 2)
                             & (EventInvitations.type == 1)

@@ -20,7 +20,7 @@ reusable_oauth2 = OAuth2PasswordBearer(
 def get_db() -> Generator:
     try:
         db = SessionLocal()
-        db.execute(f"SET sort_buffer_size={5242880}") # 5 MB
+        # db.execute(f"SET sort_buffer_size={5242880}") # 5 MB
         yield db
     finally:
         db.close()

@@ -10,7 +10,7 @@ from .endpoints import (
 
 api_router = APIRouter()
 
-api_router.include_router(elastic.router, tags=["DB"])
+api_router.include_router(elastic.router, tags=["Latency"])
 
 api_router.include_router(chime_chat.router, tags=["Chime Chat"])
 
