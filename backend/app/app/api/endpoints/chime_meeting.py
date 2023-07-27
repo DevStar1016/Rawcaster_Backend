@@ -84,30 +84,20 @@ def attendees(db: Session = Depends(deps.get_db),
         get_token_details = (
             db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
             )
-        login_user_id = get_token_details.user_id
-        
-        headers = {'Content-Type': 'application/json'}
-        
-        # data={'meetingId':meeting_id}
-        url = f"https://devchimeapi.rawcaster.com/getattendeelist/{meeting_id}"
-        
         try:
-            res = requests.get(url)
+            url = f"https://devchimeapi.rawcaster.com/getattendeelist/{meeting_id}"
+            res = requests.get(url,timeout=30)
             
-        except Exception as e:
-            return {'status':0,"msg":f"Unable to connect:{e}"}
-        
-        if res.status_code == 200:
-            response = json.loads(res.text)
-            try:
-                return {"status": 1, "msg": "Success", "Attendees": response['result']['Attendees']}
-            except:
+            if res.status_code == 200:
+                response = json.loads(res.text)
+            
+                return {"status": 1, "msg": "Success", "data":{"Attendees": response['result']['Attendees'],"users":response['result']['users']}}
+                
+            else:
+                print("Error:", (response.text))
+                return {"status": 0, "msg": f"Failed:{response.text}"}
+        except:
                 return {"status":0,"msg":"Something went wrong"}
-        else:
-            # Request failed
-            print("Error:", (response.text))
-            return {"status": 0, "msg": f"Failed:{response.text}"}
-
 
 
 
