@@ -1458,7 +1458,8 @@ def user_profile(db, id):
                 if get_user.chime_user_id
                 else None,
                 "ai_content_length": 100,
-                'test':1
+                'test':2
+                
             }
         )
         token_text = (
