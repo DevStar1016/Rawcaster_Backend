@@ -47,6 +47,7 @@ def createchimeuser(user_name: str = Form(None)):
 
 
 # @router.post("/create_channel")  # Working
+
 def create_channel(chime_bearer: str = Form(...), group_name: str = Form(...)):
     response = chime.create_channel(
         AppInstanceArn="arn:aws:chime:us-east-1:562114208112:app-instance/6ea8908f-999b-4b3d-9fae-fa1153129087",
@@ -55,7 +56,6 @@ def create_channel(chime_bearer: str = Form(...), group_name: str = Form(...)):
         Privacy="PUBLIC",
         ChimeBearer=chime_bearer,
     )
-    # print(chime_bearer)
     return response
 
 
@@ -209,4 +209,38 @@ def delete_channel(channel_arn: str = Form(...), chime_bearer: str = Form(...)):
 @router.post("/messaging_session")  # Working
 async def messaging_session():
     response = chime.get_messaging_session_endpoint()
+    return response
+
+
+
+# Mobile CHAT
+
+@router.post("/createChannel")  # Working
+def createChannel(chime_bearer: str = Form(...), group_name: str = Form(...)):
+    response = chime.create_channel(
+        AppInstanceArn="arn:aws:chime:us-east-1:562114208112:app-instance/6ea8908f-999b-4b3d-9fae-fa1153129087",
+        Name=group_name,
+        Mode="UNRESTRICTED",
+        Privacy="PUBLIC",
+        ChimeBearer=chime_bearer,
+    )
+    return response
+
+
+@router.post("/addMembers")  # Working
+def addMembers(
+    channel_arn: str = Form(...),
+    chime_bearer: str = Form(...),
+    member_id: Any = Form(..., description="['abc','def']"),
+):
+    print(member_id)
+    group_members = ast.literal_eval(member_id) if member_id else []
+
+    response = chime.batch_create_channel_membership(
+        ChannelArn=channel_arn,
+        Type="DEFAULT",
+        MemberArns=group_members,
+        ChimeBearer=chime_bearer,
+    )
+
     return response
