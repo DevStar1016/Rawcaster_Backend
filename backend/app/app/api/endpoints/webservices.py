@@ -37,8 +37,9 @@ async def test(db: Session = Depends(deps.get_db)):
 
 @router.post("/fetch_data")
 async def fetch_data(db: Session = Depends(deps.get_db)):
-    user=db.query(User).filter(User.status == 1).first()
-    return user
+    user=db.query(User).filter(User.status == 1)
+    
+    return user.first()
 
 
 # 1 Signup User
@@ -1457,8 +1458,7 @@ def user_profile(db, id):
                 "chime_user_id": get_user.chime_user_id
                 if get_user.chime_user_id
                 else None,
-                "ai_content_length": 100,
-                'test':6
+                "ai_content_length": 100
             }
         )
         token_text = (

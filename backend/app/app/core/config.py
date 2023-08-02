@@ -27,7 +27,6 @@ base_upload_folder = "local_uploads"
 
 # Elastic Cache
 # data_base = "redis://master.raew7no6l92n8p4.rljwzo.use1.cache.amazonaws.com:6379"
-# data_base = "redis://replica.raew7no6l92n8p4.rljwzo.use1.cache.amazonaws.com:6379"
 
 # Dev
 # data_base ='mysql+pymysql://Admin:Rawcaster2240422@rawcasterdev.c3xecvdvxfvf.us-east-1.rds.amazonaws.com/rawcasterdev'
@@ -38,8 +37,13 @@ data_base = "mysql+pymysql://maemysqluser:%s@192.168.1.109/rawcaster" % quote("M
 api_doc_path = "/docs"
 
 # AWS Credentials
-access_key = "AKIAYFYE6EFYG6RJOPMF"
-access_secret = "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"
+    # New
+access_key='AKIAYFYE6EFYMSZ77V3H'
+access_secret='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'
+
+    # Old
+# access_key = "AKIAYFYE6EFYG6RJOPMF"
+# access_secret = "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"
 bucket_name = "rawcaster"
 
 # AI Access Key

@@ -663,205 +663,6 @@ async def aichat(
             }
 
 
-# 92  Text To Audio Conversion (Nugget Content)
-@router.post("/nuggetcontentaudio1")
-async def nuggetcontentaudio1(
-    db: Session = Depends(deps.get_db),
-    token: str = Form(None),
-    nugget_id: str = Form(None),
-    translation_type: str = Form(None, description="1-audio,2-text"),
-):
-    if token == None or token.strip() == "":
-        return {
-            "status": -1,
-            "msg": "Sorry! your login session expired. please login again.",
-        }
-    if not nugget_id or not nugget_id.isnumeric():
-        return {"status": 0, "msg": "Check your nugget id"}
-
-    if translation_type and not translation_type.isnumeric():
-        return {"status": 0, "msg": "Check transalation type"}
-    # Check token
-    access_token = checkToken(db, token)
-
-    if access_token == False:
-        return {
-            "status": -1,
-            "msg": "Sorry! your login session expired. please login again.",
-        }
-    else:
-        translation_type = int(translation_type) if translation_type else 1
-        # check Read Out Language
-        get_token_details = (
-            db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
-        )
-        login_user_id = get_token_details.user_id if get_token_details else None
-
-        get_user_readout_language = (
-            db.query(
-                UserSettings.id.label("user_setting_id"),
-                ReadOutLanguage.id.label("read_out_id"),
-                ReadOutLanguage.language_code,
-            )
-            .filter(
-                UserSettings.user_id == login_user_id,
-                ReadOutLanguage.id == UserSettings.read_out_language_id,
-            )
-            .first()
-        )
-
-        target_language = (
-            get_user_readout_language.language_code
-            if get_user_readout_language
-            else "en"
-        )
-
-        # Get nuggets
-        get_nugget = (
-            db.query(Nuggets)
-            .filter(Nuggets.id == nugget_id, Nuggets.status == 1)
-            .first()
-        )
-        if get_nugget:
-            text_contnet = get_nugget.nuggets_master.content if get_nugget else None
-
-            if text_contnet:
-                # Transalate
-                translate = boto3.client(
-                    "translate",
-                    aws_access_key_id=access_key,
-                    aws_secret_access_key=access_secret,
-                    region_name="us-west-2",
-                )
-
-                response = translate.translate_text(
-                    Text=text_contnet,
-                    SourceLanguageCode="auto",  # Automatically detect the source language
-                    TargetLanguageCode=target_language,
-                )
-                transalation_language = response["TranslatedText"]
-
-                if translation_type == 2:
-                    return {
-                        "status": 1,
-                        "msg": "success",
-                        "translation": transalation_language,
-                    }
-                else:
-                    # Create an instance of the Polly client
-                    polly_client = boto3.Session(
-                        aws_access_key_id=access_key,
-                        aws_secret_access_key=access_secret,
-                        region_name="us-west-2",  # Replace with your desired AWS region
-                    ).client("polly")
-
-                    # Specify the desired voice and output format
-                    voice_id = "Joanna"
-                    output_format = "mp3"
-
-                    supported_language = [
-                        "ar-AE",
-                        "en-US",
-                        "en-IN",
-                        "es-MX",
-                        "en-ZA",
-                        "tr-TR",
-                        "ru-RU",
-                        "ro-RO",
-                        "pt-PT",
-                        "pl-PL",
-                        "nl-NL",
-                        "it-IT",
-                        "is-IS",
-                        "fr-FR",
-                        "fi-FI",
-                        "es-ES",
-                        "de-DE",
-                        "yue-CN",
-                        "ko-KR",
-                        "en-NZ",
-                        "en-GB-WLS",
-                        "hi-IN",
-                        "arb",
-                        "cy-GB",
-                        "cmn-CN",
-                        "da-DK",
-                        "en-AU",
-                        "pt-BR",
-                        "nb-NO",
-                        "sv-SE",
-                        "ja-JP",
-                        "es-US",
-                        "ca-ES",
-                        "fr-CA",
-                        "en-GB",
-                        "de-AT",
-                    ]
-
-                    matching_languages = [
-                        lang
-                        for lang in supported_language
-                        if lang.startswith(target_language)
-                    ]
-
-                    # text_without_punctuation = transalation_language.translate(str.maketrans("", "", string.punctuation))
-                    
-                    response = polly_client.synthesize_speech(
-                        Text=transalation_language.replace("*", "asterisk"),
-                        VoiceId=voice_id,
-                        OutputFormat=output_format,
-                        LanguageCode=matching_languages[0]
-                        if matching_languages
-                        else "en-US",
-                    )
-                    # Upload File
-                    base_dir = "rawcaster_uploads"
-
-                    try:
-                        os.makedirs(base_dir, mode=0o777, exist_ok=True)
-                    except OSError as e:
-                        sys.exit(
-                            "Can't create {dir}: {err}".format(dir=base_dir, err=e)
-                        )
-
-                    output_dir = base_dir + "/"
-
-                    filename = f"converted_{int(datetime.now().timestamp())}.mp3"
-
-                    save_full_path = f"{output_dir}{filename}"
-
-                    with open(save_full_path, "wb") as file:
-                        file.write(response["AudioStream"].read())
-
-                    s3_file_path = f"nuggets/converted_audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
-
-                    result = upload_to_s3(save_full_path, s3_file_path)
-
-                    if result["status"] == 1:
-                        # add_audio_file = NuggetContentAudio(
-                        #     nugget_master_id=get_nugget.nuggets_id,
-                        #     path=result["url"],
-                        #     created_at=datetime.utcnow(),
-                        #     status=1,
-                        # )
-                        # db.add(add_audio_file)
-                        # db.commit()
-                        # db.refresh(add_audio_file)
-                        return {
-                            "status": 1,
-                            "msg": "success",
-                            "file_path": result["url"],
-                        }
-
-                    else:
-                        return result
-                # except:
-                #     return {"status":0,"msg":"Unable to convert"}
-
-        else:
-            return {"status": 0, "msg": "Invalid Nugget"}
-
-
 # # 89  AI Response Text Audio
 
 
@@ -1334,30 +1135,36 @@ async def temp_file_upload(
 async def text_to_speech(
     db: Session = Depends(deps.get_db)
 ):
+    # engine = pyttsx3.init()
+    # engine.say("This is Text-To-Speech Engine Pyttsx3")
+    # engine.runAndWait()
+    # engine.stop()
     
     translator = googletrans.Translator()
-    text = 'La grammaire est une langue scintillante.'
-    translated = translator.translate(text, dest='ta')
+    text = 'Rawcaster allows you to configure your meeting to either allow anyone to join or restrict it to a select few. Break out rooms, schmoozing, online chats, voting are some of the features Rawcaster provides with this feature.'
+    translated = translator.translate(text)
     engine = pyttsx3.init()
-    return translated.text
+    # return translated.text
+    
 
-    # rate = engine.getProperty('rate')
-    # engine.setProperty('rate', rate - 50) 
+    rate = engine.getProperty('rate')
+    engine.setProperty('rate', rate - 50) 
     
-    # voices = engine.getProperty('voices')
-    
-    # for voice in voices:
-    #     if 'fr' in voice.id:
-    #         print(voice.id)
-    #         engine.setProperty('voice', voice.id)
-    #         break
+    voices = engine.getProperty('voices')
+   
+    for voice in voices:
+        print(voice)
+        if 'in' in voice.id:
+            print(voice.id)
+            engine.setProperty('voice', voice.id)
+            break
         
-    # # Save the audio to a file
-    # print(translated.text)
-    # output_file = "output.wav"
-    # engine.save_to_file(translated.text, output_file)
+    # Save the audio to a file
+    print(translated.text)
+    output_file = "output.wav"
+    engine.save_to_file(translated.text, output_file)
 
-    # engine.runAndWait()
+    engine.runAndWait()
 
     
 # # 92  Text To Audio Conversion (Nugget Content)
