@@ -30,170 +30,14 @@ Base = declarative_base()
 
 
 
-# @router.post("/searchrawcasterusers")
-# async def searchrawcasterusers(
-#     db: Session = Depends(deps.get_db),
-#     token: str = Form(None),
-#     auth_code: str = Form(None, description="SALT + token"),
-#     search_key: str = Form(None),
-#     page_number: str = Form(default=1),
-# ):
-#     if token == None or token.strip() == "":
-#         return {
-#             "status": -1,
-#             "msg": "Sorry! your login session expired. please login again.",
-#         }
-#     elif auth_code == None or auth_code.strip() == "":
-#         return {"status": -1, "msg": "Auth Code is missing"}
-#     elif not str(page_number).isnumeric():
-#         return {"status": 0, "msg": "Invalid page Number"}
+from fastapi import FastAPI, File, UploadFile
+from pydub import AudioSegment
+@router.post("/ios_audio")
+async def ios_audio(db:Session= Depends(deps.get_db),file:UploadFile=File(None)):
+    audio = AudioSegment.from_file(file.file, format=file.content_type)
+    converted_audio = audio.export(f"converted_{file.filename}.mp3", format="mp3")
 
-#     else:
-#         access_token = checkToken(db, token.strip())
-#         auth_text = token.strip()
-#         if checkAuthCode(auth_code.strip(), auth_text) == False:
-#             return {"status": 0, "msg": "Authentication failed!"}
-#         else:
-#             if access_token == False:
-#                 return {
-#                     "status": -1,
-#                     "msg": "Sorry! your login session expired. please login again.",
-#                 }
-#             else:
-#                 login_user_email = ""
-#                 get_token_details = (
-#                     db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
-#                 )
-
-#                 login_user_id = get_token_details.user_id if get_token_details else None
-#                 login_user_email = (
-#                     get_token_details.user.email_id if get_token_details else None
-#                 )
-
-#                 current_page_no = int(page_number)
-                
-#                 get_user = db.query(
-#                     User.id,
-#                     User.email_id,
-#                     User.user_ref_id,
-#                     User.first_name,
-#                     User.last_name,
-#                     User.display_name,
-#                     User.gender,
-#                     User.profile_img,
-#                     User.geo_location,
-#                     User.bio_data,
-#                     MyFriends.request_status.label('friend_request_status'),
-#                     FollowUser.id.label('follow_id')
-#                 ).select_from(User).outerjoin(MyFriends, 
-#                     ((MyFriends.sender_id == User.id) | (MyFriends.receiver_id == User.id))
-#                     & (MyFriends.status == 1)
-#                     & ((MyFriends.sender_id == login_user_id) | (MyFriends.receiver_id == login_user_id))
-#                 ).outerjoin(FollowUser,
-#                     (FollowUser.following_userid == User.id)
-#                     & (FollowUser.follower_userid == login_user_id)
-#                 ).filter(User.status == 1, User.id != login_user_id)
-                
-#                 # Omit blocked users --
-#                 request_status = 3
-#                 response_type = 1
-#                 requested_by = None
-#                 get_all_blocked_users = get_friend_requests(
-#                     db, login_user_id, requested_by, request_status, response_type
-#                 )
-#                 blocked_users = get_all_blocked_users["blocked"]
-
-#                 if blocked_users:
-#                     get_user = get_user.filter(User.id.not_in(blocked_users))
-
-#                 if search_key:
-#                     get_user = get_user.filter(
-#                         or_(
-#                             User.email_id.ilike(search_key + "%"),
-#                             User.mobile_no.ilike(search_key + "%"),
-#                             User.display_name.ilike("%" + search_key + "%"),
-#                             User.first_name.ilike("%" + search_key + "%"),
-#                             User.last_name.ilike("%" + search_key + "%"),
-#                         )
-#                     )
-
-#                 get_row_count = get_user.count()
-
-#                 if get_row_count < 1:
-#                     if login_user_email == search_key:
-#                         return {"status": 0, "msg": "No Result found", "invite_flag": 0}
-#                     else:
-#                         return {"status": 0, "msg": "No Result found", "invite_flag": 1}
-#                 else:
-#                     default_page_size = 25
-#                     limit, offset, total_pages = get_pagination(
-#                         get_row_count, current_page_no, default_page_size
-#                     )
-#                     # Apply Pagination
-#                     get_user = (
-#                         get_user.order_by(User.first_name.asc())
-#                         .limit(limit)
-#                         .offset(offset)
-#                         .all()
-#                     )
-
-#                     user_list = []
-                    
-#                     for user in get_user:
-
-#                         get_follow_user_details = db.query(FollowUser).filter(
-#                             FollowUser.following_userid == user.id
-#                         )
-
-#                         get_follow_user = get_follow_user_details.filter(
-#                             FollowUser.follower_userid == login_user_id
-#                         ).first()
-
-#                         follow_count = get_follow_user_details.count()
-
-#                         mutual_friends = MutualFriends(db, login_user_id, user.id)
-
-#                         user_list.append(
-#                             {
-#                                 "user_id": user.id,
-#                                 "user_ref_id": user.user_ref_id,
-#                                 "email_id": user.email_id if user.email_id else "",
-#                                 "first_name": user.first_name
-#                                 if user.first_name
-#                                 else "",
-#                                 "last_name": user.last_name if user.last_name else "",
-#                                 "display_name": user.display_name
-#                                 if user.display_name
-#                                 else "",
-#                                 "gender": user.gender if user.gender else "",
-#                                 "profile_img": user.profile_img
-#                                 if user.profile_img
-#                                 else "",
-#                                 "friend_request_status": user.friend_request_status
-#                                 if user.friend_request_status
-#                                 else "",
-#                                 "follow": True if get_follow_user else False,
-#                                 "follow_count": follow_count,
-#                                 "location": user.geo_location
-#                                 if user.geo_location
-#                                 else "",
-#                                 "mutual_friends": mutual_friends,
-#                                 "bio_data": ProfilePreference(
-#                                     db,
-#                                     login_user_id,
-#                                     user.id,
-#                                     "bio_display_status",
-#                                     user.bio_data,
-#                                 ),
-#                             }
-#                         )
-#                     return {
-#                         "status": 1,
-#                         "msg": "Success",
-#                         "total_pages": total_pages,
-#                         "current_page_no": current_page_no,
-#                         "users_list": user_list,
-#                     }
+    return {"filename": f"converted_{file.filename}.mp3"}
 
 
 class Nuggetss(Base):
@@ -322,7 +166,7 @@ async def list_nuggets(
                 .group_by(NuggetsSave.nugget_id)
                 .subquery()
             )
-
+            
             get_nuggets = (
                 db.query(
                         Nuggets.id,
@@ -347,7 +191,7 @@ async def list_nuggets(
                         nuggets_save.c.save_count,
                 ).filter(Nuggets.id == Nuggets.id,Nuggets.status == 1,Nuggets.nugget_status == 1,NuggetsMaster.status == 1)
             )
-    
+           
             if search_key:
                 get_nuggets = get_nuggets.filter(
                     or_(

@@ -16,8 +16,8 @@ bucket_name = config.bucket_name
 
 chime = boto3.client(
     "chime",
-    aws_access_key_id="AKIAYFYE6EFYG6RJOPMF",
-    aws_secret_access_key="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",
+    aws_access_key_id=access_key,
+    aws_secret_access_key=access_secret,
     region_name="us-east-1",
 )
 
