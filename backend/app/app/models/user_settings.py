@@ -30,7 +30,7 @@ class UserSettings(Base):
     participant_audio = Column(TINYINT, default=1)
     participant_video = Column(TINYINT, default=1)
     melody = Column(Integer)
-    meeting_header_image = Column(String(500))
+    meeting_header_image = Column(String(500)) 
     friend_request = Column(String(5), default=100)
     nuggets = Column(String(5), default=100)
     events = Column(String(5), default=100)
