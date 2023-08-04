@@ -153,7 +153,7 @@ async def listnuggetsnew(
             type = None
             raw_id = GetRawcasterUserID(db, type)
     
-            get_nugget=db.query(Nuggets.id,
+            get_nuggets=db.query(Nuggets.id,
                         Nuggets.nuggets_id,
                         Nuggets.user_id,
                         Nuggets.type,
@@ -161,16 +161,34 @@ async def listnuggetsnew(
                         Nuggets.created_date,
                         Nuggets.nugget_status,
                         Nuggets.status,
+                        NuggetsMaster.content,
+                        NuggetsMaster._metadata,
+                        NuggetsMaster.poll_duration,
+                        User.user_ref_id,
+                        User.user_status_id,
+                        User.display_name,
+                        User.profile_img,
                         func.count(NuggetsLikes.nugget_id).label("likes_count"),
                         func.count(NuggetView.nugget_id).label("view_count"),
                         func.count(NuggetPollVoted.nugget_id).label("poll_count"),
                        ).join(NuggetsLikes,Nuggets.id == NuggetsLikes.nugget_id,isouter=True)\
                         .join(NuggetView, Nuggets.id == NuggetView.nugget_id, isouter=True)\
                         .join(NuggetPollVoted,NuggetPollVoted.nugget_id == Nuggets.id,isouter=True)\
-                        .filter(Nuggets.status == 1,NuggetsLikes.status == 1).group_by(Nuggets.id)
-                       
+                        .join(NuggetsMaster,Nuggets.nuggets_id == NuggetsMaster.id, isouter=True)\
+                        .join(User,Nuggets.user_id == User.id, isouter=True)\
+                        .filter(Nuggets.status == 1,NuggetsLikes.status == 1,NuggetsMaster.status == 1).group_by(Nuggets.id)
             
-            return get_nugget.limit(10).offset(0).all()
+            if search_key:
+                get_nuggets = get_nuggets.filter(
+                    or_(
+                        NuggetsMaster.content.ilike("%" + search_key + "%"),
+                        User.display_name.ilike("%" + search_key + "%"),
+                        User.first_name.ilike("%" + search_key + "%"),
+                        User.last_name.ilike("%" + search_key + "%"),
+                    )
+                )
+            
+            return get_nuggets.limit(10).offset(0).all()
             
  
  
@@ -302,7 +320,7 @@ async def list_nuggets(
                 .group_by(Nuggets.id)
             )
             get_nuggets =  get_nuggets.order_by(Nuggets.id.desc()).limit(10).offset(0).all()
-            return get_nuggets
+            
             for row in get_nuggets:
                 return row.NuggetsShareWith
             if search_key:
