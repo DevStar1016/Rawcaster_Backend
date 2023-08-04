@@ -92,15 +92,88 @@ async def listnuggetsnew(
     nugget_type: str = Form(None, description="1-video,2-Other than video,0-all"),
     ):
     
-    get_nugget=db.query(Nuggets).filter(Nuggets.status == 1).order_by(Nuggets.id.desc()).limit(100).offset(0).all()
-    return get_nugget
+    if token == None or token.strip() == "":
+        return {
+            "status": -1,
+            "msg": "Sorry! your login session expired. please login again.",
+        }
+    elif nugget_type and not nugget_type.isnumeric():
+        return {"status": 0, "msg": "Invalid Nugget Type"}
+
+    elif nugget_type and not 0 <= int(nugget_type) <= 2:
+        return {"status": 0, "msg": "Invalid Nugget Type"}
+    elif not str(page_number).isnumeric():
+        return {"status": 0, "msg": "Invalid page Number"}
+    else:
+        nugget_type = int(nugget_type) if nugget_type else None
+        filter_type = int(filter_type) if filter_type else None
+        saved = int(saved) if saved else None
+
+        access_token = checkToken(db, token) if token != "RAWCAST" else True
+        if access_token == False:
+            return {
+                "status": -1,
+                "msg": "Sorry! your login session expired. please login again.",
+            }
+        else:
+            status = 0
+            msg = "Invalid nugget id"
+            get_token_details = (
+                db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+            )
+
+            user_public_nugget_display_setting = 1
+            login_user_id = 0
+            if get_token_details:
+                login_user_id = get_token_details.user_id
+
+                get_user_settings = (
+                    db.query(UserSettings)
+                    .filter(UserSettings.user_id == login_user_id)
+                    .first()
+                )
+                if get_user_settings:
+                    user_public_nugget_display_setting = (
+                        get_user_settings.public_nugget_display
+                    )
+
+            current_page_no = int(page_number)
+            user_id = int(user_id) if user_id else None
+
+            group_ids = getGroupids(db, login_user_id)
+            requested_by = None
+            request_status = 1  # Pending
+            response_type = 1
+            my_frnds = get_friend_requests(
+                db, login_user_id, requested_by, request_status, response_type
+            )
+            my_friends = my_frnds["accepted"]
+
+            my_followings = getFollowings(db, login_user_id)
+            type = None
+            raw_id = GetRawcasterUserID(db, type)
     
+            get_nugget=db.query(Nuggets.id,
+                        Nuggets.nuggets_id,
+                        Nuggets.user_id,
+                        Nuggets.type,
+                        Nuggets.share_type,
+                        Nuggets.created_date,
+                        Nuggets.nugget_status,
+                        Nuggets.status,
+                        func.count(NuggetsLikes.nugget_id).label("likes_count")
+                       ).join(NuggetsLikes,Nuggets.id == NuggetsLikes.nugget_id,isouter=True)\
+                        .filter(Nuggets.status == 1,NuggetsLikes.status == 1).group_by(Nuggets.id)
+                       
+            
+            return get_nugget.limit(10).offset(0).all()
+            
  
  
  
 from sqlalchemy.orm import joinedload
-@router.post("/listnuggets")  
-async def listnuggets(
+@router.post("/list_nuggets")  
+async def list_nuggets(
     db: Session = Depends(deps.get_db),
     token: str = Form(None),
     my_nuggets: str = Form(None),
