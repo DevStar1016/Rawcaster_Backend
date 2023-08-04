@@ -399,8 +399,40 @@ async def listnuggetsnew(
                             and_(Nuggets.user_id.in_(my_followers)),
                             Nuggets.share_type != 2,
                         )
-                    )             
-            return get_nuggets.limit(10).offset(0).all()
+                    )  
+                else:
+                    get_nuggets=get_nuggets.filter(User.influencer_category.like("%" + category + "%"))
+                    
+            # Omit blocked users nuggets
+            requested_by = None
+            request_status = 3  # Rejected
+            response_type = 1
+
+            get_all_blocked_users = get_friend_requests(
+                db, login_user_id, requested_by, request_status, response_type
+            )
+            
+            blocked_users = get_all_blocked_users["blocked"]
+
+            if blocked_users:
+                get_nuggets = get_nuggets.filter(Nuggets.user_id.not_in(blocked_users))
+
+            get_nuggets = get_nuggets.order_by(Nuggets.created_date.desc())
+
+            get_nuggets_count = get_nuggets.count()
+
+            if get_nuggets_count < 1:
+                return {"status": 0, "msg": "No Result found"}
+            else:
+                default_page_size = 10
+                limit, offset, total_pages = get_pagination(
+                    get_nuggets_count, current_page_no, default_page_size
+                )
+
+                get_nuggets = get_nuggets.limit(limit).offset(offset).all()
+                
+            
+            return get_nuggets
             
  
  
