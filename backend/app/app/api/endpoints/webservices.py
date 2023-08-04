@@ -7784,7 +7784,7 @@ async def addevent(
                 # Create Meeting (Chime API Call)
                 chime_meeting_id=None
                 try:
-                    user_id=11 if login_user_id == 88 else 22 if login_user_id == 67 else 33
+                    user_id=11 if login_user_id == 88 else 22 if login_user_id == 67 else 33 if login_user_id == 121 else 44 if login_user_id == 728 else 55 if login_user_id == 164 else 66 if login_user_id == 684 else 77
                     shareScreen=True if user_screenshare == 1 else False
                     joinApprovalRequired=False if event_type == 1 else True 
                     data={'joinApprovalRequired': True,'allowOtherToShareScreen':shareScreen,'userId':user_id}
