@@ -5201,8 +5201,8 @@ async def addnuggets(
 
      
 # 26. List Nuggets   OLD-API
-@router.post("/list_nuggets")  
-async def list_nuggets(
+@router.post("/listnuggets")  
+async def listnuggets(
     db: Session = Depends(deps.get_db),
     token: str = Form(None),
     my_nuggets: str = Form(None),
