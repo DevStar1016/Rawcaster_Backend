@@ -171,11 +171,13 @@ async def listnuggetsnew(
                         func.count(NuggetsLikes.nugget_id).label("likes_count"),
                         func.count(NuggetView.nugget_id).label("view_count"),
                         func.count(NuggetPollVoted.nugget_id).label("poll_count"),
+                        func.count(NuggetsComments.nugget_id).label("comment_count"),
                        ).join(NuggetsLikes,Nuggets.id == NuggetsLikes.nugget_id,isouter=True)\
                         .join(NuggetView, Nuggets.id == NuggetView.nugget_id, isouter=True)\
                         .join(NuggetPollVoted,NuggetPollVoted.nugget_id == Nuggets.id,isouter=True)\
                         .join(NuggetsMaster,Nuggets.nuggets_id == NuggetsMaster.id, isouter=True)\
                         .join(User,Nuggets.user_id == User.id, isouter=True)\
+                        .join(NuggetsComments,NuggetsComments.nugget_id == Nuggets.id,isouter=True)\
                         .filter(Nuggets.status == 1,NuggetsLikes.status == 1,NuggetsMaster.status == 1).group_by(Nuggets.id)
             
             if search_key:
@@ -187,6 +189,28 @@ async def listnuggetsnew(
                         User.last_name.ilike("%" + search_key + "%"),
                     )
                 )
+            if access_token == "RAWCAST":
+                get_nuggets = get_nuggets.filter(Nuggets.share_type == 1)
+                
+                if nugget_type == 1:  # Video Nugget
+                    get_nuggets = get_nuggets.join(
+                        NuggetsAttachment,
+                        Nuggets.nuggets_id == NuggetsAttachment.nugget_id,
+                        isouter=True,
+                    ).filter(NuggetsAttachment.media_type == "video")
+
+                elif nugget_type == 2:  # Other type
+                    get_nuggets = get_nuggets.join(
+                        NuggetsAttachment,
+                        Nuggets.nuggets_id == NuggetsAttachment.nugget_id,
+                        isouter=True,
+                    ).filter(
+                        or_(
+                            NuggetsAttachment.media_type == None,
+                            NuggetsAttachment.media_type == "image",
+                            NuggetsAttachment.media_type == "audio",
+                        )
+                    )  
             
             return get_nuggets.limit(10).offset(0).all()
             
