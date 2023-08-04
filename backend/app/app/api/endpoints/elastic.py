@@ -63,10 +63,10 @@ async def view_test(db:Session= Depends(deps.get_db)):
 async def test_list(db:Session= Depends(deps.get_db)):
     nuggets_data = db.query(Nuggets).all()
     return nuggets_data
-
-@router.post("/list_nuggets")
-async def list_nuggets(
-    db:Session= Depends(deps.get_db),
+ 
+@router.post("/listnuggets")  
+async def listnuggets(
+    db: Session = Depends(deps.get_db),
     token: str = Form(None),
     my_nuggets: str = Form(None),
     filter_type: str = Form(None, description="1-Influencer"),
@@ -76,18 +76,18 @@ async def list_nuggets(
     search_key: str = Form(None),
     page_number: str = Form(default=1),
     nugget_type: str = Form(None, description="1-video,2-Other than video,0-all"),
-    ):
+):
     
     if token == None or token.strip() == "":
         return {
             "status": -1,
-            "msg": "Sorry! your login db expired. please login again.",
+            "msg": "Sorry! your login session expired. please login again.",
         }
     elif nugget_type and not nugget_type.isnumeric():
-        return {"status": 0, "msg": "Invalid Nuggets Type"}
+        return {"status": 0, "msg": "Invalid Nugget Type"}
 
     elif nugget_type and not 0 <= int(nugget_type) <= 2:
-        return {"status": 0, "msg": "Invalid Nuggets Type"}
+        return {"status": 0, "msg": "Invalid Nugget Type"}
     elif not str(page_number).isnumeric():
         return {"status": 0, "msg": "Invalid page Number"}
     else:
@@ -99,77 +99,49 @@ async def list_nuggets(
         if access_token == False:
             return {
                 "status": -1,
-                "msg": "Sorry! your login db expired. please login again.",
+                "msg": "Sorry! your login session expired. please login again.",
             }
         else:
             status = 0
             msg = "Invalid nugget id"
             get_token_details = (
-                db.query(ApiTokens.user_id,UserSettings.public_nugget_display).join(User,User.id == ApiTokens.user_id).outerjoin(UserSettings,UserSettings.user_id == User.id ).filter(ApiTokens.token == access_token).first()
+                db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
             )
 
             user_public_nugget_display_setting = 1
             login_user_id = 0
             if get_token_details:
                 login_user_id = get_token_details.user_id
-                user_public_nugget_display_setting=get_token_details.public_nugget_display
-            
+
+                get_user_settings = (
+                    db.query(UserSettings)
+                    .filter(UserSettings.user_id == login_user_id)
+                    .first()
+                )
+                if get_user_settings:
+                    user_public_nugget_display_setting = (
+                        get_user_settings.public_nugget_display
+                    )
+
             current_page_no = int(page_number)
             user_id = int(user_id) if user_id else None
-            
-            group_ids=getGroupids(db,login_user_id)
+
+            group_ids = getGroupids(db, login_user_id)
             requested_by = None
             request_status = 1  # Pending
             response_type = 1
-            my_frnds = get_friend_requests(db, login_user_id, requested_by, request_status, response_type)
-            
+            my_frnds = get_friend_requests(
+                db, login_user_id, requested_by, request_status, response_type
+            )
             my_friends = my_frnds["accepted"]
+
             my_followings = getFollowings(db, login_user_id)
-            
-            type=None
+            type = None
             raw_id = GetRawcasterUserID(db, type)
-            
-            nuggets_likes = (
-                db.query(NuggetsLikes.nugget_id, func.count(NuggetsLikes.nugget_id).label("likes_count"))
-                .filter(NuggetsLikes.status == 1)
-                .group_by(NuggetsLikes.nugget_id)
-                .subquery()
-            )
+        
 
-            nuggets_comments = (
-                db.query(
-                    NuggetsComments.nugget_id,
-                    func.count(NuggetsComments.nugget_id).label("comments_count"),
-                )
-                .filter(NuggetsComments.status == 1)
-                .group_by(NuggetsComments.nugget_id)
-                .subquery()
-            )
-
-            nuggets_share_with = (
-                db.query(
-                    NuggetsShareWith.nuggets_id,
-                    func.count(NuggetsShareWith.nuggets_id).label("share_with_count"),
-                )
-                .group_by(NuggetsShareWith.nuggets_id)
-                .subquery()
-            )
-
-            nugget_view = (
-                db.query(NuggetView.nugget_id, func.count(NuggetView.nugget_id).label("view_count"))
-                .group_by(NuggetView.nugget_id)
-                .subquery()
-            )
-
-            nuggets_save = (
-                db.query(NuggetsSave.nugget_id, func.count(NuggetsSave.nugget_id).label("save_count"))
-                .group_by(NuggetsSave.nugget_id)
-                .subquery()
-            )
-            
             get_nuggets = (
-                db.query(
-                        Nuggets.id,
+                db.query(Nuggets.id,
                         Nuggets.nuggets_id,
                         Nuggets.user_id,
                         Nuggets.type,
@@ -184,14 +156,40 @@ async def list_nuggets(
                         User.display_name,
                         User.profile_img,
                         NuggetsMaster.poll_duration,
-                        nuggets_likes.c.likes_count,
-                        nuggets_comments.c.comments_count,
-                        nuggets_share_with.c.share_with_count,
-                        nugget_view.c.view_count,
-                        nuggets_save.c.save_count,
-                ).filter(Nuggets.id == Nuggets.id,Nuggets.status == 1,Nuggets.nugget_status == 1,NuggetsMaster.status == 1)
+                        func.count(NuggetsLikes.nugget_id).label("likes_count"),
+                        func.count(NuggetsComments.nugget_id).label("comment_count"),
+                        func.count(NuggetView.nugget_id).label("view_count"),
+                        func.count(NuggetPollVoted.nugget_id).label("poll_count"),
+                         
+                        )
+                .join(User, Nuggets.user_id == User.id, isouter=True)
+                .join(
+                    NuggetsMaster, Nuggets.nuggets_id == NuggetsMaster.id, isouter=True
+                )
+                .join(
+                    NuggetPollVoted,
+                    NuggetPollVoted.nugget_id == Nuggets.id,
+                    isouter=True,
+                )
+                .join(NuggetsComments,NuggetsComments.nugget_id == Nuggets.id,isouter=True)
+                .join(
+                    NuggetsLikes,
+                    (Nuggets.id == NuggetsLikes.nugget_id) & (NuggetsLikes.status == 1),
+                    isouter=True,
+                )
+                .join(
+                    NuggetsShareWith,
+                    Nuggets.id == NuggetsShareWith.nuggets_id,
+                    isouter=True,
+                )
+                .join(NuggetView, Nuggets.id == NuggetView.nugget_id, isouter=True)
+                .join(NuggetsSave, Nuggets.id == NuggetsSave.nugget_id, isouter=True)
+                .filter(Nuggets.status == 1)
+                .filter(Nuggets.nugget_status == 1)
+                .filter(NuggetsMaster.status == 1)
+                .group_by(Nuggets.id)
             )
-           
+            
             if search_key:
                 get_nuggets = get_nuggets.filter(
                     or_(
@@ -201,8 +199,7 @@ async def list_nuggets(
                         User.last_name.ilike("%" + search_key + "%"),
                     )
                 )
-            
-            # get_nuggets for nuggets permission
+
             if access_token == "RAWCAST":  # When Customer not login
                 get_nuggets = get_nuggets.filter(Nuggets.share_type == 1)
 
@@ -231,15 +228,14 @@ async def list_nuggets(
 
             elif saved == 1:
                 get_nuggets = get_nuggets.filter(NuggetsSave.user_id == login_user_id)
-
+                
             elif user_id:
-
                 if login_user_id != user_id:
                     get_nuggets = get_nuggets.filter(
                         Nuggets.user_id == user_id, Nuggets.share_type == 1
                     )
                 get_nuggets = get_nuggets.filter(Nuggets.user_id == user_id)
-
+                    
             else:
                 if nugget_type == 1:  # Video
                     get_nuggets = get_nuggets.filter(
@@ -429,7 +425,7 @@ async def list_nuggets(
                     get_nuggets = get_nuggets.filter(
                         User.influencer_category.like("%" + category + "%"),
                     )
-         
+
             # Omit blocked users nuggets
             requested_by = None
             request_status = 3  # Rejected
@@ -451,23 +447,50 @@ async def list_nuggets(
             if get_nuggets_count < 1:
                 return {"status": 0, "msg": "No Result found"}
             else:
-                default_page_size = 20
+                default_page_size = 10
                 limit, offset, total_pages = get_pagination(
                     get_nuggets_count, current_page_no, default_page_size
                 )
 
                 get_nuggets = get_nuggets.limit(limit).offset(offset).all()
-                
                 nuggets_list = []
+               
                 for nuggets in get_nuggets:
                     attachments = []
                     poll_options = []
                     is_downloadable = 0
+                    
+                    # tot_likes = (
+                    #     db.query(NuggetsLikes.id)
+                    #     .filter(
+                    #         NuggetsLikes.nugget_id == nuggets.id,
+                    #         NuggetsLikes.status == 1,
+                    #     )
+                    #     .count()
+                    # )
+
+                    # total_comments = (
+                    #     db.query(NuggetsComments.id)
+                    #     .filter(NuggetsComments.nugget_id == nuggets.id)
+                    #     .count()
+                    # )
+
+                    # total_views = (
+                    #     db.query(NuggetView.id)
+                    #     .filter(NuggetView.nugget_id == nuggets.id)
+                    #     .count()
+                    # )
+
+                    # total_vote = (
+                    #     db.query(NuggetPollVoted.id)
+                    #     .filter(NuggetPollVoted.nugget_id == nuggets.id)
+                    #     .count()
+                    # )
 
                     img_count = 0
                     shared_detail = []
                     get_nugget_share = (
-                        db.query(NuggetsShareWith.type,NuggetsShareWith.share_with)
+                        db.query(NuggetsShareWith)
                         .filter(NuggetsShareWith.nuggets_id == nuggets.id)
                         .all()
                     )
@@ -481,7 +504,7 @@ async def list_nuggets(
 
                         if type == 1:
                             friend_groups = (
-                                db.query(FriendGroups.id,FriendGroups.group_name,FriendGroups.group_icon)
+                                db.query(FriendGroups)
                                 .filter(FriendGroups.id.in_(shared_group_ids))
                                 .all()
                             )
@@ -495,7 +518,7 @@ async def list_nuggets(
                                 )
                         elif type == 2:
                             friend_groups = (
-                                db.query(User.display_name,User.profile_img,User.id)
+                                db.query(User)
                                 .filter(User.id.in_(shared_group_ids))
                                 .all()
                             )
@@ -529,7 +552,7 @@ async def list_nuggets(
                             )
 
                     get_nugget_poll_option = (
-                        db.query(NuggetPollOption.id,NuggetPollOption.option_name,NuggetPollOption.poll_vote_percentage,NuggetPollOption.votes,NuggetPollOption.status)
+                        db.query(NuggetPollOption)
                         .filter(
                             NuggetPollOption.nuggets_master_id == nuggets.nuggets_id,
                             NuggetPollOption.status == 1,
@@ -587,6 +610,15 @@ async def list_nuggets(
                         )
                         .first()
                     )
+                    saved = (
+                        db.query(NuggetsSave)
+                        .filter(
+                            NuggetsSave.nugget_id == nuggets.id,
+                            NuggetsSave.user_id == login_user_id,
+                            NuggetsSave.status == 1,
+                        )
+                        .count()
+                    )
 
                     if nuggets.share_type == 1:
                         if following == 1:
@@ -643,7 +675,7 @@ async def list_nuggets(
                             else "",
                             "account_verify_type": 1 if check_verify else 0,
                             "type": nuggets.type,
-                            "original_user_id": nuggets.user_id
+                            "original_user_id": nuggets.id
                             if nuggets.user_id
                             else "",
                             "original_user_name": nuggets.display_name
@@ -665,9 +697,9 @@ async def list_nuggets(
                             "viewed": 0,
                             "following": True if following > 0 else False,
                             "follow_count": follow_count,
-                            # "total_likes": nuggets.tot_likes,
-                            # "total_comments": nuggets.total_comments,
-                            # "total_views": nuggets.total_views,
+                            "total_likes": nuggets.likes_count,
+                            "total_comments": nuggets.comment_count,
+                            "total_views": nuggets.view_count,
                             "total_media": img_count,
                             "share_type": nuggets.share_type,
                             "media_list": attachments,
@@ -684,8 +716,8 @@ async def list_nuggets(
                             "poll_duration": nuggets.poll_duration,
                             "voted": 1 if voted else 0,
                             "voted_option": voted.poll_option_id if voted else None,
-                            # "total_vote": nuggets.total_vote if nuggets.total_vote else 0,
-                            # "saved": True if nuggets.is_saved == 1 else False,
+                            "total_vote": nuggets.poll_count,
+                            "saved": True if saved == 1 else False,
                         }
                     )
 
@@ -696,8 +728,9 @@ async def list_nuggets(
                     "total_pages": total_pages,
                     "current_page_no": current_page_no,
                     "nuggets_list": nuggets_list,
-                }    
-      
+                }
+
+ 
  
  
 # @router.post("/show_buffer")
