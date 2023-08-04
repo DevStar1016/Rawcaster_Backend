@@ -211,7 +211,19 @@ async def listnuggetsnew(
                             NuggetsAttachment.media_type == "audio",
                         )
                     )  
+            elif my_nuggets == 1:  # My Nuggets
+                get_nuggets = get_nuggets.filter(Nuggets.user_id == login_user_id)
             
+            elif saved == 1:     # Saved Nuggets
+                get_nuggets = get_nuggets.filter(NuggetsSave.user_id == login_user_id)
+                
+            elif user_id:        # Other's Nuggets
+                if login_user_id != user_id:
+                    get_nuggets = get_nuggets.filter(
+                        Nuggets.user_id == user_id, Nuggets.share_type == 1
+                    )
+                get_nuggets = get_nuggets.filter(Nuggets.user_id == user_id)
+                 
             return get_nuggets.limit(10).offset(0).all()
             
  
