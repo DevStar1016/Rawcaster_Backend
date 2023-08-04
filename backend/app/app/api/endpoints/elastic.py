@@ -161,8 +161,12 @@ async def listnuggetsnew(
                         Nuggets.created_date,
                         Nuggets.nugget_status,
                         Nuggets.status,
-                        func.count(NuggetsLikes.nugget_id).label("likes_count")
+                        func.count(NuggetsLikes.nugget_id).label("likes_count"),
+                        func.count(NuggetView.nugget_id).label("view_count"),
+                        func.count(NuggetPollVoted.nugget_id).label("poll_count"),
                        ).join(NuggetsLikes,Nuggets.id == NuggetsLikes.nugget_id,isouter=True)\
+                        .join(NuggetView, Nuggets.id == NuggetView.nugget_id, isouter=True)\
+                        .join(NuggetPollVoted,NuggetPollVoted.nugget_id == Nuggets.id,isouter=True)\
                         .filter(Nuggets.status == 1,NuggetsLikes.status == 1).group_by(Nuggets.id)
                        
             
