@@ -30,14 +30,27 @@ Base = declarative_base()
 
 
 
-from fastapi import FastAPI, File, UploadFile
-from pydub import AudioSegment
-@router.post("/ios_audio")
-async def ios_audio(db:Session= Depends(deps.get_db),file:UploadFile=File(None)):
-    audio = AudioSegment.from_file(file.file, format=file.content_type)
-    converted_audio = audio.export(f"converted_{file.filename}.mp3", format="mp3")
 
-    return {"filename": f"converted_{file.filename}.mp3"}
+@router.post("/audio")
+async def audio(db:Session= Depends(deps.get_db)):
+    from gtts import gTTS
+    import os
+
+    def text_to_speech(text, language='es', filename='output.mp3'):
+        import googletrans
+        
+        translator = googletrans.Translator()
+        translated = translator.translate(text,dest='es')
+        translated_text=translated.text
+        
+        tts = gTTS(text=translated_text, lang=language, slow=False)
+        tts.save(filename)
+        os.system(f"start {filename}")  # This will play the speech on Windows. Modify for other OS.
+    
+    text='Rawcaster allows you to configure your meeting to either allow anyone to join or restrict it to a select few. Break out rooms, schmoozing, online chats, voting are some of the features Rawcaster provides with this feature.'
+    s=text_to_speech(text)
+    return s
+
 
 
 class Nuggetss(Base):
@@ -64,6 +77,28 @@ async def test_list(db:Session= Depends(deps.get_db)):
     nuggets_data = db.query(Nuggets).all()
     return nuggets_data
  
+ 
+@router.post("/listnuggetsnew")  
+async def listnuggetsnew(
+    db: Session = Depends(deps.get_db),
+    token: str = Form(None),
+    my_nuggets: str = Form(None),
+    filter_type: str = Form(None, description="1-Influencer"),
+    category: str = Form(None, description="Influencer category"),
+    user_id: str = Form(None),
+    saved: str = Form(None),
+    search_key: str = Form(None),
+    page_number: str = Form(default=1),
+    nugget_type: str = Form(None, description="1-video,2-Other than video,0-all"),
+    ):
+    
+    get_nugget=db.query(Nuggets).filter(Nuggets.status == 1).order_by(Nuggets.id.desc()).limit(100).offset(0).all()
+    return get_nugget
+    
+ 
+ 
+ 
+from sqlalchemy.orm import joinedload
 @router.post("/listnuggets")  
 async def listnuggets(
     db: Session = Depends(deps.get_db),
@@ -138,8 +173,9 @@ async def listnuggets(
             my_followings = getFollowings(db, login_user_id)
             type = None
             raw_id = GetRawcasterUserID(db, type)
+            
+            # .options(joinedload(NuggetsShareWith))
         
-
             get_nuggets = (
                 db.query(Nuggets.id,
                         Nuggets.nuggets_id,
@@ -160,7 +196,6 @@ async def listnuggets(
                         func.count(NuggetsComments.nugget_id).label("comment_count"),
                         func.count(NuggetView.nugget_id).label("view_count"),
                         func.count(NuggetPollVoted.nugget_id).label("poll_count"),
-                         
                         )
                 .join(User, Nuggets.user_id == User.id, isouter=True)
                 .join(
@@ -189,7 +224,10 @@ async def listnuggets(
                 .filter(NuggetsMaster.status == 1)
                 .group_by(Nuggets.id)
             )
-            
+            get_nuggets =  get_nuggets.order_by(Nuggets.id.desc()).limit(10).offset(0).all()
+            return get_nuggets
+            for row in get_nuggets:
+                return row.NuggetsShareWith
             if search_key:
                 get_nuggets = get_nuggets.filter(
                     or_(
@@ -454,38 +492,11 @@ async def listnuggets(
 
                 get_nuggets = get_nuggets.limit(limit).offset(offset).all()
                 nuggets_list = []
-               
+                # return get_nuggets
                 for nuggets in get_nuggets:
                     attachments = []
                     poll_options = []
                     is_downloadable = 0
-                    
-                    # tot_likes = (
-                    #     db.query(NuggetsLikes.id)
-                    #     .filter(
-                    #         NuggetsLikes.nugget_id == nuggets.id,
-                    #         NuggetsLikes.status == 1,
-                    #     )
-                    #     .count()
-                    # )
-
-                    # total_comments = (
-                    #     db.query(NuggetsComments.id)
-                    #     .filter(NuggetsComments.nugget_id == nuggets.id)
-                    #     .count()
-                    # )
-
-                    # total_views = (
-                    #     db.query(NuggetView.id)
-                    #     .filter(NuggetView.nugget_id == nuggets.id)
-                    #     .count()
-                    # )
-
-                    # total_vote = (
-                    #     db.query(NuggetPollVoted.id)
-                    #     .filter(NuggetPollVoted.nugget_id == nuggets.id)
-                    #     .count()
-                    # )
 
                     img_count = 0
                     shared_detail = []
