@@ -223,7 +223,183 @@ async def listnuggetsnew(
                         Nuggets.user_id == user_id, Nuggets.share_type == 1
                     )
                 get_nuggets = get_nuggets.filter(Nuggets.user_id == user_id)
-                 
+            
+            else:
+                if nugget_type == 1:  # Video
+                    get_nuggets = get_nuggets.filter(
+                        Nuggets.nuggets_id == NuggetsAttachment.nugget_id,
+                        NuggetsAttachment.media_type == "video",
+                    )
+                print(user_public_nugget_display_setting)
+                if nugget_type == 2:  # Audio and Image
+                    get_nuggets = get_nuggets.outerjoin(
+                        NuggetsAttachment,
+                        Nuggets.nuggets_id == NuggetsAttachment.nugget_id,
+                    ).filter(
+                        or_(
+                            NuggetsAttachment.media_type == None,
+                            NuggetsAttachment.media_type == "image",
+                            NuggetsAttachment.media_type == "audio",
+                        )
+                    )
+                if filter_type == 1:
+                    my_followers = []  # my_followers
+                    follow_user = (
+                        db.query(FollowUser.following_userid)
+                        .filter(FollowUser.follower_userid == login_user_id)
+                        .all()
+                    )
+                    if follow_user:
+                        for group_list in follow_user:
+                            my_followers.append(group_list.following_userid)
+                    
+                    get_nuggets = get_nuggets.filter(
+                        or_(
+                            and_(Nuggets.user_id == login_user_id),
+                            and_(Nuggets.user_id.in_(my_followers)),
+                            Nuggets.share_type != 2,
+                        )
+                    )
+                    
+                elif user_public_nugget_display_setting == 0:  # Rawcaster
+                    get_nuggets = get_nuggets.filter(
+                        or_(Nuggets.user_id == login_user_id, Nuggets.user_id == raw_id)
+                    )
+                    
+                elif user_public_nugget_display_setting == 1:  # Public
+                    get_nuggets = get_nuggets.join(NuggetsShareWith, Nuggets.id == NuggetsShareWith.nuggets_id,isouter=True)\
+                        .filter(
+                        or_(
+                            Nuggets.user_id == login_user_id,
+                            and_(Nuggets.share_type == 1),
+                            and_(
+                                Nuggets.share_type == 2,
+                                Nuggets.user_id == login_user_id,
+                            ),
+                            and_(
+                                Nuggets.share_type == 3,
+                                NuggetsShareWith.type == 1,
+                                NuggetsShareWith.share_with.in_(group_ids),
+                            ),
+                            and_(
+                                Nuggets.share_type == 4,
+                                NuggetsShareWith.type == 2,
+                                NuggetsShareWith.share_with.in_([login_user_id]),
+                            ),
+                            and_(
+                                Nuggets.share_type == 6, Nuggets.user_id.in_(my_friends)
+                            ),
+                            and_(
+                                Nuggets.share_type == 7,
+                                Nuggets.user_id.in_(my_followings),
+                            ),
+                            and_(Nuggets.user_id == raw_id),
+                        )
+                    )    
+                elif user_public_nugget_display_setting == 2:  # All Connections
+                    get_nuggets = get_nuggets.filter(
+                        or_(
+                            and_(Nuggets.user_id == login_user_id),
+                            and_(
+                                Nuggets.user_id.in_(my_friends), Nuggets.share_type != 2
+                            ),
+                        )
+                    )
+
+                elif user_public_nugget_display_setting == 3:  # Specific Connections
+                    my_friends = []  # Selected Connections id's
+
+                    online_group_list = (
+                        db.query(UserProfileDisplayGroup)
+                        .filter(
+                            UserProfileDisplayGroup.user_id == login_user_id,
+                            UserProfileDisplayGroup.profile_id
+                            == "public_nugget_display",
+                        )
+                        .all()
+                    )
+
+                    if online_group_list:
+                        for group_list in online_group_list:
+                            my_friends.append(group_list.groupid)
+                    get_nuggets = get_nuggets.filter(
+                        or_(
+                            and_(Nuggets.user_id == login_user_id),
+                            and_(
+                                Nuggets.user_id.in_(my_friends), Nuggets.share_type != 2
+                            ),
+                        )
+                    )
+
+                elif user_public_nugget_display_setting == 4:  # All Groups
+                    get_nuggets = get_nuggets.join(
+                        FriendGroupMembers,
+                        Nuggets.user_id == FriendGroupMembers.user_id,
+                        isouter=True,
+                    )
+                    get_nuggets = get_nuggets.join(
+                        FriendGroups, FriendGroupMembers.group_id == FriendGroups.id,isouter=True
+                    ).filter(FriendGroups.status == 1)
+                    get_nuggets = get_nuggets.filter(
+                        or_(
+                            Nuggets.user_id == login_user_id,
+                            and_(
+                                FriendGroups.created_by == login_user_id,
+                                Nuggets.share_type != 2,
+                            ),
+                        )
+                    )
+
+                elif user_public_nugget_display_setting == 5:  # Specific Groups
+                    my_friends = []
+                    online_group_list = (
+                        db.query(UserProfileDisplayGroup)
+                        .filter(
+                            UserProfileDisplayGroup.user_id == login_user_id,
+                            UserProfileDisplayGroup.profile_id
+                            == "public_nugget_display",
+                        )
+                        .all()
+                    )
+                    if online_group_list:
+                        for group_list in online_group_list:
+                            my_friends.append(group_list.groupid)
+
+                    get_nuggets = get_nuggets.join(
+                        FriendGroupMembers,
+                        Nuggets.user_id == FriendGroupMembers.user_id,
+                    )
+                    get_nuggets = get_nuggets.join(
+                        FriendGroups, FriendGroupMembers.group_id == FriendGroups.id
+                    ).filter(FriendGroups.status == 1)
+
+                    get_nuggets = get_nuggets.filter(
+                        or_(
+                            Nuggets.user_id == login_user_id,
+                            and_(
+                                FriendGroups.id.in_(my_friends), Nuggets.share_type != 2
+                            ),
+                        )
+                    )
+
+                elif user_public_nugget_display_setting == 6:  # My influencers
+                    my_followers = []  # Selected Connections id's
+                    follow_user = (
+                        db.query(FollowUser)
+                        .filter(FollowUser.follower_userid == login_user_id)
+                        .all()
+                    )
+                    if follow_user:
+                        for group_list in follow_user:
+                            my_followers.append(group_list.following_userid)
+
+                    get_nuggets = get_nuggets.filter(
+                        or_(
+                            Nuggets.user_id == login_user_id,
+                            and_(Nuggets.user_id.in_(my_followers)),
+                            Nuggets.share_type != 2,
+                        )
+                    )             
             return get_nuggets.limit(10).offset(0).all()
             
  
@@ -423,7 +599,7 @@ async def list_nuggets(
                             NuggetsAttachment.media_type == "audio",
                         )
                     )
-
+                print(user_public_nugget_display_setting)
                 if filter_type == 1:  # Influencer
                     my_followers = []  # my_followers
                     follow_user = (
