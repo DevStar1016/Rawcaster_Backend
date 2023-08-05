@@ -446,6 +446,7 @@ async def listnuggetsnew(
                     if nuggets['Nuggets'].nuggets_master.nuggets_attachment:
                         nugget_attachments=nuggets['Nuggets'].nuggets_master.nuggets_attachment
                         for nug_attch in nugget_attachments:
+                            img_count += 1
                             if nug_attch.status == 1:
                                 if nugget_type == 2:
                                     if nug_attch.media_type != 'video':
@@ -561,13 +562,62 @@ async def listnuggetsnew(
                     else:
                         is_downloadable = 1 
                     
+                    # Check account Verification
+                    check_verify = (
+                        db.query(VerifyAccounts)
+                        .filter(
+                            VerifyAccounts.user_id == nuggets['Nuggets'].user_id,
+                            VerifyAccounts.verify_status == 1,
+                        )
+                        .first()
+                    )
+                    
                     nuggets_list.append({"nugget_id":nuggets['Nuggets'].id,
                                         "content": nuggets['Nuggets'].nuggets_master.content,
                                         "metadata": nuggets['Nuggets'].nuggets_master._metadata,
                                         'created_date':common_date(nuggets['Nuggets'].created_date),
-                                        'user_id':nuggets['Nuggets'].user_id
+                                        'user_id':nuggets['Nuggets'].user_id,
+                                        'user_ref_id':nuggets['Nuggets'].user.user_ref_id,
+                                        'account_verify_type':1 if check_verify else 0,
+                                        'type':nuggets['Nuggets'].type,
+                                        'original_user_id':nuggets['Nuggets'].user.id,
+                                        'original_user_name':nuggets['Nuggets'].nuggets_master.user.display_name,
+                                        'original_user_image':nuggets['Nuggets'].nuggets_master.user.profile_img,
+                                        'user_name':nuggets['Nuggets'].user.display_name,
+                                        'user_image':nuggets['Nuggets'].user.profile_img,
+                                        'user_status_id':nuggets["Nuggets"].user.user_status_id,
+                                        "liked":nugget_like,
+                                        'viewed':0,
+                                        "following":True if following else False,
+                                        'follow_count':follow_count,
+                                        'total_likes':total_likes,
+                                        'total_comments':total_comments,
+                                        'total_views':total_views,
+                                        'total_media':img_count,
+                                        'share_type':nuggets['Nuggets'].share_type,
+                                        'media_list':attachments,
+                                        'is_nugget_owner':1 if nuggets['Nuggets'].user_id == login_user_id else 0,
+                                        'is_master_nugget_owner':1 if nuggets['Nuggets'].nuggets_master.user_id == login_user_id else 0,
+                                        'shared_detail':shared_detail,
+                                        'shared_with':[],
+                                        'is_downloadable':is_downloadable,
+                                        'poll_option':poll_options,
+                                        'poll_duration':nuggets['Nuggets'].nuggets_master.poll_duration,
+                                        'voted': 1 if voted else 0,
+                                        'voted_option': voted.poll_option_id if voted else None,
+                                        'total_vote':total_poll,
+                                        'saved': True if saved else False
                                         })
-                    return nuggets_list
+                
+                return {
+                    "status": 1,
+                    "msg": "Success",
+                    "nuggets_count": get_nuggets_count,
+                    "total_pages": total_pages,
+                    "current_page_no": current_page_no,
+                    "nuggets_list": nuggets_list
+                    }
+
             # return get_nuggets
             
  
