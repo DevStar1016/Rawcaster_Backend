@@ -403,6 +403,7 @@ async def listnuggetsnew(
                 default_page_size = 10
                 limit, offset, total_pages = get_pagination(
                     get_nuggets_count, current_page_no, default_page_size)
+                
                 get_nuggets = get_nuggets.limit(limit).offset(offset).all()
                 
                 nuggets_list=[]
