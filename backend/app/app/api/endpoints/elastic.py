@@ -419,28 +419,28 @@ async def listnuggetsnew(
                     total_poll=nuggets['poll_count']
                     img_count=0
                     
-                    if login_user_id == nuggets['Nuggets'].user_id and nuggets['Nuggets'].nuggets_share_with:
-                        shared_group_ids=[]
-                        type=0
-                        nugget_share_details=nuggets['Nuggets'].nuggets_share_with
+                    # if login_user_id == nuggets['Nuggets'].user_id and nuggets['Nuggets'].nuggets_share_with:
+                    #     shared_group_ids=[]
+                    #     type=0
+                    #     nugget_share_details=nuggets['Nuggets'].nuggets_share_with
                         
-                        for share_nugget in nugget_share_details:
-                            type=share_nugget.type
-                            shared_group_ids.append(share_nugget.share_with)
+                    #     for share_nugget in nugget_share_details:
+                    #         type=share_nugget.type
+                    #         shared_group_ids.append(share_nugget.share_with)
                         
-                        if type == 1:
-                            friend_groups=db.query(FriendGroups.group_name,FriendGroups.group_icon)\
-                                .filter(FriendGroups.id.in_(shared_group_ids)).all()
+                    #     if type == 1:
+                    #         friend_groups=db.query(FriendGroups.group_name,FriendGroups.group_icon)\
+                    #             .filter(FriendGroups.id.in_(shared_group_ids)).all()
                             
-                            for frnf_gp in friend_groups:
-                                shared_detail.append({'name':frnf_gp.group_name,'img':frnf_gp.group_icon})
+                    #         for frnf_gp in friend_groups:
+                    #             shared_detail.append({'name':frnf_gp.group_name,'img':frnf_gp.group_icon})
 
-                        elif type == 2:
-                            friend_groups=db.query(User.display_name,User.profile_img)\
-                                .filter(User.id.in_(shared_group_ids)).all()
+                    #     elif type == 2:
+                    #         friend_groups=db.query(User.display_name,User.profile_img)\
+                    #             .filter(User.id.in_(shared_group_ids)).all()
                             
-                            for frnf_gp in friend_groups:
-                                shared_detail.append({'name':frnf_gp.display_name,'img':frnf_gp.profile_img})
+                    #         for frnf_gp in friend_groups:
+                    #             shared_detail.append({'name':frnf_gp.display_name,'img':frnf_gp.profile_img})
 
                     # Nugget Attachments
                     if nuggets['Nuggets'].nuggets_master.nuggets_attachment:
