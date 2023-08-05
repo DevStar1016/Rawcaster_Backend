@@ -6,7 +6,7 @@ from typing import List
 from app.utils import *
 from app.api import deps
 import datetime
-from sqlalchemy.orm import Session,aliased
+from sqlalchemy.orm import Session,aliased,joinedload
 from datetime import datetime, date
 from sqlalchemy import func, case, text, Date, extract,distinct,true,select,Column,Integer,String,Text
 import re
@@ -52,30 +52,20 @@ async def audio(db:Session= Depends(deps.get_db)):
     return s
 
 
-
-class Nuggetss(Base):
-    __tablename__ = 'nuggets'
-
-    # Define columns for the view (should match the columns in the SQL query)
-    id = Column(Integer, primary_key=True)
-    user_id = Column(String)
-    nuggets_id =Column(Integer)
-    # content=Column(Text)
-    
-
-# Use the query property to define the SQL query for the view
-# Nuggetss.query = select([text("display_name FROM user")]).select_from(text("user"))
-
-
-@router.post("/view_test")
-async def view_test(db:Session= Depends(deps.get_db)):
-    nuggets_data = db.query(Nuggetss).all()
-    return nuggets_data
-
 @router.post("/test_list")
 async def test_list(db:Session= Depends(deps.get_db)):
-    nuggets_data = db.query(Nuggets).all()
-    return nuggets_data
+    get_nuggets=db.query(Nuggets,func.count(NuggetsLikes.nugget_id).label("likes_count"))\
+                .join(NuggetsLikes,Nuggets.id == NuggetsLikes.nugget_id,isouter=True)\
+                .filter(NuggetsLikes.status == 1)
+            
+    for nug,like_count in get_nuggets:
+        print(like_count)
+        nug_attach=nug.nuggets_master.nuggets_attachment
+        return nug.nuggets_master
+        for data in nug_attach:
+            print(data.id)
+
+        
  
  
 @router.post("/listnuggetsnew")  
@@ -152,33 +142,27 @@ async def listnuggetsnew(
             my_followings = getFollowings(db, login_user_id)
             type = None
             raw_id = GetRawcasterUserID(db, type)
-    
-            get_nuggets=db.query(Nuggets.id,
-                        Nuggets.nuggets_id,
-                        Nuggets.user_id,
-                        Nuggets.type,
-                        Nuggets.share_type,
-                        Nuggets.created_date,
-                        Nuggets.nugget_status,
-                        Nuggets.status,
-                        NuggetsMaster.content,
-                        NuggetsMaster._metadata,
-                        NuggetsMaster.poll_duration,
-                        User.user_ref_id,
-                        User.user_status_id,
-                        User.display_name,
-                        User.profile_img,
+            
+            # get_nuggets=db.query(Nuggets,func.count(NuggetsLikes.nugget_id).label("likes_count"))\
+            #     .join(NuggetsLikes,Nuggets.id == NuggetsLikes.nugget_id,isouter=True)\
+            #     .filter(NuggetsLikes.status == 1)
+            
+            # return get_nuggets.limit(10).offset(0).all()
+            get_nuggets=db.query(Nuggets,
                         func.count(NuggetsLikes.nugget_id).label("likes_count"),
                         func.count(NuggetView.nugget_id).label("view_count"),
                         func.count(NuggetPollVoted.nugget_id).label("poll_count"),
-                        func.count(NuggetsComments.nugget_id).label("comment_count"),
-                       ).join(NuggetsLikes,Nuggets.id == NuggetsLikes.nugget_id,isouter=True)\
+                        func.count(NuggetsComments.nugget_id).label("comment_count")
+                       )\
+                        .join(User,Nuggets.user_id == User.id,isouter=True)\
+                        .join(NuggetsMaster,Nuggets.nuggets_id == NuggetsMaster.id,isouter=True)\
+                        .join(NuggetsLikes,Nuggets.id == NuggetsLikes.nugget_id,isouter=True)\
                         .join(NuggetView, Nuggets.id == NuggetView.nugget_id, isouter=True)\
                         .join(NuggetPollVoted,NuggetPollVoted.nugget_id == Nuggets.id,isouter=True)\
-                        .join(NuggetsMaster,Nuggets.nuggets_id == NuggetsMaster.id, isouter=True)\
-                        .join(User,Nuggets.user_id == User.id, isouter=True)\
+                        .join(NuggetsShareWith,NuggetsShareWith.nuggets_id == Nuggets.id,isouter=True)\
                         .join(NuggetsComments,NuggetsComments.nugget_id == Nuggets.id,isouter=True)\
-                        .filter(Nuggets.status == 1,NuggetsLikes.status == 1,NuggetsMaster.status == 1).group_by(Nuggets.id)
+                        .join(NuggetsSave,Nuggets.id == NuggetsSave.nugget_id)\
+                        .filter(Nuggets.status == 1,Nuggets.nugget_status == 1,NuggetsMaster.status == 1).group_by(Nuggets.id)
             
             if search_key:
                 get_nuggets = get_nuggets.filter(
@@ -190,21 +174,14 @@ async def listnuggetsnew(
                     )
                 )
             if access_token == "RAWCAST":
-                get_nuggets = get_nuggets.filter(Nuggets.share_type == 1)
+                get_nuggets = get_nuggets.join( NuggetsAttachment,
+                        Nuggets.nuggets_id == NuggetsAttachment.nugget_id).filter(Nuggets.share_type == 1)
                 
                 if nugget_type == 1:  # Video Nugget
-                    get_nuggets = get_nuggets.join(
-                        NuggetsAttachment,
-                        Nuggets.nuggets_id == NuggetsAttachment.nugget_id,
-                        isouter=True,
-                    ).filter(NuggetsAttachment.media_type == "video")
+                    get_nuggets = get_nuggets.filter(NuggetsAttachment.media_type == "video")
 
                 elif nugget_type == 2:  # Other type
-                    get_nuggets = get_nuggets.join(
-                        NuggetsAttachment,
-                        Nuggets.nuggets_id == NuggetsAttachment.nugget_id,
-                        isouter=True,
-                    ).filter(
+                    get_nuggets = get_nuggets.filter(
                         or_(
                             NuggetsAttachment.media_type == None,
                             NuggetsAttachment.media_type == "image",
@@ -230,7 +207,7 @@ async def listnuggetsnew(
                         Nuggets.nuggets_id == NuggetsAttachment.nugget_id,
                         NuggetsAttachment.media_type == "video",
                     )
-                print(user_public_nugget_display_setting)
+                
                 if nugget_type == 2:  # Audio and Image
                     get_nuggets = get_nuggets.outerjoin(
                         NuggetsAttachment,
@@ -267,8 +244,7 @@ async def listnuggetsnew(
                     )
                     
                 elif user_public_nugget_display_setting == 1:  # Public
-                    get_nuggets = get_nuggets.join(NuggetsShareWith, Nuggets.id == NuggetsShareWith.nuggets_id,isouter=True)\
-                        .filter(
+                    get_nuggets = get_nuggets.filter(
                         or_(
                             Nuggets.user_id == login_user_id,
                             and_(Nuggets.share_type == 1),
@@ -426,18 +402,177 @@ async def listnuggetsnew(
             else:
                 default_page_size = 10
                 limit, offset, total_pages = get_pagination(
-                    get_nuggets_count, current_page_no, default_page_size
-                )
-
+                    get_nuggets_count, current_page_no, default_page_size)
                 get_nuggets = get_nuggets.limit(limit).offset(offset).all()
                 
+                nuggets_list=[]
+                
+                for nuggets in get_nuggets:
+                    attachments=[]
+                    poll_options=[]
+                    is_downloadable=[]
+                    shared_detail=[]
+                    
+                    total_likes=nuggets['likes_count']
+                    total_comments=nuggets['comment_count']
+                    total_views=nuggets['view_count']
+                    total_poll=nuggets['poll_count']
+                    img_count=0
+                    
+                    if login_user_id == nuggets['Nuggets'].user_id and nuggets['Nuggets'].nuggets_share_with:
+                        shared_group_ids=[]
+                        type=0
+                        nugget_share_details=nuggets['nuggets'].nuggets_share_with
+                        
+                        for share_nugget in nugget_share_details:
+                            type=share_nugget.type
+                            shared_group_ids.append(share_nugget.share_with)
+                        
+                        if type == 1:
+                            friend_groups=db.query(FriendGroups.group_name,FriendGroups.group_icon)\
+                                .filter(FriendGroups.id.in_(shared_group_ids)).all()
+                            
+                            for frnf_gp in friend_groups:
+                                shared_detail.append({'name':frnf_gp.group_name,'img':frnf_gp.group_icon})
+
+                        elif type == 2:
+                            friend_groups=db.query(User.display_name,User.profile_img)\
+                                .filter(User.id.in_(shared_group_ids)).all()
+                            
+                            for frnf_gp in friend_groups:
+                                shared_detail.append({'name':frnf_gp.display_name,'img':frnf_gp.profile_img})
+
+                    # Nugget Attachments
+                    if nuggets['Nuggets'].nuggets_master.nuggets_attachment:
+                        nugget_attachments=nuggets['Nuggets'].nuggets_master.nuggets_attachment
+                        for nug_attch in nugget_attachments:
+                            if nug_attch.status == 1:
+                                if nugget_type == 2:
+                                    if nug_attch.media_type != 'video':
+                                        attachments.append(
+                                                {
+                                                    "media_id": nug_attch.id,
+                                                    "media_type": nug_attch.media_type,
+                                                    "media_file_type": nug_attch.media_file_type,
+                                                    "path": nug_attch.path,
+                                                }
+                                            )
+                                elif nugget_type == 1:
+                                    if nug_attch.media_type == 'video':
+                                        attachments.append(
+                                                {
+                                                    "media_id": nug_attch.id,
+                                                    "media_type": nug_attch.media_type,
+                                                    "media_file_type": nug_attch.media_file_type,
+                                                    "path": nug_attch.path,
+                                                }
+                                            )
+                    # Nugget Poll Options
+                    if nuggets['Nuggets'].nuggets_master.nugget_poll_option:
+                        nugget_poll_options=nuggets['Nuggets'].nuggets_master.nugget_poll_option
+                        
+                        for nug_poll in nugget_poll_options:
+                            if nug_poll.status == 1:
+                                poll_options.append({'option_id':nug_poll.id,"option_name":nug_poll.option_name,
+                                                     "option_percentage":nug_poll.poll_vote_percentage,
+                                                     "votes":nug_poll.votes})
+
+                    following = (
+                        db.query(FollowUser)
+                        .filter(
+                            FollowUser.follower_userid == login_user_id,
+                            FollowUser.following_userid == nuggets['Nuggets'].user_id,
+                        )
+                        .count()
+                    )
+                    
+                    follow_count = (
+                        db.query(FollowUser)
+                        .filter(FollowUser.following_userid == nuggets['Nuggets'].user_id)
+                        .count()
+                    )
+                    
+                    nugget_like = False
+                    nugget_view=False
+                    
+                    checklike = (
+                        db.query(NuggetsLikes)
+                        .filter(
+                            NuggetsLikes.nugget_id == nuggets['Nuggets'].id,
+                            NuggetsLikes.user_id == login_user_id,
+                        )
+                        .first()
+                    )
+                    checkview=db.query(NuggetView).filter(NuggetView.nugget_id == nuggets['Nuggets'].id,NuggetView.user_id == login_user_id).first()
+                    if checklike:
+                        nugget_like=True
+                    if checkview:
+                        nugget_view=True
+                    
+                    if login_user_id == nuggets['Nuggets'].user_id:
+                        following=1
+                    
+                    voted = (
+                        db.query(NuggetPollVoted)
+                        .filter(
+                            NuggetPollVoted.nugget_id == nuggets['Nuggets'].id,
+                            NuggetPollVoted.user_id == login_user_id,
+                        )
+                        .first()
+                    )
+                    saved = (
+                        db.query(NuggetsSave)
+                        .filter(
+                            NuggetsSave.nugget_id == nuggets['Nuggets'].id,
+                            NuggetsSave.user_id == login_user_id,
+                            NuggetsSave.status == 1,
+                        )
+                        .count()
+                    )
+                    
+                    if nuggets['Nuggets'].share_type == 1:
+                        if following == 1:
+                            is_downloadable=1
+                        else:
+                            user_id=nuggets['Nuggets'].user_id
+                            get_friend_request = db.query(MyFriends).filter(
+                                MyFriends.status == 1, MyFriends.request_status == 1
+                            )
+
+                            get_friend_request = (
+                                get_friend_request.filter(
+                                    or_(
+                                        and_(
+                                            MyFriends.sender_id == login_user_id,
+                                            MyFriends.receiver_id == user_id,
+                                        ),
+                                        and_(
+                                            MyFriends.sender_id == user_id,
+                                            MyFriends.receiver_id == login_user_id,
+                                        ),
+                                    )
+                                )
+                                .order_by(MyFriends.id.desc())
+                                .first()
+                            )
+
+                            if get_friend_request:
+                                is_downloadable = 1
+                    else:
+                        is_downloadable = 1 
+                    
+                    nuggets_list.append({"nugget_id":nuggets['Nuggets'].id,
+                                        "content": nuggets['Nuggets'].nuggets_master.content,
+                                        "metadata": nuggets['Nuggets'].nuggets_master._metadata,
+                                        'created_date':common_date(nuggets['Nuggets'].created_date),
+                                        'user_id':nuggets['Nuggets'].user_id
+                                        })
+                    return nuggets_list
+            # return get_nuggets
             
-            return get_nuggets
-            
  
  
  
-from sqlalchemy.orm import joinedload
 @router.post("/list_nuggets")  
 async def list_nuggets(
     db: Session = Depends(deps.get_db),
