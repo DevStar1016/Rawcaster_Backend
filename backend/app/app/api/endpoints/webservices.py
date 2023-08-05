@@ -5271,11 +5271,12 @@ async def listnuggets(
                 db, login_user_id, requested_by, request_status, response_type
             )
             my_friends = my_frnds["accepted"]
-
+            
             my_followings = getFollowings(db, login_user_id)
+            
             type = None
             raw_id = GetRawcasterUserID(db, type)
-
+            
             get_nuggets = (
                 db.query(Nuggets)
                 .join(User, Nuggets.user_id == User.id, isouter=True)
@@ -5310,7 +5311,7 @@ async def listnuggets(
                 .filter(NuggetsMaster.status == 1)
                 .group_by(Nuggets.id)
             )
-
+           
             if search_key:
                 get_nuggets = get_nuggets.filter(
                     or_(

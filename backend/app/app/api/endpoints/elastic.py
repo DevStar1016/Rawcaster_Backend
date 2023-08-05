@@ -109,7 +109,7 @@ async def listnuggetsnew(
             status = 0
             msg = "Invalid nugget id"
             get_token_details = (
-                db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+                db.query(ApiTokens.user_id).filter(ApiTokens.token == access_token).first()
             )
 
             user_public_nugget_display_setting = 1
@@ -118,7 +118,7 @@ async def listnuggetsnew(
                 login_user_id = get_token_details.user_id
 
                 get_user_settings = (
-                    db.query(UserSettings)
+                    db.query(UserSettings.public_nugget_display)
                     .filter(UserSettings.user_id == login_user_id)
                     .first()
                 )
@@ -138,16 +138,12 @@ async def listnuggetsnew(
                 db, login_user_id, requested_by, request_status, response_type
             )
             my_friends = my_frnds["accepted"]
-
+            
             my_followings = getFollowings(db, login_user_id)
+
             type = None
             raw_id = GetRawcasterUserID(db, type)
             
-            # get_nuggets=db.query(Nuggets,func.count(NuggetsLikes.nugget_id).label("likes_count"))\
-            #     .join(NuggetsLikes,Nuggets.id == NuggetsLikes.nugget_id,isouter=True)\
-            #     .filter(NuggetsLikes.status == 1)
-            
-            # return get_nuggets.limit(10).offset(0).all()
             get_nuggets=db.query(Nuggets,
                         func.count(NuggetsLikes.nugget_id).label("likes_count"),
                         func.count(NuggetView.nugget_id).label("view_count"),
@@ -161,8 +157,11 @@ async def listnuggetsnew(
                         .join(NuggetPollVoted,NuggetPollVoted.nugget_id == Nuggets.id,isouter=True)\
                         .join(NuggetsShareWith,NuggetsShareWith.nuggets_id == Nuggets.id,isouter=True)\
                         .join(NuggetsComments,NuggetsComments.nugget_id == Nuggets.id,isouter=True)\
-                        .join(NuggetsSave,Nuggets.id == NuggetsSave.nugget_id)\
-                        .filter(Nuggets.status == 1,Nuggets.nugget_status == 1,NuggetsMaster.status == 1).group_by(Nuggets.id)
+                        .join(NuggetsSave,Nuggets.id == NuggetsSave.nugget_id,isouter=True)\
+                        .filter(Nuggets.status == 1,
+                                Nuggets.nugget_status == 1,
+                                NuggetsMaster.status == 1)\
+                        .group_by(Nuggets.id)
             
             if search_key:
                 get_nuggets = get_nuggets.filter(
@@ -396,7 +395,7 @@ async def listnuggetsnew(
             get_nuggets = get_nuggets.order_by(Nuggets.created_date.desc())
 
             get_nuggets_count = get_nuggets.count()
-
+            
             if get_nuggets_count < 1:
                 return {"status": 0, "msg": "No Result found"}
             else:
@@ -423,7 +422,7 @@ async def listnuggetsnew(
                     if login_user_id == nuggets['Nuggets'].user_id and nuggets['Nuggets'].nuggets_share_with:
                         shared_group_ids=[]
                         type=0
-                        nugget_share_details=nuggets['nuggets'].nuggets_share_with
+                        nugget_share_details=nuggets['Nuggets'].nuggets_share_with
                         
                         for share_nugget in nugget_share_details:
                             type=share_nugget.type
@@ -694,7 +693,7 @@ async def list_nuggets(
                 db, login_user_id, requested_by, request_status, response_type
             )
             my_friends = my_frnds["accepted"]
-
+            return my_friends
             my_followings = getFollowings(db, login_user_id)
             type = None
             raw_id = GetRawcasterUserID(db, type)
