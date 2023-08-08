@@ -7939,7 +7939,7 @@ async def addevent(
                             and file_ext != ".gif"
                         ):
                             s3_file_path = f"eventsmelody/eventsmelody{random.randint(11111,99999)}{new_event.id}{int(datetime.datetime.utcnow().timestamp())}"
-                            upload_file_path = upload_file_path
+                            upload_file_path = uploaded_file_path
                             result = upload_to_s3(upload_file_path, s3_file_path)
 
                             if result and result["status"] == 1:
@@ -7962,7 +7962,7 @@ async def addevent(
 
                         else:
                             s3_file_path = f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{new_event.id}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                            upload_file_path = upload_file_path
+                            upload_file_path = uploaded_file_path
 
                             if type == "video" and file_ext != ".mp4":
                                 s3_file_path = f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{new_event.id}{int(datetime.datetime.utcnow().timestamp())}.mp4"
@@ -8649,7 +8649,7 @@ async def listevents(
                                     "path": default_melody.path,
                                     "type": default_melody.type,
                                     "is_default": default_melody.event_id,
-                                },
+                                } if default_melody else {'path':'','type':'','is_default':""},
                                 "default_host_audio": default_host_audio
                                 if default_host_audio
                                 else None,

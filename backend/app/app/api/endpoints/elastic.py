@@ -616,7 +616,7 @@ async def listnuggetsnew(
                     #             shared_detail.append({'name':frnf_gp.display_name,'img':frnf_gp.profile_img})
 
                     # Nugget Attachments
-                    return nuggets['Nuggets'].nuggets_master.nuggets_attachment
+                    
                     if nuggets['Nuggets'].nuggets_master.nuggets_attachment:
                         nugget_attachments=nuggets['Nuggets'].nuggets_master.nuggets_attachment
                         for nug_attch in nugget_attachments:
