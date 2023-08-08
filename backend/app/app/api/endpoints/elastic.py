@@ -616,14 +616,17 @@ async def listnuggetsnew(
                     #             shared_detail.append({'name':frnf_gp.display_name,'img':frnf_gp.profile_img})
 
                     # Nugget Attachments
-                    
                     if nuggets['Nuggets'].nuggets_master.nuggets_attachment:
+                    
                         nugget_attachments=nuggets['Nuggets'].nuggets_master.nuggets_attachment
                         for nug_attch in nugget_attachments:
+                            
                             img_count += 1
                             if nug_attch.status == 1:
+                                
                                 if nugget_type == 2:
                                     if nug_attch.media_type != 'video':
+                                        
                                         attachments.append(
                                                 {
                                                     "media_id": nug_attch.id,
@@ -633,6 +636,7 @@ async def listnuggetsnew(
                                                 }
                                             )
                                 elif nugget_type == 1:
+                                    
                                     if nug_attch.media_type == 'video':
                                         attachments.append(
                                                 {
@@ -642,6 +646,16 @@ async def listnuggetsnew(
                                                     "path": nug_attch.path,
                                                 }
                                             )
+                                else:
+                                    attachments.append(
+                                                {
+                                                    "media_id": nug_attch.id,
+                                                    "media_type": nug_attch.media_type,
+                                                    "media_file_type": nug_attch.media_file_type,
+                                                    "path": nug_attch.path,
+                                                }
+                                            )
+                                    
                     # Nugget Poll Options
                     if nuggets['Nuggets'].nuggets_master.nugget_poll_option:
                         nugget_poll_options=nuggets['Nuggets'].nuggets_master.nugget_poll_option
