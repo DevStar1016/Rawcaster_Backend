@@ -9,6 +9,7 @@ class ReadOutLanguage(Base):
     id = Column(Integer, primary_key=True)
     language = Column(String(100))
     language_code = Column(String(10))
+    language_with_country=Column(String(10))
     created_at = Column(DateTime)
     status = Column(TINYINT, default=1, comment="0->Inactive, 1->Active")
 

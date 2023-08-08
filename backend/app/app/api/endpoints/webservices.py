@@ -7641,6 +7641,7 @@ async def addevent(
     event_invite_friends = (
         json.loads(event_invite_friends) if event_invite_friends else None
     )
+    
     event_invite_custom = event_invite_mails if event_invite_mails else None
     event_invite_groups = (
         json.loads(event_invite_groups) if event_invite_groups else None
@@ -8883,10 +8884,9 @@ async def editevent(
                     "status": 0,
                     "msg": "You need to complete your account validation before you can do this",
                 }
-
-            delete_invite_custom = (
-                json.loads(delete_invite_mails) if delete_invite_mails else None
-            )
+          
+            delete_invite_custom=delete_invite_mails.split(',') if delete_invite_mails else []
+            
             delete_invite_groups = (
                 json.loads(delete_invite_groups) if delete_invite_groups else None
             )

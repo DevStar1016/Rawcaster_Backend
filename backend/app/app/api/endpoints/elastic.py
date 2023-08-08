@@ -23,6 +23,7 @@ import subprocess
 from .chime_chat import *
 from better_profanity import profanity
 from sqlalchemy.ext.declarative import declarative_base
+import googletrans
 
 router = APIRouter()
 
@@ -50,6 +51,180 @@ async def audio(db:Session= Depends(deps.get_db)):
     text='Rawcaster allows you to configure your meeting to either allow anyone to join or restrict it to a select few. Break out rooms, schmoozing, online chats, voting are some of the features Rawcaster provides with this feature.'
     s=text_to_speech(text)
     return s
+
+
+@router.post("/audio_with_country_code")
+async def audio_with_country_code(db:Session= Depends(deps.get_db)):
+    
+    from gtts import gTTS
+    import os
+
+    def read_text_with_native_accent(text, country_code):
+        # Mapping of country codes to language codes
+        country_to_language={
+            "af": "af-ZA",  # Afrikaans
+            "sq": "sq-AL",  # Albanian
+            "am": "am",  # Amharic
+            "hy": 'hy',  # TEST
+            "ar": "ar",  # Arabic
+            "be": "be-BY",  # Belarusian
+            "bn": "bn",  # Bengali
+            "bs": "bs-BA",  # Bosnian
+            "bg": "bg-BG",  # Bulgarian
+            "ca": "ca-ES",  # Catalan
+            "zh-cn": "zh-CN",  # Chinese (Simplified)
+            "zh-tw": "zh-TW",  # Chinese (Traditional)
+            "hr": "hr-HR",  # Croatian
+            "cs": "cs-CZ",  # Czech
+            "da": "da-DK",  # Danish
+            "nl": "nl-NL",  # Dutch
+            "en": "en-US",  # English
+            "eo": "eo-EO",  # Esperanto
+            "et": "et-EE",  # Estonian
+            "tl": "tl-PH",  # Filipino
+            "fi": "fi",  # Finnish
+            "fr": "fr-FR",  # French
+            "fy": "fy-NL",  # Frisian
+            "gl": "gl-ES",  # Galician
+            "ka": "ka-GE",  # Georgian
+            "de": "de",  # German
+            "el": "el-GR",  # Greek
+            "gu": "en-IN",  # Gujarati
+            "ht": "ht-HT",  # Haitian Creole
+            "ha": "ha-NG",  # Hausa
+            "haw": "haw-US",  # Hawaiian
+            "iw": "iw-IL",  # Hebrew
+            "hi": "en-IN",  # Hindi
+            "hmn": "hmn-LA",  # Hmong
+            "hu": "hu-HU",  # Hungarian
+            "is": "is-IS",  # Icelandic
+            "ig": "ig-NG",  # Igbo
+            "id": "id-ID",  # Indonesian
+            "ga": "ga-IE",  # Irish
+            "it": "it-IT",  # Italian
+            "ja": "ja-JP",  # Japanese
+            "jw": "jw-ID",  # Javanese
+            "kn": "en-IN",  # Kannada
+            "kk": "kk-KZ",  # Kazakh
+            "km": "km-KH",  # Khmer
+            "ko": "ko-KR",  # Korean
+            "ku": "ku-TR",  # Kurdish (Kurmanji)
+            "ky": "ky-KG",  # Kyrgyz
+            "lo": "lo-LA",  # Lao
+            "la": "la-VA",  # Latin
+            "lv": "lv-LV",  # Latvian
+            "lt": "lt-LT",  # Lithuanian
+            "lb": "lb-LU",  # Luxembourgish
+            "mk": "mk-MK",  # Macedonian
+            "mg": "mg-MG",  # Malagasy
+            "ms": "ms-MY",  # Malay
+            "ml": "en-IN",  # Malayalam
+            "mt": "mt-MT",  # Maltese
+            "mi": "mi-NZ",  # Maori
+            "mr": "en-IN",  # Marathi
+            "mn": "MN",  # Mongolian
+            "my": "my-MM",  # Burmese
+            "ne": "ne-NP",  # Nepali
+            "no": "no",  # Norwegian
+            "or": "en-IN",  # Odia (Oriya)
+            "ps": "ps-AF",  # Pashto
+            "fa": "fa-IR",  # Persian
+            "pl": "pl-PL",  # Polish
+            "pt": "pt-BR",  # Portuguese
+            "pa": "en-IN",  # Punjabi
+            "ro": "ro-RO",  # Romanian
+            "ru": "ru-RU",  # Russian
+            "sm": "sm-WS",  # Samoan
+            "gd": "gd-GB",  # Scots Gaelic
+            "sr": "sr-RS",  # Serbian
+            "st": "st-LS",  # Sesotho
+            "sn": "sn-ZW",  # Shona
+            "sd": "sd-PK",  # Sindhi
+            "si": "si-LK",  # Sinhala
+            "sk": "sk-SK",  # Slovak
+            "sl": "sl-SI",  # Slovenian
+            "so": "so-SO",  # Somali
+            "es": "es-ES",  # Spanish
+            "su": "su-ID",  # Sundanese
+            "sw": "sw-TZ",  # Swahili
+            "sv": "sv-SE",  # Swedish
+            "tg": "tg-TJ",  # Tajik
+            "ta": "en-IN",  # Tamil
+            "tt": "tt-RU",  # Tatar
+            "te": "en-IN",  # Telugu
+            "th": "th-TH",  # Thai
+            "tr": "tr-TR",  # Turkish
+            "tk": "tk-TM",  # Turkmen
+            "uk": "uk-UA",  # Ukrainian
+            "ur": "ur-PK",  # Urdu
+            "ug": "ug-CN",  # Uyghur
+            "uz": "uz-UZ",  # Uzbek
+            "vi": "vi-VN",  # Vietnamese
+            "cy": "cy-GB",  # Welsh
+            "xh": "xh-ZA",  # Xhosa
+            "yi": "yi-IL",  # Yiddish
+            "yo": "yo-NG",  # Yoruba
+            "zu": "zu-ZA"   # Zulu
+        }
+        # country_to_language = {
+        #     "us": "en-US",  # United States
+        #     "uk": "en-GB",  # United Kingdom
+        #     "fr": "fr-FR",  # France
+        #     "de": "de",  # German
+        #     "cn": "zh-CN", # China
+        #     "in": "en-IN", # India
+        #     "ja": "ja", # Japan
+        #     "au": "en-AU", # Australia
+        #     'br': "pt-BR"
+            
+        #     # Add more country codes and corresponding language codes as needed
+        # }
+        code_with_country=None
+        language_code=None
+        if country_code in country_to_language:
+            code_with_country = country_to_language[country_code]
+            
+            language_code=country_code
+            
+        if code_with_country:
+            print(f"language code:{code_with_country}")
+            translator = googletrans.Translator()
+            text = 'Rawcaster allows you to configure your meeting to either allow anyone to join or restrict it to a select few. Break out rooms, schmoozing, online chats, voting are some of the features Rawcaster provides with this feature.'
+            translated_text = translator.translate(text, dest=language_code)
+            
+            text=translated_text.text
+            print(text)
+            tts = gTTS(text)
+            tts.save("output.mp3")
+       
+        else:
+            print("Country code not supported.")
+            return "Country code not supported."
+    # Example usage
+   
+    desired_country_code = "hy"  # Change this to the desired country code
+    res=read_text_with_native_accent(text, desired_country_code)
+    return res       
+
+
+    # import os
+    # from gtts import gTTS
+    # def text_to_speech(text, country_code, filename='output.mp3'):
+
+    #     language_code = f'{country_code.lower()}-{country_code.upper()}'
+    #     # if language_code not in gtts.lang:
+    #     #     raise ValueError(f"Language not supported: {language_code}")
+    #     print(language_code)
+    #     tts = gTTS(text=text, lang='cn-CN', slow=False)
+    #     tts.save(filename)
+    #     os.system(f"start {filename}")  # This will play the speech on Windows. Modify for other OS.
+
+    # input_text="Hello, this is an example of text that will be read in the native accent of the given country."
+    # country_code='AI'
+    # response=text_to_speech(input_text, country_code)
+    # return response
+
+
 
 
 @router.post("/test_list")
@@ -100,7 +275,7 @@ async def listnuggetsnew(
         saved = int(saved) if saved else None
 
         access_token = checkToken(db, token) if token != "RAWCAST" else True
-        if access_token == False:
+        if not access_token == False:
             return {
                 "status": -1,
                 "msg": "Sorry! your login session expired. please login again.",
@@ -113,19 +288,19 @@ async def listnuggetsnew(
             )
 
             user_public_nugget_display_setting = 1
-            login_user_id = 0
-            if get_token_details:
-                login_user_id = get_token_details.user_id
+            login_user_id = 536
+            # if get_token_details:
+            # login_user_id = get_token_details.user_id
 
-                get_user_settings = (
-                    db.query(UserSettings.public_nugget_display)
-                    .filter(UserSettings.user_id == login_user_id)
-                    .first()
+            get_user_settings = (
+                db.query(UserSettings.public_nugget_display)
+                .filter(UserSettings.user_id == login_user_id)
+                .first()
+            )
+            if get_user_settings:
+                user_public_nugget_display_setting = (
+                    get_user_settings.public_nugget_display
                 )
-                if get_user_settings:
-                    user_public_nugget_display_setting = (
-                        get_user_settings.public_nugget_display
-                    )
 
             current_page_no = int(page_number)
             user_id = int(user_id) if user_id else None
@@ -146,7 +321,6 @@ async def listnuggetsnew(
             
             get_nuggets=db.query(Nuggets,
                         func.count(NuggetsLikes.nugget_id).label("likes_count"),
-                        func.count(NuggetView.nugget_id).label("view_count"),
                         func.count(NuggetPollVoted.nugget_id).label("poll_count"),
                         func.count(NuggetsComments.nugget_id).label("comment_count")
                        )\
@@ -154,7 +328,6 @@ async def listnuggetsnew(
                         .join(User,Nuggets.user_id == User.id,isouter=True)\
                         .join(NuggetsMaster,Nuggets.nuggets_id == NuggetsMaster.id,isouter=True)\
                         .join(NuggetsLikes,Nuggets.id == NuggetsLikes.nugget_id,isouter=True)\
-                        .join(NuggetView, Nuggets.id == NuggetView.nugget_id, isouter=True)\
                         .join(NuggetPollVoted,NuggetPollVoted.nugget_id == Nuggets.id,isouter=True)\
                         .join(NuggetsShareWith,NuggetsShareWith.nuggets_id == Nuggets.id,isouter=True)\
                         .join(NuggetsComments,NuggetsComments.nugget_id == Nuggets.id,isouter=True)\
@@ -416,7 +589,7 @@ async def listnuggetsnew(
                     
                     total_likes=nuggets['likes_count']
                     total_comments=nuggets['comment_count']
-                    total_views=nuggets['view_count']
+                    total_views=nuggets['Nuggets'].total_view_count
                     total_poll=nuggets['poll_count']
                     img_count=0
                     
@@ -1891,4 +2064,115 @@ async def listnuggetstest(
                     "nuggets_list": nuggets_list,
                 }
 
- 
+@router.post("/add_code")
+async def add_code(db:Session= Depends(deps.get_db)):
+    code=[
+"af",
+"sq",
+"am",
+"hy",
+"ar",
+"be",
+"bn",
+"bs",
+"bg",
+"ca",
+"zh",
+"zh",
+"hr",
+"cs",
+"da",
+"nl",
+"en",
+"eo",
+"et",
+"tl",
+"fi",
+"fr",
+"fy",
+"gl",
+"ka",
+"de",
+"el",
+"gu",
+"ht",
+"ha",
+"ha",
+"iw",
+"hi",
+"hm",
+"hu",
+"is",
+"ig",
+"id",
+"ga",
+"it",
+"ja",
+"jw",
+"kn",
+"kk",
+"km",
+"ko",
+"ku",
+"ky",
+"lo",
+"la",
+"lv",
+"lt",
+"lb",
+"mk",
+"mg",
+"ms",
+"ml",
+"mt",
+"mi",
+"mr",
+"mn",
+"my",
+"ne",
+"no",
+"or",
+"ps",
+"fa",
+"pl",
+"pt",
+"pa",
+"ro",
+"ru",
+"sm",
+"gd",
+"sr",
+"st",
+"sn",
+"sd",
+"si",
+"sk",
+"sl",
+"so",
+"es",
+"su",
+"sw",
+"sv",
+"tg",
+"ta",
+"tt",
+"te",
+"th",
+"tr",
+"tk",
+"uk",
+"ur",
+"ug",
+"uz",
+"vi",
+"cy",
+"xh",
+"yi",
+"yo",
+"zu"]
+    id=1
+    for lang in code:
+        add_language=db.query(ReadOutLanguage).filter(ReadOutLanguage.id == id).update({"language_with_country":lang})
+        db.commit()
+        id=id+1
+        
