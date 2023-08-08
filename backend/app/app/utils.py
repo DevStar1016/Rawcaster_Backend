@@ -525,38 +525,42 @@ def get_nugget_detail(db, nugget_id, login_user_id):
     get_nuggets = db.query(Nuggets).filter(Nuggets.id == nugget_id).first()
 
     if get_nuggets:
-        total_likes = (
-            db.query(NuggetsLikes)
-            .filter(
-                NuggetsLikes.user_id == login_user_id,
-                NuggetsLikes.nugget_id == nugget_id,
-            )
-            .distinct()
-            .count()
-        )
-        total_comments = (
-            db.query(NuggetsComments)
-            .filter(NuggetsComments.nugget_id == nugget_id, NuggetsComments.status == 1)
-            .distinct()
-            .count()
-        )
-        total_views = (
-            db.query(NuggetView)
-            .filter(
-                NuggetView.nugget_id == nugget_id, NuggetView.user_id == login_user_id
-            )
-            .distinct()
-            .count()
-        )
-        total_pollvote = (
-            db.query(NuggetPollVoted)
-            .filter(
-                NuggetPollVoted.user_id == login_user_id,
-                NuggetPollVoted.nugget_id == nugget_id,
-            )
-            .distinct()
-            .count()
-        )
+        total_likes=get_nuggets.total_like_count
+        total_comments=get_nuggets.total_comment_count
+        total_views=get_nuggets.total_view_count
+        total_pollvote=get_nuggets.total_poll_count
+        # total_likes = (
+        #     db.query(NuggetsLikes)
+        #     .filter(
+        #         NuggetsLikes.user_id == login_user_id,
+        #         NuggetsLikes.nugget_id == nugget_id,
+        #     )
+        #     .distinct()
+        #     .count()
+        # )
+        # total_comments = (
+        #     db.query(NuggetsComments)
+        #     .filter(NuggetsComments.nugget_id == nugget_id, NuggetsComments.status == 1)
+        #     .distinct()
+        #     .count()
+        # )
+        # total_views = (
+        #     db.query(NuggetView)
+        #     .filter(
+        #         NuggetView.nugget_id == nugget_id, NuggetView.user_id == login_user_id
+        #     )
+        #     .distinct()
+        #     .count()
+        # )
+        # total_pollvote = (
+        #     db.query(NuggetPollVoted)
+        #     .filter(
+        #         NuggetPollVoted.user_id == login_user_id,
+        #         NuggetPollVoted.nugget_id == nugget_id,
+        #     )
+        #     .distinct()
+        #     .count()
+        # )
 
         attachments = []
         poll_options = []
