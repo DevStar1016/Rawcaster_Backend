@@ -275,7 +275,7 @@ async def listnuggetsnew(
         saved = int(saved) if saved else None
 
         access_token = checkToken(db, token) if token != "RAWCAST" else True
-        if not access_token == False:
+        if access_token == False:
             return {
                 "status": -1,
                 "msg": "Sorry! your login session expired. please login again.",
@@ -288,19 +288,18 @@ async def listnuggetsnew(
             )
 
             user_public_nugget_display_setting = 1
-            login_user_id = 536
-            # if get_token_details:
-            # login_user_id = get_token_details.user_id
+            login_user_id = get_token_details.user_id
+            if get_token_details:
 
-            get_user_settings = (
-                db.query(UserSettings.public_nugget_display)
-                .filter(UserSettings.user_id == login_user_id)
-                .first()
-            )
-            if get_user_settings:
-                user_public_nugget_display_setting = (
-                    get_user_settings.public_nugget_display
+                get_user_settings = (
+                    db.query(UserSettings.public_nugget_display)
+                    .filter(UserSettings.user_id == login_user_id)
+                    .first()
                 )
+                if get_user_settings:
+                    user_public_nugget_display_setting = (
+                        get_user_settings.public_nugget_display
+                    )
 
             current_page_no = int(page_number)
             user_id = int(user_id) if user_id else None
