@@ -2431,6 +2431,7 @@ async def logins(
                 "user_id": user_id,
                 "authcode": new_auth_code,
                 "acc_verify_status": get_user.is_email_id_verified,
+                "signup_type": get_user.signup_type,
                 "first_time": 1, # existing_user   ( Existing user first time login - goto influencer page)
                 "chime_user_id": check_chat_id,
             }
