@@ -17,6 +17,7 @@ class MyFriends(Base):
     request_status = Column(
         TINYINT, comment=" 0->Pending, 1->Accepted, 2->Rejected, 3->Blocked "
     )
+    channel_arn=Column(String(150))
     status_date = Column(DateTime)
     status = Column(TINYINT, default=1, comment=" 0->inactive, 1->active ")
 
