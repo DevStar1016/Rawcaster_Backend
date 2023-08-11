@@ -1563,16 +1563,16 @@ async def getmyprofile(
                 get_user = db.query(User).filter(User.id == login_user_id).first()
                 
                 if get_user:
-                    # followers_count = db.query(FollowUser.id).filter(FollowUser.following_userid == login_user_id).count()
-                    # following_count = db.query(FollowUser.id).filter(FollowUser.follower_userid == login_user_id).count()
+                    followers_count = db.query(FollowUser.id).filter(FollowUser.following_userid == login_user_id).count()
+                    following_count = db.query(FollowUser.id).filter(FollowUser.follower_userid == login_user_id).count()
                     # nugget_count = db.query(NuggetsMaster.id).join(Nuggets,Nuggets.nuggets_id == NuggetsMaster.id).\
                     #     filter(NuggetsMaster.user_id == login_user_id,NuggetsMaster.status == 1).count()
-                    # event_count=db.query(Events.id).filter(Events.created_by == login_user_id, Events.status == 1).count()
+                    event_count=db.query(Events.id).filter(Events.created_by == login_user_id, Events.status == 1).count()
                     # friends_count=db.query(MyFriends).filter(MyFriends.status == 1,MyFriends.request_status == 1,or_(MyFriends.sender_id == get_user.id,MyFriends.receiver_id == get_user.id)).count()
-                    # get_account_status=db.query(VerifyAccounts).filter(VerifyAccounts.user_id == get_user.id).first()
-                    # get_saved_nuggets = db.query(NuggetsSave)\
-                    #     .filter(NuggetsSave.user_id == get_user.id, NuggetsSave.status == 1)\
-                    #     .count()
+                    get_account_status=db.query(VerifyAccounts).filter(VerifyAccounts.user_id == get_user.id).first()
+                    get_saved_nuggets = db.query(NuggetsSave)\
+                        .filter(NuggetsSave.user_id == get_user.id, NuggetsSave.status == 1)\
+                        .count()
                     
                     user_details={}
                     user_details.update({"user_id":get_user.id,
@@ -1603,15 +1603,15 @@ async def getmyprofile(
                                         "user_status_id":get_user.user_status_id,
                                         "bio_data":get_user.bio_data if get_user.bio_data else "",
                                         # "friends_count":friends_count,
-                                        # "followers_count":followers_count,
-                                        # "following_count":following_count,
+                                        "followers_count":followers_count,
+                                        "following_count":following_count,
                                         # "nugget_count":nugget_count,
-                                        # "event_count":event_count,  
+                                        "event_count":event_count,  
                                         "work_at":get_user.work_at if get_user.work_at else "",
                                         'studied_at':get_user.studied_at if get_user.studied_at else "",
                                         'influencer_category':get_user.influencer_category if get_user.influencer_category else "",
-                                        # 'account_verify_type':(2 if get_account_status.verify_status == 1 else 1) if get_account_status else 0,# 0 -Request not send , 1- Pending ,2 - Verified
-                                        # 'saved_nugget_count':get_saved_nuggets,
+                                        'account_verify_type':(2 if get_account_status.verify_status == 1 else 1) if get_account_status else 0,# 0 -Request not send , 1- Pending ,2 - Verified
+                                        'saved_nugget_count':get_saved_nuggets,
                                         "nugget_content_length":get_user.user_status_master.max_nugget_char if get_user.user_status_master else 0,
                                         "chime_user_id":get_user.chime_user_id if get_user.chime_user_id else None,
                                         "ai_content_length":100
