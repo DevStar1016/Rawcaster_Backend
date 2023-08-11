@@ -1227,7 +1227,6 @@ def nuggetcontentaudio(
             text_contnet = get_nugget.nuggets_master.content if get_nugget else None
             
             if text_contnet:
-                print(target_language)
                 translator = googletrans.Translator()
                 translated = translator.translate(text_contnet, dest=target_language)   
                 
@@ -1241,9 +1240,9 @@ def nuggetcontentaudio(
                     
                     text=translated.text
                     try:
-                        myobj = gTTS(text=text,lang=get_user_readout_language.language_with_country)
+                        myobj = gTTS(text=text)
                     except Exception as e:
-                        return {"status":0,"msg":f"Unable to convert error:{e}"}
+                        return {"status":0,"msg":f"Unable to convert- {e}"}
                     
                     base_dir = "rawcaster_uploads"
 

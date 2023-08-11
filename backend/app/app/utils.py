@@ -829,7 +829,7 @@ def getGroupids(db, login_user_id):
 
     if login_user_id:
         friend_group_memebers = (
-            db.query(FriendGroupMembers)
+            db.query(FriendGroupMembers.group_id)
             .filter_by(status=1, user_id=login_user_id)
             .all()
         )
@@ -1027,11 +1027,10 @@ def getFollowings(db, user_id):
 
 def NuggetAccessCheck(db, login_user_id, nugget_id):
     group_ids = getGroupids(db, login_user_id)
-
+    
     requested_by = None
     request_status = 1
     response_type = 1
-    search_key = None
     my_friends_req = get_friend_requests(
         db, login_user_id, requested_by, request_status, response_type
     )
@@ -1093,7 +1092,7 @@ def NuggetAccessCheck(db, login_user_id, nugget_id):
         criteria = criteria.filter(Nuggets.user_id.notin_(blocked_users))
 
     check_nuggets = criteria.count()
-
+    
     if check_nuggets > 0:
         return True
     else:
@@ -2424,13 +2423,13 @@ async def logins(
                 "msg": "Success",
                 "salt_token": salt_token,
                 "token": token_text,
-                "email": username,
+                "email_id": username,
                 "expirytime": common_date(exptime),
                 "profile_image": profile_image,
                 "name": name,
                 "user_id": user_id,
                 "authcode": new_auth_code,
-                "acc_verify_status": get_user.is_email_id_verified,
+                "acc_verify_status": get_user.is_email_id_verified if get_user.signup_type == 1 else  get_user.is_email_iis_mobile_no_verifiedd_verified if get_user.signup_type == 2 else None,
                 "signup_type": get_user.signup_type,
                 "first_time": 1, # existing_user   ( Existing user first time login - goto influencer page)
                 "chime_user_id": check_chat_id,

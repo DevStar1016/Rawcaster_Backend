@@ -36,18 +36,16 @@ def createchimeuser(user_name: str = Form(None)):
     res = requests.post(url, headers=headers)
 
     if res.status_code == 200:
-        # Request was successful
         response = res.json()
 
         return {"status": 1, "mgs": "Success", "data": response}
     else:
-        # Request failed
         print("Error:", response.text)
         return {"status": 0, "msg": f"Failed:{response.text}"}
 
 
-# @router.post("/create_channel")  # Working
 
+# @router.post("/create_channel")  # Working
 def create_channel(chime_bearer: str = Form(...), group_name: str = Form(...)):
     response = chime.create_channel(
         AppInstanceArn="arn:aws:chime:us-east-1:562114208112:app-instance/6ea8908f-999b-4b3d-9fae-fa1153129087",
@@ -110,12 +108,6 @@ async def list_channel_msg(db: Session = Depends(deps.get_db), token: str = Form
         MaxResults=50,
         ChimeBearer="arn:aws:chime:us-east-1:562114208112:app-instance/6ea8908f-999b-4b3d-9fae-fa1153129087/user/anon_ef587af3-c304-4d83-b0ae-7523fb33a609",
     )
-
-    # response = chime.delete_channel_message(
-    #     ChannelArn='arn:aws:chime:us-east-1:562114208112:app-instance/6ea8908f-999b-4b3d-9fae-fa1153129087/channel/9d951b24-8638-4f6c-85f4-778839ee3d0a',
-    #     MessageId='98bde658e32d913fe56c74b3147b2b27201480f1e33872c9e60dd3c3cd317f7f',
-    #     ChimeBearer='arn:aws:chime:us-east-1:562114208112:app-instance/6ea8908f-999b-4b3d-9fae-fa1153129087/user/anon_ef587af3-c304-4d83-b0ae-7523fb33a609'
-    #     )
     return response
 
 
@@ -213,7 +205,7 @@ async def messaging_session():
 
 
 
-# Mobile CHAT
+# Mobile CHAT  -  Testing
 
 @router.post("/createChannel")  # Working
 def createChannel(chime_bearer: str = Form(...), group_name: str = Form(...)):
