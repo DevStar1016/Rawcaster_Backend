@@ -1383,68 +1383,68 @@ def user_profile(db, id):
             {
                 "user_id": get_user.id,
                 "user_ref_id": get_user.user_ref_id if get_user.user_ref_id else "",
-                # "is_email_id_verified": get_user.is_email_id_verified
-                # if get_user.is_email_id_verified
-                # else 0,
-                # "is_mobile_no_verified": get_user.is_mobile_no_verified
-                # if get_user.is_mobile_no_verified
-                # else 0,
-                # "acc_verify_status": 1
-                # if get_user.is_email_id_verified == 1
-                # or get_user.is_mobile_no_verified == 1
-                # else 0,
-                # "is_profile_updated": 1
-                # if get_user.dob != "" and get_user.gender != ""
-                # else 0,
-                # "name": get_user.display_name if get_user.display_name else "",
-                # "email_id": get_user.email_id if get_user.email_id else "",
-                # "mobile": str(get_user.mobile_no) if get_user.mobile_no else "",
-                # "profile_image": get_user.profile_img
-                # if get_user.profile_img
-                # else defaultimage("profile_img"),
-                # "cover_image": get_user.cover_image
-                # if get_user.cover_image
-                # else defaultimage("cover_img"),
-                # "website": get_user.website if get_user.website else "",
-                # "first_name": get_user.first_name if get_user.first_name else "",
-                # "last_name": get_user.last_name if get_user.last_name else "",
-                # "gender": get_user.gender if get_user.gender else "",
-                # "dob": get_user.dob if get_user.dob else "",
-                # "country_code": get_user.country_code if get_user.country_code else "",
-                # "country_id": get_user.country_id if get_user.country_id else "",
-                # "user_code": get_user.user_code if get_user.user_code else "",
-                # "geo_location": get_user.geo_location if get_user.geo_location else "",
-                # "latitude": get_user.latitude if get_user.latitude else "",
-                # "longitude": get_user.longitude if get_user.longitude else "",
-                # "date_of_join": common_date(get_user.created_at)
-                # if get_user.created_at
-                # else "",
-                # "user_type": get_user.user_type_master.name
-                # if get_user.user_type_master
-                # else "",  # .....
-                # "user_status": get_user.user_status_master.name
-                # if get_user.user_status_master.name
-                # else "",  # -----
-                # "user_status_id": get_user.user_status_id,
-                # "bio_data": get_user.bio_data if get_user.bio_data else "",
-                # "followers_count": followers_count,
-                # "friend_count": friend_count,
-                # "following_count": following_count,
-                # "nugget_count": nugget_count,
-                # "event_count": event_count,
-                # "work_at": get_user.work_at if get_user.work_at else "",
-                # "studied_at": get_user.studied_at if get_user.studied_at else "",
-                # "influencer_category": get_user.influencer_category
-                # if get_user.influencer_category
-                # else "",
-                # "account_verify_type":(2 if get_account_status.verify_status == 1 else 1) if get_account_status else 0,# 0 -Request not send , 1- Pending ,2 - Verified
-                # "saved_nugget_count": get_saved_nuggets,
-                # "nugget_content_length": get_user.user_status_master.max_nugget_char
-                # if get_user.user_status_master.max_nugget_char
-                # else 0,
-                # "chime_user_id": get_user.chime_user_id
-                # if get_user.chime_user_id
-                # else None,
+                "is_email_id_verified": get_user.is_email_id_verified
+                if get_user.is_email_id_verified
+                else 0,
+                "is_mobile_no_verified": get_user.is_mobile_no_verified
+                if get_user.is_mobile_no_verified
+                else 0,
+                "acc_verify_status": 1
+                if get_user.is_email_id_verified == 1
+                or get_user.is_mobile_no_verified == 1
+                else 0,
+                "is_profile_updated": 1
+                if get_user.dob != "" and get_user.gender != ""
+                else 0,
+                "name": get_user.display_name if get_user.display_name else "",
+                "email_id": get_user.email_id if get_user.email_id else "",
+                "mobile": str(get_user.mobile_no) if get_user.mobile_no else "",
+                "profile_image": get_user.profile_img
+                if get_user.profile_img
+                else defaultimage("profile_img"),
+                "cover_image": get_user.cover_image
+                if get_user.cover_image
+                else defaultimage("cover_img"),
+                "website": get_user.website if get_user.website else "",
+                "first_name": get_user.first_name if get_user.first_name else "",
+                "last_name": get_user.last_name if get_user.last_name else "",
+                "gender": get_user.gender if get_user.gender else "",
+                "dob": get_user.dob if get_user.dob else "",
+                "country_code": get_user.country_code if get_user.country_code else "",
+                "country_id": get_user.country_id if get_user.country_id else "",
+                "user_code": get_user.user_code if get_user.user_code else "",
+                "geo_location": get_user.geo_location if get_user.geo_location else "",
+                "latitude": get_user.latitude if get_user.latitude else "",
+                "longitude": get_user.longitude if get_user.longitude else "",
+                "date_of_join": common_date(get_user.created_at)
+                if get_user.created_at
+                else "",
+                "user_type": get_user.user_type_master.name
+                if get_user.user_type_master
+                else "",  # .....
+                "user_status": get_user.user_status_master.name
+                if get_user.user_status_master.name
+                else "",  # -----
+                "user_status_id": get_user.user_status_id,
+                "bio_data": get_user.bio_data if get_user.bio_data else "",
+                "followers_count": followers_count,
+                "friend_count": friend_count,
+                "following_count": following_count,
+                "nugget_count": nugget_count,
+                "event_count": event_count,
+                "work_at": get_user.work_at if get_user.work_at else "",
+                "studied_at": get_user.studied_at if get_user.studied_at else "",
+                "influencer_category": get_user.influencer_category
+                if get_user.influencer_category
+                else "",
+                "account_verify_type":(2 if get_account_status.verify_status == 1 else 1) if get_account_status else 0,# 0 -Request not send , 1- Pending ,2 - Verified
+                "saved_nugget_count": get_saved_nuggets,
+                "nugget_content_length": get_user.user_status_master.max_nugget_char
+                if get_user.user_status_master.max_nugget_char
+                else 0,
+                "chime_user_id": get_user.chime_user_id
+                if get_user.chime_user_id
+                else None,
                 "ai_content_length": 100
             }
         )
@@ -1476,6 +1476,52 @@ def user_profile(db, id):
         user_details.update({"unread_notification_count": total_unread_count})
 
         return {"status": 1, "msg": "Success", "profile": user_details}
+
+
+# # 11 - Get My Profile
+# @router.post("/getmyprofileold")
+# async def getmyprofileold(
+#     db: Session = Depends(deps.get_db),
+#     token: str = Form(None),
+#     auth_code: str = Form(None, description="SALT + token"),
+# ):
+#     if token == None or token.strip() == "":
+#         return {
+#             "status": -1,
+#             "msg": "Sorry! your login session expired. please login again.",
+#         }
+
+#     elif auth_code == None or auth_code.strip() == "":
+#         return {"status": -1, "msg": "Auth Code is missing"}
+
+#     else:
+#         access_token = checkToken(db, token.strip())
+#         auth_text = token.strip()
+
+#         if checkAuthCode(auth_code, auth_text) == False:
+#             return {"status": 0, "msg": "Authentication failed!"}
+
+#         else:
+#             if access_token == False:
+#                 return {
+#                     "status": -1,
+#                     "msg": "Sorry! your login session expired. please login again.",
+#                 }
+
+#             else:
+#                 get_token_details = (
+#                     db.query(ApiTokens.user_id).filter(ApiTokens.token == access_token).first()
+#                 )
+#                 login_user_id = get_token_details.user_id if get_token_details else None
+
+#                 get_user = db.query(User).filter(User.id == login_user_id).first()
+#                 if get_user:
+#                     user_details = user_profile(db, login_user_id)
+#                     return user_details
+
+#                 else:
+#                     return {"status": 0, "msg": "No result found!"}
+
 
 
 # 11 - Get My Profile
@@ -1515,9 +1561,89 @@ async def getmyprofile(
                 login_user_id = get_token_details.user_id if get_token_details else None
 
                 get_user = db.query(User).filter(User.id == login_user_id).first()
+                
                 if get_user:
-                    user_details = user_profile(db, login_user_id)
-                    return user_details
+                    followers_count = db.query(FollowUser.id).filter(FollowUser.following_userid == login_user_id).count()
+                    following_count = db.query(FollowUser.id).filter(FollowUser.follower_userid == login_user_id).count()
+                    nugget_count = db.query(NuggetsMaster.id).join(Nuggets,Nuggets.nuggets_id == NuggetsMaster.id).\
+                        filter(NuggetsMaster.user_id == login_user_id,NuggetsMaster.status == 1).count()
+                    event_count=db.query(Events.id).filter(Events.created_by == login_user_id, Events.status == 1).count()
+                    friends_count=db.query(MyFriends).filter(MyFriends.status == 1,MyFriends.request_status == 1,or_(MyFriends.sender_id == get_user.id,MyFriends.receiver_id == get_user.id)).count()
+                    get_account_status=db.query(VerifyAccounts).filter(VerifyAccounts.user_id == get_user.id).first()
+                    get_saved_nuggets = db.query(NuggetsSave)\
+                        .filter(NuggetsSave.user_id == get_user.id, NuggetsSave.status == 1)\
+                        .count()
+                    
+                    user_details={}
+                    user_details.update({"user_id":get_user.id,
+                                        "user_ref_id":get_user.user_ref_id,
+                                        'is_email_id_verified':get_user.is_email_id_verified,
+                                        "is_mobile_no_verified":get_user.is_mobile_no_verified,
+                                        "acc_verify_status":1 if get_user.is_email_id_verified == 1 or get_user.is_mobile_no_verified == 1 else 0,
+                                        "is_profile_updated": 1 if get_user.dob != '' and get_user.gender != "" else 0,
+                                        "name":get_user.display_name if get_user.display_name != '' and get_user.display_name != None else "",
+                                        "email_id":get_user.email_id if get_user.email_id else "",
+                                        "mobile":str(get_user.mobile_no) if get_user.mobile_no else "",
+                                        "profile_image":get_user.profile_img if get_user.profile_img else defaultimage("profile_img"),
+                                        "cover_image":get_user.cover_image if get_user.cover_image else defaultimage("cover_img"),
+                                        "website":get_user.website if get_user.website else "",
+                                        "first_name":get_user.first_name if get_user.first_name else "",
+                                        "last_name":get_user.last_name if get_user.last_name else "",
+                                        "gender":get_user.gender if get_user.gender else "",
+                                        "dob":get_user.dob if get_user.dob else "",
+                                        "country_code":get_user.country_code if get_user.country_code else "",
+                                        "country_id":get_user.country_id if get_user.country_id else "",
+                                        "user_code":get_user.user_code if get_user.user_code else "",
+                                        "geo_location":get_user.geo_location if get_user.geo_location else "",
+                                        "latitude":get_user.latitude if get_user.latitude else "",
+                                        "longitude":get_user.longitude if get_user.longitude else "",
+                                        "date_of_join":common_date(get_user.created_at) if get_user.created_at else "",
+                                        "user_type":get_user.user_type_master.name if get_user.user_type_master else "",
+                                        "user_status":get_user.user_status_master.name if get_user.user_status_master else "",
+                                        "user_status_id":get_user.user_status_id,
+                                        "bio_data":get_user.bio_data if get_user.bio_data else "",
+                                        "friends_count":friends_count,
+                                        "followers_count":followers_count,
+                                        "following_count":following_count,
+                                        "nugget_count":nugget_count,
+                                        "event_count":event_count,  
+                                        "work_at":get_user.work_at if get_user.work_at else "",
+                                        'studied_at':get_user.studied_at if get_user.studied_at else "",
+                                        'influencer_category':get_user.influencer_category if get_user.influencer_category else "",
+                                        'account_verify_type':(2 if get_account_status.verify_status == 1 else 1) if get_account_status else 0,# 0 -Request not send , 1- Pending ,2 - Verified
+                                        'saved_nugget_count':get_saved_nuggets,
+                                        "nugget_content_length":get_user.user_status_master.max_nugget_char if get_user.user_status_master else 0,
+                                        "chime_user_id":get_user.chime_user_id if get_user.chime_user_id else None,
+                                        "ai_content_length":100
+                                         })
+                    token_text = (
+                        str(get_user.user_ref_id) + str(datetime.datetime.utcnow().timestamp())
+                        ).encode("ascii")
+                    invite_url = inviteBaseurl()
+                    join_link = f"{invite_url}signup?ref={token_text}"
+
+                    user_details.update({"referral_link": join_link})
+
+                    settings = (
+                        db.query(UserSettings).filter(UserSettings.user_id == get_user.id).first()
+                    )
+                    if settings:
+                        user_details.update(
+                            {"language": settings.language.name if settings.language_id else ""}
+                        )
+                    else:
+                        user_details.update({"language": "English"})
+
+                    two_type_verification = OTPverificationtype(db, get_user)
+
+                    user_details.update({"two_type_verification": two_type_verification})
+                    # Get Notification
+                    total_unread_count = (
+                        db.query(Notification).filter_by(status=1, is_read=0, user_id=id).count()
+                    )
+                    user_details.update({"unread_notification_count": total_unread_count})
+
+                    return {"status": 1, "msg": "Success", "profile": user_details}
 
                 else:
                     return {"status": 0, "msg": "No result found!"}
