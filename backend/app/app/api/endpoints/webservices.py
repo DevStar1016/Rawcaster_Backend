@@ -1335,7 +1335,7 @@ async def contactus(
 
 def user_profile(db, id):
     get_user = db.query(User).filter(User.id == id).first()
-    return get_user
+
     if get_user:
         get_account_status=db.query(VerifyAccounts).filter(VerifyAccounts.user_id == get_user.id).first()
         
