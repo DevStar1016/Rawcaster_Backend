@@ -53,6 +53,7 @@ async def audio(db:Session= Depends(deps.get_db)):
     return s
 
 
+
 @router.post("/audio_with_country_code")
 async def audio_with_country_code(db:Session= Depends(deps.get_db)):
     
@@ -190,7 +191,7 @@ async def audio_with_country_code(db:Session= Depends(deps.get_db)):
             print(f"language code:{code_with_country}")
             translator = googletrans.Translator()
             text = 'Rawcaster allows you to configure your meeting to either allow anyone to join or restrict it to a select few. Break out rooms, schmoozing, online chats, voting are some of the features Rawcaster provides with this feature.'
-            translated_text = translator.translate(text, dest=language_code)
+            translated_text = translator.translate(text, dest='zh-cn')
             
             text=translated_text.text
             print(text)
@@ -202,7 +203,7 @@ async def audio_with_country_code(db:Session= Depends(deps.get_db)):
             return "Country code not supported."
     # Example usage
    
-    desired_country_code = "hy"  # Change this to the desired country code
+    desired_country_code = "zh-cn"  # Change this to the desired country code
     res=read_text_with_native_accent(text, desired_country_code)
     return res       
 
