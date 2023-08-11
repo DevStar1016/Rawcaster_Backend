@@ -1337,6 +1337,8 @@ def user_profile(db, id):
     get_user = db.query(User).filter(User.id == id).first()
     
     if get_user:
+        get_account_status=db.query(VerifyAccounts).filter(VerifyAccounts.user_id == get_user.id).first()
+        
         followers_count = db.query(FollowUser).filter_by(following_userid=id).count()
         following_count = db.query(FollowUser).filter_by(follower_userid=id).count()
 
@@ -1375,6 +1377,7 @@ def user_profile(db, id):
             .count()
         )
         user_details = {}
+        
         
         user_details.update(
             {
@@ -1434,11 +1437,7 @@ def user_profile(db, id):
                 "influencer_category": get_user.influencer_category
                 if get_user.influencer_category
                 else "",
-                "account_verify_type": (
-                    2 if get_user.verify_accounts[0].verify_status == 1 else 1
-                )
-                if get_user.verify_accounts
-                else 0,  # 0 -Request not send , 1- Pending ,2 - Verified
+                "account_verify_type":(2 if get_account_status.verify_status == 1 else 1) if get_account_status else 0,# 0 -Request not send , 1- Pending ,2 - Verified
                 "saved_nugget_count": get_saved_nuggets,
                 "nugget_content_length": get_user.user_status_master.max_nugget_char
                 if get_user.user_status_master.max_nugget_char
