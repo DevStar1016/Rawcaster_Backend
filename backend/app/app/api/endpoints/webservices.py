@@ -5102,10 +5102,10 @@ async def listnuggets(
             get_token_details = (
                 db.query(ApiTokens.user_id).filter(ApiTokens.token == access_token).first()
             )
-
+            login_user_id=0
             user_public_nugget_display_setting = 1
-            login_user_id = get_token_details.user_id
             if get_token_details:
+                login_user_id = get_token_details.user_id
 
                 get_user_settings = (
                     db.query(UserSettings.public_nugget_display)
