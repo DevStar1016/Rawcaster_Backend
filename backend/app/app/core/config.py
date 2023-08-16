@@ -1,13 +1,33 @@
-from typing import Any, Dict, List, Optional, Union, TypeVar, Generic
-
-from pydantic import AnyHttpUrl, BaseSettings, EmailStr, validator
+from typing import Any, Dict, List, Optional, TypeVar, Generic
+from pydantic import AnyHttpUrl, BaseSettings, validator
 from fastapi import Query
 from fastapi_pagination.default import Page as BasePage, Params as BaseParams
 import pytz
 from urllib.parse import quote
+import boto3
+import json
+
+# AWS Credentials
+
+# Old
+# access_key = "AKIAYFYE6EFYG6RJOPMF"
+# access_secret = "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"
+
+# New
+access_key='AKIAYFYE6EFYMSZ77V3H'
+access_secret='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'
+bucket_name = "rawcaster"
+
+# Get Secret from AWS
+client = boto3.client('secretsmanager',  aws_access_key_id=access_key,
+            aws_secret_access_key=access_secret,
+            region_name="us-east-1")
+
+get_secret_value_response = client.get_secret_value(SecretId='dev_rawcaster_credentials')
+credentials =json.loads(get_secret_value_response['SecretString'])
+
 
 T = TypeVar("T")
-
 
 class Params(BaseParams):
     size: int = Query(500, gt=0, le=1000, description="Page size")
@@ -25,31 +45,23 @@ base_domain_url = ""
 base_url_segment = "/rawcaster"
 base_upload_folder = "local_uploads"
 
-# Elastic Cache
-# data_base = "redis://master.raew7no6l92n8p4.rljwzo.use1.cache.amazonaws.com:6379"
-
 # Dev
-# data_base ='mysql+pymysql://Admin:Rawcaster2240422@rawcasterdev.c3xecvdvxfvf.us-east-1.rds.amazonaws.com/rawcasterdev'
+data_base =credentials['db_connection']
 
 # Local
 data_base = "mysql+pymysql://maemysqluser:%s@192.168.1.109/rawcaster" % quote("MaeNewMysql2@2@")
 
 api_doc_path = "/docs"
 
-# AWS Credentials
-    # New
-access_key='AKIAYFYE6EFYMSZ77V3H'
-access_secret='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'
+open_ai_key=credentials['open_ai_key']
 
-    # Old
-# access_key = "AKIAYFYE6EFYG6RJOPMF"
-# access_secret = "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"
-bucket_name = "rawcaster"
+# SMS Credentials
+sms_access_key=credentials['sms_access_key']
+sms_secret_access_key=credentials['sms_secret_access_key']
 
-# AI Access Key
-open_ai_key = "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"
-
-
+# Email Credentials
+email_username=credentials['email_username']
+email_password=credentials['email_password']
 
 class Settings(BaseSettings):
     API_V1_STR: str = base_url_segment

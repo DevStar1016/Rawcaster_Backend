@@ -22,19 +22,23 @@ import subprocess
 from mail_templates.mail_template import *
 from cryptography.fernet import Fernet
 from app.core import config
-from celery import Celery
 import shutil
 from pyfcm import FCMNotification
 from api.endpoints import chime_chat
 from profanityfilter import ProfanityFilter
 
 
-celery_app = Celery("tasks", broker="redis://localhost:8000")
-
-
 access_key = config.access_key
 access_secret = config.access_secret
 bucket_name = config.bucket_name
+
+# Email Credential
+email_username=config.email_username
+email_password=config.email_password
+
+# SMS Credential
+sms_access_key=config.sms_access_key
+sms_access_secret=config.sms_secret_access_key
 
 
 def is_date(string, fuzzy=False):
@@ -196,8 +200,8 @@ async def send_email(db, to_mail, subject, message):
     )
     if not check_bounce_mail:
         conf = ConnectionConfig(
-            MAIL_USERNAME="AKIAYFYE6EFYF3SQOJHI",
-            MAIL_PASSWORD="BPkaC3u48gAj15i/YBLMDnICroNWdHXRWHMBYGWlDT6Q",
+            MAIL_USERNAME=email_username,
+            MAIL_PASSWORD=email_password,
             MAIL_FROM="rawcaster@rawcaster.com",
             MAIL_PORT=587,
             MAIL_SERVER="email-smtp.us-west-2.amazonaws.com",
@@ -225,8 +229,8 @@ def sendSMS(mobile_no, message):
     # Create an SNS client
     sns = boto3.client(
         "sns",
-        aws_access_key_id='AKIAYFYE6EFYFBWQRGPB',
-        aws_secret_access_key="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",
+        aws_access_key_id=sms_access_key,
+        aws_secret_access_key=sms_access_secret,
         region_name="us-west-2",
     )  # Replace 'us-west-2' with your desired AWS region
 
