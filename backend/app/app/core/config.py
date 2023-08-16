@@ -8,12 +8,11 @@ import boto3
 import json
 
 # AWS Credentials
-
-# Old
+                # ---------- Old
 # access_key = "AKIAYFYE6EFYG6RJOPMF"
 # access_secret = "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"
 
-# New
+                # ---------  New
 access_key='AKIAYFYE6EFYMSZ77V3H'
 access_secret='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'
 bucket_name = "rawcaster"
@@ -46,7 +45,7 @@ base_url_segment = "/rawcaster"
 base_upload_folder = "local_uploads"
 
 # Dev
-data_base =credentials['db_connection']
+# data_base =credentials['db_connection']
 
 # Local
 data_base = "mysql+pymysql://maemysqluser:%s@192.168.1.109/rawcaster" % quote("MaeNewMysql2@2@")

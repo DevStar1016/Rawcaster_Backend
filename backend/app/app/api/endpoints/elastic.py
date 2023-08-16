@@ -1,6 +1,5 @@
-from fastapi import APIRouter, Depends, Form, File, UploadFile, BackgroundTasks
+from fastapi import APIRouter, Depends, Form, File
 from app.models import *
-from app.core import config
 from app.core.security import *
 from typing import List
 from app.utils import *

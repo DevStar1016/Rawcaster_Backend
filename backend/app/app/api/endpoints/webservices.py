@@ -6052,7 +6052,7 @@ async def addnuggetcomment(
                     user_id=login_user_id,
                     parent_id=comment_id,
                     nugget_id=nugget_id,
-                    content=comment,
+                    content= detect_and_remove_offensive(comment),
                     created_date=datetime.datetime.utcnow(),
                     modified_date=datetime.datetime.utcnow(),
                 )
@@ -6163,7 +6163,7 @@ async def editnuggetcomment(
                 .first()
             )
             if check_nugget_comment:
-                check_nugget_comment.content = comment
+                check_nugget_comment.content = detect_and_remove_offensive(comment)
                 check_nugget_comment.modified_date = datetime.datetime.utcnow()
                 db.commit()
                 if check_nugget_comment:
