@@ -476,7 +476,7 @@ async def get_secret(db:Session=Depends(deps.get_db),MeetingId:str=Form(None)):
     # json_string = "{\"my-username\": \"my-username-value\", \"my-password\": \"my-password-value\"}"
  
     get_secret_value_response = secrets_manager_client.get_secret_value(SecretId='my_secret1')
-    return json.loads(get_secret_value_response['SecretString'])
+    return get_secret_value_response['SecretString']
     try:
         data = json.loads(json_string)
         username = data.get("my-username")
