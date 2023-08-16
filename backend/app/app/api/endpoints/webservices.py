@@ -4602,8 +4602,6 @@ async def addnuggets(
                             file_stat = os.stat(uploaded_file_path)
                             file_size = file_stat.st_size
 
-                           
-
                             if (
                                 file_size > 1000000
                                 and type == "image"
@@ -4634,17 +4632,43 @@ async def addnuggets(
                                 s3_file_path = f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
 
                                 if type == "video":
-                                        
-                                    splites_flag=1
-                                    splited_video_reposne=process_data(
-                                        db,
-                                        uploaded_file_path,
-                                        login_user_id,
-                                        master_id,
-                                        share_type,
-                                        share_with
-                                    )
-                                    nugget_ids += splited_video_reposne
+                                    video = VideoFileClip(
+                                                uploaded_file_path
+                                            )
+                                    total_duration = video.duration
+                                    if total_duration < 360:
+                                        s3_file_path = f"nuggets/audio_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
+
+                                        result = upload_to_s3(
+                                            uploaded_file_path, s3_file_path
+                                        )
+                                        if result["status"] == 1:
+                                            add_nugget_attachment = NuggetsAttachment(
+                                                user_id=login_user_id,
+                                                nugget_id=add_nuggets_master.id,
+                                                media_type=type,
+                                                media_file_type=file_ext,
+                                                file_size=file_size,
+                                                path=result["url"],
+                                                created_date=datetime.datetime.utcnow(),
+                                                status=1,
+                                            )
+                                            db.add(add_nugget_attachment)
+                                            db.commit()
+                                            db.refresh(add_nugget_attachment)
+                                        else:
+                                            return result
+                                    else:
+                                        splites_flag=1
+                                        splited_video_reposne=process_data(
+                                            db,
+                                            uploaded_file_path,
+                                            login_user_id,
+                                            master_id,
+                                            share_type,
+                                            share_with
+                                        )
+                                        nugget_ids += splited_video_reposne
                                    
                                     
                                 elif type == "audio":
@@ -13040,7 +13064,7 @@ async def followandunfollow(
                         )
                         member_id = (
                             getUserId.user.chime_user_id
-                            if getUserId.user.chime_user_id
+                            if getUserId.user
                             else None
                         )
                         try:
