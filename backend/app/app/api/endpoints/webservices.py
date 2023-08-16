@@ -21,7 +21,6 @@ from mail_templates.mail_template import *
 from moviepy.video.io.VideoFileClip import VideoFileClip
 import subprocess
 from .chime_chat import *
-from better_profanity import profanity
 
 router = APIRouter()
 
@@ -7738,7 +7737,7 @@ async def addevent(
                             and type == "image"
                             and file_ext != ".gif"
                         ):
-                            s3_file_path = f"eventsmelody/eventsmelody{random.randint(11111,99999)}{new_event.id}{int(datetime.datetime.utcnow().timestamp())}"
+                            s3_file_path = f"eventsmelody/eventsmelody{random.randint(11111,99999)}{new_event.id}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                             upload_file_path = uploaded_file_path
                             result = upload_to_s3(upload_file_path, s3_file_path)
 
@@ -7780,7 +7779,9 @@ async def addevent(
                                     created_at=datetime.datetime.utcnow(),
                                     created_by=login_user_id,
                                 )
-
+                                db.add(add_new_melody)
+                                db.commit()
+                                
                                 if add_new_melody:
                                     new_event.event_melody_id = add_new_melody.id
                                     db.commit()
@@ -13059,7 +13060,7 @@ async def followandunfollow(
                         )
                         chime_bearer = (
                             friend_groups.user.chime_user_id
-                            if friend_groups.user.chime_user_id
+                            if friend_groups.user
                             else None
                         )
                         member_id = (
