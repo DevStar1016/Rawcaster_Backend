@@ -11,7 +11,6 @@ from app.core import config
 import openai
 import json
 from pydub import AudioSegment
-from better_profanity import profanity
 from gtts import gTTS
 import pyttsx3
 import googletrans
@@ -643,7 +642,7 @@ async def aichat(
                     return {
                         "status": 1,
                         "type": 1 if audio_file else 0,
-                        "query": profanity.censor(query, "*"),
+                        "query": detect_and_remove_offensive(query),
                         "msg": result,
                         "created_at": created_at,
                     }
