@@ -1697,9 +1697,7 @@ def get_event_detail(db, event_id, login_user_id):
     event = {}
     event_details = db.query(Events).filter(Events.id == event_id).first()
     if event_details:
-        default_melody = (
-            db.query(EventMelody).filter_by(id=event_details.event_melody_id).first()
-        )
+       
         event.update(
             {
                 "event_id": event_details.id,
@@ -1761,16 +1759,20 @@ def get_event_detail(db, event_id, login_user_id):
                 else 0,
                 "user_screenshare": event_details.user_screenshare
                 if event_details.user_screenshare != None
-                else 0,
-                "melodies": {
-                    "path": default_melody.path if default_melody.path else None,
-                    "type": default_melody.type if default_melody.type else None,
-                    "is_default": default_melody.event_id
-                    if default_melody.event_id
-                    else None,
-                },
+                else 0
             }
         )
+        default_melody = (
+            db.query(EventMelody).filter_by(id=event_details.event_melody_id).first()
+        )
+        if default_melody:
+            event.update({"melodies": {
+                        "path": default_melody.path if default_melody.path else None,
+                        "type": default_melody.type if default_melody.type else None,
+                        "is_default": default_melody.event_id
+                        if default_melody.event_id
+                        else None,
+                    }})
 
         get_event_default_avs = (
             db.query(EventDefaultAv).filter_by(event_id=event_details.id).all()
