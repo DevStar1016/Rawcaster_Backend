@@ -50,6 +50,7 @@ bucket_name = "rawcaster"
 open_ai_key = "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"
 
 
+
 class Settings(BaseSettings):
     API_V1_STR: str = base_url_segment
     BASE_UPLOAD_FOLDER: str = base_upload_folder

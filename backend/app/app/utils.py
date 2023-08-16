@@ -224,7 +224,7 @@ def sendSMS(mobile_no, message):
     # Create an SNS client
     sns = boto3.client(
         "sns",
-        aws_access_key_id="AKIAYFYE6EFYFBWQRGPB",
+        aws_access_key_id='AKIAYFYE6EFYFBWQRGPB',
         aws_secret_access_key="7HlZXvuVccwoOnVb7HuTVTZ4YeZGvBCy5thSJ6KO",
         region_name="us-west-2",
     )  # Replace 'us-west-2' with your desired AWS region

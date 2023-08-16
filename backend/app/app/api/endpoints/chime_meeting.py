@@ -435,19 +435,19 @@ def exit_meeting(db: Session = Depends(deps.get_db),
 # ---------------------------------------------- Secret --------------------------------------------------------
 
 
-# #    Create Secret
-# import boto3
+#    Create Secret
+import boto3
 
 # # Create a Secrets Manager client
-# secrets_manager_client = boto3.client('secretsmanager',  aws_access_key_id='AKIAYFYE6EFYG6RJOPMF',
-#     aws_secret_access_key='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',
-#      region_name="us-east-1")
+# secrets_manager_client = boto3.client('secretsmanager',  aws_access_key_id=access_key,
+#     aws_secret_access_key=access_secret,
+#     region_name="us-east-1")
 
 # # Define the secret name and value
-# secret_name = 'my-secret'
+# secret_name = 'my_secret1'
 # secret_value = {
-#     'my-username': 'my-username-value',
-#     'my-password': 'my-password-value'
+#     "my_username": "1",
+#     "my_password": "2"
 # }
 
 # # Create the secret in Secrets Manager
@@ -460,21 +460,42 @@ def exit_meeting(db: Session = Depends(deps.get_db),
 # print('Created secret ARN:', response['ARN'])
 
 
-# # Read Secret
-# import boto3
-# import json
+from fastapi.encoders import jsonable_encoder
+@router.post("/get_secret")
+async def get_secret(db:Session=Depends(deps.get_db),MeetingId:str=Form(None)):
+    # Read Secret
+    import boto3
+    import json
+    from botocore.exceptions import ClientError
+    
+    # Create a Secrets Manager client
+    secrets_manager_client = boto3.client('secretsmanager',  aws_access_key_id=access_key,
+        aws_secret_access_key=access_secret,
+        region_name="us-east-1")
 
-# # Create a Secrets Manager client
-# secrets_manager_client = boto3.client('secretsmanager',  aws_access_key_id='AKIAYFYE6EFYG6RJOPMF',
-#     aws_secret_access_key='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',
-#      region_name="us-east-1")
+    # json_string = "{\"my-username\": \"my-username-value\", \"my-password\": \"my-password-value\"}"
+ 
+    get_secret_value_response = secrets_manager_client.get_secret_value(SecretId='my_secret1')
+    return json.loads(get_secret_value_response['SecretString'])
+    try:
+        data = json.loads(json_string)
+        username = data.get("my-username")
+        password = data.get("my-password")
+        return username
+        print(f"Username: {username}")
+        print(f"Password: {password}")
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON: {e}")
+    # try:
+    #     get_secret_value_response = secrets_manager_client.get_secret_value(
+    #         SecretId='my_secret1'
+    #     )
+    #     data=json.loads()
+    
+    # except ClientError as e:
+      
+    #     raise e
 
-# secret_name = 'my-secret'
+    # Decrypts secret using the associated KMS key.
+    # secret = get_secret_value_response['SecretString']
 
-# # Retrieve the secret value from Secrets Manager
-# response = secrets_manager_client.get_secret_value(SecretId=secret_name)
-
-# # Extract the secret value from the response
-# secret_value = response['SecretString']
-# # Parse the secret value from JSON to a dictionary
-# print(secret_value)

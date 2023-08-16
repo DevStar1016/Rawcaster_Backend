@@ -34,25 +34,39 @@ Base = declarative_base()
 
 @router.post("/audio")
 async def audio(db:Session= Depends(deps.get_db)):
-    from gtts import gTTS
-    import os
+    mobile_no="918903257051"
+    msg="hi"
+    send_sms=sendSMS(mobile_no, msg)
+    return "sms"
+    # import pyttsx3
 
-    def text_to_speech(text, language='es', filename='output.mp3'):
-        import googletrans
+    # def speak_text(text, language, accent):
+    #     """Speaks the given text in the specified language and accent."""
         
-        translator = googletrans.Translator()
-        translated = translator.translate(text,dest='es')
-        translated_text=translated.text
+    #     engine = pyttsx3.init()
         
-        tts = gTTS(text=translated_text, lang=language, slow=False)
-        tts.save(filename)
-        os.system(f"start {filename}")  # This will play the speech on Windows. Modify for other OS.
-    
-    text='Rawcaster allows you to configure your meeting to either allow anyone to join or restrict it to a select few. Break out rooms, schmoozing, online chats, voting are some of the features Rawcaster provides with this feature.'
-    s=text_to_speech(text)
-    return s
+    #     voices = engine.getProperty('voices')
+    #     selected_voice = None
+        
+    #     for voice in voices:
+    #         if language.lower() in voice.languages[0].lower() and accent.lower() in voice.id.lower():
+    #             selected_voice = voice
+    #             break
+        
+    #     engine.setProperty("voice",(selected_voice.id).encode("utf-8"))
+        
+    #     engine.setProperty('rate', 150)  # Speed of speech
+    #     engine.setProperty('volume', 0.9)  # Volume level
+        
+    #     engine.say(text)
+    #     engine.runAndWait()
 
-
+    # text = "示例中文"
+    # language = "zh-cn"
+    # accent = "zh-cn-cmn-mandarin"
+    # speak_text(text, language, accent)
+            
+        
 
 @router.post("/audio_with_country_code")
 async def audio_with_country_code(db:Session= Depends(deps.get_db)):
