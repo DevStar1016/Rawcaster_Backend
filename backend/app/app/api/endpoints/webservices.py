@@ -4549,9 +4549,11 @@ async def addnuggets(
                 for i in range(looping_count):
                     nugget_ids=[]
                     
+                    nugget_content=detect_and_remove_offensive(content) if content else None
+                    
                     add_nuggets_master = NuggetsMaster(
                         user_id=login_user_id,
-                        content=(profanity.censor(content, "*") if content else None) if content_location == 0 else None,
+                        content=nugget_content if content_location == 0 else None,
                         _metadata=metadata,
                         poll_duration=poll_duration,
                         created_date=datetime.datetime.utcnow(),
@@ -4662,7 +4664,6 @@ async def addnuggets(
 
                                     sub_process_path = f"{output_dir}{filename}"
                                     
-                                    output_audio_file='test.mp3'
                                     ffmpeg_command = ['ffmpeg', '-i', uploaded_file_path, sub_process_path]
                                     try:
                                         subprocess.run(ffmpeg_command, check=True)
@@ -6525,7 +6526,7 @@ async def editnugget(
                 db.query(Nuggets).filter_by(id=nugget_id, user_id=login_user_id).first()
             )
             if check_nuggets:
-                content = profanity.censor(content, "*") if content else None
+                content = detect_and_remove_offensive(content) if content else None
 
                 share_with = json.loads(share_with) if share_with else None
 

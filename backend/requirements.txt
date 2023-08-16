@@ -24,3 +24,4 @@ pydub
 better-profanity
 pyttsx3
 redis
+profanityfilter==2.0.6 

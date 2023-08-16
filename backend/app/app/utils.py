@@ -26,6 +26,7 @@ from celery import Celery
 import shutil
 from pyfcm import FCMNotification
 from api.endpoints import chime_chat
+from profanityfilter import ProfanityFilter
 
 
 celery_app = Celery("tasks", broker="redis://localhost:8000")
@@ -1811,6 +1812,12 @@ def get_event_detail(db, event_id, login_user_id):
                 }
             )
     return event
+
+
+def detect_and_remove_offensive(text):
+    pf = ProfanityFilter()
+    cleaned_text = pf.censor(text)
+    return cleaned_text
 
 
 def defaultimage(flag):

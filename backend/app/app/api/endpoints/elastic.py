@@ -32,39 +32,20 @@ Base = declarative_base()
 
 
 
-@router.post("/audio")
-async def audio(db:Session= Depends(deps.get_db)):
-    mobile_no="918903257051"
-    msg="hi"
-    send_sms=sendSMS(mobile_no, msg)
-    return "sms"
-    # import pyttsx3
+@router.post("/abusive_word")
+async def abusive_word(db:Session= Depends(deps.get_db)):
+    from profanityfilter import ProfanityFilter
 
-    # def speak_text(text, language, accent):
-    #     """Speaks the given text in the specified language and accent."""
-        
-    #     engine = pyttsx3.init()
-        
-    #     voices = engine.getProperty('voices')
-    #     selected_voice = None
-        
-    #     for voice in voices:
-    #         if language.lower() in voice.languages[0].lower() and accent.lower() in voice.id.lower():
-    #             selected_voice = voice
-    #             break
-        
-    #     engine.setProperty("voice",(selected_voice.id).encode("utf-8"))
-        
-    #     engine.setProperty('rate', 150)  # Speed of speech
-    #     engine.setProperty('volume', 0.9)  # Volume level
-        
-    #     engine.say(text)
-    #     engine.runAndWait()
+    def detect_and_remove_offensive(text):
+        pf = ProfanityFilter()
+        cleaned_text = pf.censor(text)
+        return cleaned_text
 
-    # text = "示例中文"
-    # language = "zh-cn"
-    # accent = "zh-cn-cmn-mandarin"
-    # speak_text(text, language, accent)
+    text = ""
+    cleaned_text = detect_and_remove_offensive(text)
+    print(cleaned_text)
+   
+
             
         
 
