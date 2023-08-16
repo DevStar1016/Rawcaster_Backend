@@ -41,7 +41,7 @@ async def abusive_word(db:Session= Depends(deps.get_db)):
         cleaned_text = pf.censor(text)
         return cleaned_text
 
-    text = ""
+    text = "妈的"
     cleaned_text = detect_and_remove_offensive(text)
     print(cleaned_text)
    

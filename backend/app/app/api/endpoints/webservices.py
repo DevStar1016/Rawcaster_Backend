@@ -8912,7 +8912,9 @@ async def editevent(
                                     created_at=datetime.datetime.utcnow(),
                                     created_by=login_user_id,
                                 )
-
+                                db.add(add_new_melody)
+                                db.commit()
+                                
                                 if add_new_melody:
                                     edit_event.event_melody_id = add_new_melody.id
                                     db.commit()

@@ -432,70 +432,7 @@ def exit_meeting(db: Session = Depends(deps.get_db),
 #     return response
 
 
-# ---------------------------------------------- Secret --------------------------------------------------------
 
 
-#    Create Secret
-import boto3
 
-# # Create a Secrets Manager client
-# secrets_manager_client = boto3.client('secretsmanager',  aws_access_key_id=access_key,
-#     aws_secret_access_key=access_secret,
-#     region_name="us-east-1")
-
-# # Define the secret name and value
-# secret_name = 'my_secret1'
-# secret_value = {
-#     "my_username": "1",
-#     "my_password": "2"
-# }
-
-# # Create the secret in Secrets Manager
-# response = secrets_manager_client.create_secret(
-#     Name=secret_name,
-#     SecretString=str(secret_value)
-# )
-
-# # Print the ARN (Amazon Resource Name) of the created secret
-# print('Created secret ARN:', response['ARN'])
-
-
-from fastapi.encoders import jsonable_encoder
-@router.post("/get_secret")
-async def get_secret(db:Session=Depends(deps.get_db),MeetingId:str=Form(None)):
-    # Read Secret
-    import boto3
-    import json
-    from botocore.exceptions import ClientError
-    
-    # Create a Secrets Manager client
-    secrets_manager_client = boto3.client('secretsmanager',  aws_access_key_id=access_key,
-        aws_secret_access_key=access_secret,
-        region_name="us-east-1")
-
-    # json_string = "{\"my-username\": \"my-username-value\", \"my-password\": \"my-password-value\"}"
- 
-    get_secret_value_response = secrets_manager_client.get_secret_value(SecretId='my_secret1')
-    return get_secret_value_response['SecretString']
-    try:
-        data = json.loads(json_string)
-        username = data.get("my-username")
-        password = data.get("my-password")
-        return username
-        print(f"Username: {username}")
-        print(f"Password: {password}")
-    except json.JSONDecodeError as e:
-        print(f"Error decoding JSON: {e}")
-    # try:
-    #     get_secret_value_response = secrets_manager_client.get_secret_value(
-    #         SecretId='my_secret1'
-    #     )
-    #     data=json.loads()
-    
-    # except ClientError as e:
-      
-    #     raise e
-
-    # Decrypts secret using the associated KMS key.
-    # secret = get_secret_value_response['SecretString']
 
