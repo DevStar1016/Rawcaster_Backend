@@ -235,6 +235,7 @@ async def test_list(db:Session= Depends(deps.get_db)):
         for data in nug_attach:
             print(data.id)
 
+    
         
 @router.post("/listnuggetsold")  
 async def listnuggetsold(

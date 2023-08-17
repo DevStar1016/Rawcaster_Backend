@@ -50,6 +50,7 @@ async def signup(
     last_name: str = Form(None, max_length=100),
     display_name: str = Form(None, max_length=100),
     gender: str = Form(None, description="1-male,2-female"),
+    other_gender:str=Form(None),
     dob: Any = Form(None),
     email_id: str = Form(None, max_length=100, description="email or mobile number"),
     country_code: str = Form(None),
@@ -258,6 +259,7 @@ async def signup(
                     is_mobile_no_verified=0,
                     country_id=country_id,
                     user_code=None,
+                    other_gender=other_gender,
                     signup_type=signup_type,
                     profile_img=defaultimage("profile_img"),
                     signup_social_ref_id=signup_social_ref_id,
@@ -1408,6 +1410,7 @@ def user_profile(db, id):
                 "first_name": get_user.first_name if get_user.first_name else "",
                 "last_name": get_user.last_name if get_user.last_name else "",
                 "gender": get_user.gender if get_user.gender else "",
+                "other_gender":get_user.other_gender if get_user.other_gender else "",
                 "dob": get_user.dob if get_user.dob else "",
                 "country_code": get_user.country_code if get_user.country_code else "",
                 "country_id": get_user.country_id if get_user.country_id else "",
@@ -1657,6 +1660,7 @@ async def updatemyprofile(
     first_name: str = Form(None),
     last_name: str = Form(None),
     gender: str = Form(None, description="0->Transgender,1->Male,2->Female"),
+    other_gender:str=Form(None),
     dob: Any = Form(None),
     email_id: str = Form(None),
     website: str = Form(None),
@@ -1811,6 +1815,7 @@ async def updatemyprofile(
                     get_user_profile.influencer_category = (
                         influencer_category.strip() if influencer_category else None
                     )
+                    get_user_profile.other_gender=other_gender
                     db.commit()
                     
                     # Profile Image Upload
@@ -4193,15 +4198,14 @@ def process_data(
     subprocess.run(command)
 
     # Generate the output file paths
-    file_paths = []
+    splited_file_path = []
     for i in range(0, 1000):  # Assuming up to 999 output parts
         file_path = output_prefix + f"{i:03d}.mp4"
 
         if not os.path.exists(file_path):
             break
-        file_paths.append(file_path)
+        splited_file_path.append(file_path)
 
-    splited_file_path = file_paths
     
     #remove local file path
     os.remove(uploaded_file_path)
@@ -4213,16 +4217,29 @@ def process_data(
     row = 0
     nugget_id = None
     nugget_ids=[]
+   
+    # Reverse File Path
+    tot_length=len(splited_file_path)
+    content_location = 1
+    content=None
     
-    for local_file_pth in splited_file_path:
+    for local_file_pth in splited_file_path[::-1]:
+        
         if row == 0:
-            pass
+            # Get last record
+            getLastRecord=db.query(NuggetsMaster).filter(NuggetsMaster.user_id == login_user_id).order_by(NuggetsMaster.id.desc()).first()
+            content = getLastRecord.content if getLastRecord else None
+            getLastRecord.content=None
+            db.commit()
+            
         else:
             add_nuggets_master = NuggetsMaster(
-                user_id=login_user_id, created_date=datetime.datetime.utcnow(), status=0
+                user_id=login_user_id,content=content if tot_length == content_location else None,created_date=datetime.datetime.utcnow(), status=0
             )
             db.add(add_nuggets_master)
             db.commit()
+        
+        content_location = content_location + 1
 
         s3_file_path = f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
 
@@ -4541,7 +4558,7 @@ async def addnuggets(
             else:
                 # Set Content for a first Nugget (Only for splited file upload)
                 splites_flag=0
-                content_location = 0
+                content_location = 1
                 looping_count = len(nuggets_media) if nuggets_media else 1
 
                 nugget_details = []
@@ -4552,7 +4569,7 @@ async def addnuggets(
                     
                     add_nuggets_master = NuggetsMaster(
                         user_id=login_user_id,
-                        content=nugget_content if content_location == 0 else None,
+                        content=nugget_content if looping_count == content_location else None,
                         _metadata=metadata,
                         poll_duration=poll_duration,
                         created_date=datetime.datetime.utcnow(),
@@ -4560,6 +4577,8 @@ async def addnuggets(
                     )
                     db.add(add_nuggets_master)
                     db.commit()
+                    db.refresh(add_nuggets_master)
+                    
                     content_location = content_location + 1
                     if add_nuggets_master:
                         # Poll Option save
@@ -4668,7 +4687,7 @@ async def addnuggets(
                                             share_with
                                         )
                                         nugget_ids += splited_video_reposne
-                                   
+                                        
                                     
                                 elif type == "audio":
                                     base_dir = "rawcaster_uploads"
@@ -6052,7 +6071,7 @@ async def addnuggetcomment(
                     user_id=login_user_id,
                     parent_id=comment_id,
                     nugget_id=nugget_id,
-                    content= detect_and_remove_offensive(comment),
+                    content= detect_and_remove_offensive(comment) if comment else None,
                     created_date=datetime.datetime.utcnow(),
                     modified_date=datetime.datetime.utcnow(),
                 )
@@ -6163,7 +6182,7 @@ async def editnuggetcomment(
                 .first()
             )
             if check_nugget_comment:
-                check_nugget_comment.content = detect_and_remove_offensive(comment)
+                check_nugget_comment.content = detect_and_remove_offensive(comment) if comment else None
                 check_nugget_comment.modified_date = datetime.datetime.utcnow()
                 db.commit()
                 if check_nugget_comment:
@@ -7611,12 +7630,12 @@ async def addevent(
                 datetime_str = datetime.datetime.combine(date_obj, time_obj)
 
                 new_event = Events(
-                    title=event_title,
+                    title= detect_and_remove_offensive(event_title),
                     ref_id=reference_id,
                     chime_meeting_id=chime_meeting_id,
                     server_id=server_id if server_id != None else None,
                     event_type_id=event_type,
-                    description=event_message,
+                    description=detect_and_remove_offensive(event_message) if event_message else None,
                     event_layout_id=event_layout,
                     no_of_participants=event_participants,
                     duration=event_duration,
@@ -7726,8 +7745,12 @@ async def addevent(
                             type = "image"
                         elif file_ext == ".mp3":
                             type = "audio"
+                            media_type = 3
+                            
                         elif file_ext == "pptx" or file_ext == "ppt":
                             type = "ppt"
+                            media_type = 4
+                            
                         elif "video" in file_temp:
                             type = "video"
                             media_type = 2
@@ -8737,8 +8760,8 @@ async def editevent(
 
                 old_start_datetime = edit_event.start_date_time if edit_event else None
 
-                edit_event.title = event_title
-                edit_event.description = event_message
+                edit_event.title = detect_and_remove_offensive(event_title) if event_title else None
+                edit_event.description = detect_and_remove_offensive(event_message) if event_message else None
                 edit_event.event_type_id = event_type
                 edit_event.event_layout_id = event_layout
                 edit_event.no_of_participants = event_participants
@@ -8857,10 +8880,15 @@ async def editevent(
                             or file_ext == "jpg"
                         ):
                             type = "image"
+                            
                         elif file_ext == ".mp3":
                             type = "audio"
+                            media_type=3
+                            
                         elif file_ext == "pptx" or file_ext == "ppt":
                             type = "ppt"
+                            media_type=4
+                            
                         elif "video" in file_temp:
                             type = "video"
                             media_type = 2
@@ -10081,6 +10109,7 @@ async def getothersprofile(
                             if get_user.last_name
                             else "",
                             "gender": get_user.gender if get_user.gender else "",
+                            "other_gender":get_user.other_gender if get_user.other_gender else "",
                             "country_code": get_user.country_code
                             if get_user.country_code
                             else "",
@@ -12956,8 +12985,7 @@ async def followandunfollow(
                     .filter(
                         FollowUser.follower_userid == login_user_id,
                         FollowUser.following_userid == follow_userid,
-                    )
-                    .first()
+                    ).first()
                 )
 
                 friend_groups = (
@@ -12965,16 +12993,10 @@ async def followandunfollow(
                     .filter(
                         FriendGroups.group_name == "My Fans",
                         FriendGroups.created_by == follow_userid,
-                    )
-                    .first()
+                    ).first()
                 )
 
-                if (
-                    type == 1
-                    and get_user_detail
-                    and not follow_user
-                    and login_user_id != follow_userid
-                ):  # Follow
+                if (type == 1 and get_user_detail and not follow_user and login_user_id != follow_userid):  # Follow
                     add_follow_user = FollowUser(
                         follower_userid=login_user_id,
                         following_userid=follow_userid,
@@ -12982,8 +13004,10 @@ async def followandunfollow(
                     )
                     db.add(add_follow_user)
                     db.commit()
-
+                    db.refresh(add_follow_user)
+                    
                     if add_follow_user and friend_groups:
+        
                         friend_group_member = (
                             db.query(FriendGroupMembers)
                             .filter(
@@ -13015,35 +13039,39 @@ async def followandunfollow(
                                 add_frnd_group.id,
                             )
 
-                            # Add Member in Channel
-                            channel_arn = (
-                                friend_groups.group_arn
-                                if friend_groups.group_arn
-                                else None
-                            )
-                            chime_bearer = (
-                                friend_groups.user.chime_user_id
-                                if friend_groups.user.chime_user_id
-                                else None
-                            )
-                            member_id = (
-                                list(add_frnd_group.user.chime_user_id)
-                                if add_frnd_group.user.chime_user_id
-                                else None
-                            )
-                            try:
-                                addmembers(channel_arn, chime_bearer, member_id)
-                            except Exception as e:
-                                print(f"Follow:{e}")
+                        # Add Member in Channel
+                        channel_arn = (
+                            friend_groups.group_arn
+                            if friend_groups.group_arn
+                            else None
+                        )
+                        chime_bearer = (
+                            friend_groups.user.chime_user_id
+                            if friend_groups.user.chime_user_id
+                            else None
+                        )
+                        member_id = (
+                            list(add_frnd_group.user.chime_user_id)
+                            if add_frnd_group.user.chime_user_id
+                            else None
+                        )
+                        try:
+                            addmembers(channel_arn, chime_bearer, member_id)
+                        except Exception as e:
+                            print(f"Follow:{e}")
 
-                    get_influence_count = croninfluencemember(db, get_user.id)
+                        get_influence_count = croninfluencemember(db, get_user.id)
 
-                    # insert notification
-
-                    return {
-                        "status": 1,
-                        "msg": f"Now you are fan of {add_follow_user.user2.display_name}",
-                    }
+                        return {
+                            "status": 1,
+                            "msg": f"Now you are fan of {add_follow_user.user2.display_name}",
+                        }
+                    else:
+                        return {
+                            "status": 0,
+                            "msg": "Something went wrong.",
+                            }
+                        
 
                 elif type == 2:
                     if friend_groups:
@@ -13595,7 +13623,7 @@ async def addliveevent(
                 }
 
             event_title = (
-                event_title
+                detect_and_remove_offensive(event_title)
                 if event_title and event_title != None or event_title.strip() != ""
                 else None
             )
@@ -13964,7 +13992,7 @@ async def editliveevent(
 
             event_id = int(event_id) if event_id else None
             event_title = (
-                event_title
+                detect_and_remove_offensive(event_title)
                 if event_title and event_title.strip() != "" or event_title != None
                 else None
             )

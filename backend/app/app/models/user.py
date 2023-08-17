@@ -24,6 +24,7 @@ class User(Base):
     last_name = Column(String(100))
     display_name = Column(String(100))
     gender = Column(TINYINT(1), comment=" 0->Transgender, 1->Male, 2->Female ")
+    other_gender=Column(String(100))
     dob = Column(Date)
     country_code = Column(String(10))
     mobile_no = Column(BigInteger)
