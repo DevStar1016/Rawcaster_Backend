@@ -2442,7 +2442,7 @@ async def logins(
                 "name": name,
                 "user_id": user_id,
                 "authcode": new_auth_code,
-                "acc_verify_status": get_user.is_email_id_verified if get_user.signup_type == 1 else  get_user.is_email_iis_mobile_no_verifiedd_verified if get_user.signup_type == 2 else None,
+                "acc_verify_status": get_user.is_email_id_verified if get_user.signup_type == 1 else  get_user.is_mobile_no_verified if get_user.signup_type == 2 else None,
                 "signup_type": get_user.signup_type,
                 "first_time": 1, # existing_user   ( Existing user first time login - goto influencer page)
                 "chime_user_id": check_chat_id,
