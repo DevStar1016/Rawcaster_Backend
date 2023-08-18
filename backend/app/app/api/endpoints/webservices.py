@@ -708,7 +708,7 @@ async def resendotp(
                 # return {"status":1,"otp_ref_id":otp_ref_id,"msg":"Success"}
 
         get_otp_log = (
-            db.query(OtpLog).filter(OtpLog.id == otp_ref_id, OtpLog.status == 1).first()
+            db.query(OtpLog).filter(OtpLog.id == otp_ref_id, OtpLog.status == 0).first()
         )
 
         if not get_otp_log:
@@ -769,7 +769,7 @@ async def resendotp(
                     pass
 
             remaining_seconds = 0
-            target_time = datetime.datetime.timestamp(otp_time) + 300
+            target_time = datetime.datetime.timestamp(otp_time) + 120
             current_time = datetime.datetime.utcnow().timestamp()
 
             if current_time < target_time:
@@ -1054,7 +1054,7 @@ async def forgotpassword(
                     if add_otp_log:
                         otp_ref_id = add_otp_log.id
 
-                target_time = otp_time.timestamp() + 300
+                target_time = otp_time.timestamp() + 120
                 if otp_time.timestamp() < target_time:
                     remaining_seconds = target_time - otp_time.timestamp()
                 msg = ""
