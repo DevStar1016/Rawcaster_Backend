@@ -7737,6 +7737,7 @@ async def addevent(
                         file_size = file_stat.st_size
 
                         media_type = 1
+                        type=''
                         if (
                             file_ext == ".png"
                             or file_ext == ".jpeg"
@@ -8898,8 +8899,8 @@ async def editevent(
                             and type == "image"
                             and file_ext != ".gif"
                         ):
-                            s3_file_path = f"eventsmelody/eventsmelody{random.randint(11111,99999)}{edit_event.id}{int(datetime.datetime.utcnow().timestamp())}"
-                            upload_file_path = upload_file_path
+                            s3_file_path = f"eventsmelody/eventsmelody{random.randint(11111,99999)}{edit_event.id}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
+                            upload_file_path = uploaded_file_path
                             result = upload_to_s3(upload_file_path, s3_file_path)
 
                             if result and result["status"] == 1:
@@ -8922,15 +8923,14 @@ async def editevent(
 
                         else:
                             s3_file_path = f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{edit_event.id}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                            upload_file_path = upload_file_path
-
+                            
                             if type == "video" and file_ext != ".mp4":
                                 s3_file_path = f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{edit_event.id}{int(datetime.datetime.utcnow().timestamp())}.mp4"
-                                upload_file_path = video_file_upload(
-                                    event_melody, compress=1, file_ext=file_ext
-                                )
+                                # upload_file_path = video_file_upload(
+                                #     event_melody, compress=1, file_ext=file_ext
+                                # )
 
-                            result = upload_to_s3(upload_file_path, s3_file_path)
+                            result = upload_to_s3(uploaded_file_path, s3_file_path)
 
                             if result and result["status"] == 1:
                                 add_new_melody = EventMelody(
@@ -13095,7 +13095,7 @@ async def followandunfollow(
                         )
                         member_id = (
                             getUserId.user.chime_user_id
-                            if getUserId.user
+                            if getUserId
                             else None
                         )
                         try:
