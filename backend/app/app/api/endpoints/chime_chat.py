@@ -91,11 +91,11 @@ async def list_channel_member(
 
 
 @router.post("/delete_msg")  # Working
-async def delete_msg(db: Session = Depends(deps.get_db), token: str = Form(None)):
+async def delete_msg(db: Session = Depends(deps.get_db)):
     response = chime.delete_channel_message(
-        ChannelArn="arn:aws:chime:us-east-1:562114208112:app-instance/6ea8908f-999b-4b3d-9fae-fa1153129087/channel/9d951b24-8638-4f6c-85f4-778839ee3d0a",
-        MessageId="2141bbd0b04fee2a141be2a16214aeffe4b94697884d63d6f7ebb6218fa04777",
-        ChimeBearer="arn:aws:chime:us-east-1:562114208112:app-instance/6ea8908f-999b-4b3d-9fae-fa1153129087/user/anon_9f7c5018-09b6-4b3e-b710-b8e58f9a4db0",
+        ChannelArn="arn:aws:chime:us-east-1:562114208112:app-instance/6ea8908f-999b-4b3d-9fae-fa1153129087/channel/218d6efe-15e1-450e-b4b7-0f4453aeeeb5",
+        MessageId="cc18cc90ba9d73c731e675b4d9aac44b7c6d6e9a989b65168c9c46fbe4ba4c03",
+        ChimeBearer="arn:aws:chime:us-east-1:562114208112:app-instance/6ea8908f-999b-4b3d-9fae-fa1153129087/user/anon_657be7db-40e1-4585-84b8-680ff815ce5e",
     )
     return response
 
@@ -103,10 +103,10 @@ async def delete_msg(db: Session = Depends(deps.get_db), token: str = Form(None)
 @router.post("/list_channel_msg")  # Working
 async def list_channel_msg(db: Session = Depends(deps.get_db), token: str = Form(None)):
     response = chime.list_channel_messages(
-        ChannelArn="arn:aws:chime:us-east-1:562114208112:app-instance/6ea8908f-999b-4b3d-9fae-fa1153129087/channel/9d951b24-8638-4f6c-85f4-778839ee3d0a",
+        ChannelArn="arn:aws:chime:us-east-1:562114208112:app-instance/6ea8908f-999b-4b3d-9fae-fa1153129087/channel/218d6efe-15e1-450e-b4b7-0f4453aeeeb5",
         SortOrder="ASCENDING",
         MaxResults=50,
-        ChimeBearer="arn:aws:chime:us-east-1:562114208112:app-instance/6ea8908f-999b-4b3d-9fae-fa1153129087/user/anon_ef587af3-c304-4d83-b0ae-7523fb33a609",
+        ChimeBearer="arn:aws:chime:us-east-1:562114208112:app-instance/6ea8908f-999b-4b3d-9fae-fa1153129087/user/anon_657be7db-40e1-4585-84b8-680ff815ce5e",
     )
     return response
 
@@ -236,3 +236,34 @@ def addMembers(
     )
 
     return response
+
+
+
+
+@router.post("/sendChatMessage")  # Working
+async def send_chat_message(
+    db: Session = Depends(deps.get_db),
+    chime_bearer: str = Form(...),
+    message: str = Form(...),
+    ):
+        
+    # Send a channel message
+    response = chime.send_channel_message(
+        ChannelArn="arn:aws:chime:us-east-1:562114208112:app-instance/6ea8908f-999b-4b3d-9fae-fa1153129087/channel/218d6efe-15e1-450e-b4b7-0f4453aeeeb5",
+        Content=message,
+        Type="STANDARD",
+        Persistence="PERSISTENT",
+        ChimeBearer=chime_bearer,
+    )
+
+    # Check the response
+    if response["ResponseMetadata"]["HTTPStatusCode"] == 201:
+        print(response)
+        return {
+            "status": 1,
+            "msg": "Channel message sent successfully.",
+        }
+    else:
+        return {"status": 0, "msg": "Failed to send channel message"}
+
+            
