@@ -2588,7 +2588,7 @@ async def respondtofriendrequests(
 #                 for res in my_friend_group:
 #                     get_user=db.query(User).filter(User.id == res.created_by).first()
 
-#                     gte_frnd_group_count=db.query(FriendGroupMembers).filter(FriendGroupMembers.group_id == res.id).count()
+#                     get_frnd_group_count=db.query(FriendGroupMembers).filter(FriendGroupMembers.group_id == res.id).count()
 #                     grouptype=1
 #                     groupname=res.group_name
 
@@ -2662,7 +2662,7 @@ async def respondtofriendrequests(
 #                                             "group_id":res.id,
 #                                             "group_name":groupname,
 #                                             "group_icon":res.group_icon if res.group_icon else defaultimage('group_icon'),
-#                                             "group_member_count":(gte_frnd_group_count + 1 if grouptype == 1 else gte_frnd_group_count)  if gte_frnd_group_count else 0,
+#                                             "group_member_count":(get_frnd_group_count + 1 if grouptype == 1 else get_frnd_group_count)  if get_frnd_group_count else 0,
 #                                             "locked":1
 #                                             })
 #                     else:
@@ -2672,7 +2672,7 @@ async def respondtofriendrequests(
 #                                             "locked":0,
 #                                             "owner_membership_type":get_user.user_status_id,
 #                                             "group_icon":res.group_icon if res.group_icon else defaultimage('group_icon'),
-#                                             "group_member_count":(gte_frnd_group_count + 1 if grouptype == 1 else gte_frnd_group_count)  if gte_frnd_group_count else 0,
+#                                             "group_member_count":(get_frnd_group_count + 1 if grouptype == 1 else get_frnd_group_count)  if get_frnd_group_count else 0,
 #                                             "group_owner":res.created_by if res.created_by else 0,
 #                                             "typing":0,
 #                                             "chat_enabled":res.chat_enabled,
@@ -2765,7 +2765,7 @@ async def listallfriendgroups(
                 for res in my_friend_group:
                     get_user = db.query(User).filter(User.id == res.created_by).first()
 
-                    gte_frnd_group_count = (
+                    get_frnd_group_count = (
                         db.query(FriendGroupMembers)
                         .filter(FriendGroupMembers.group_id == res.id)
                         .count()
@@ -2848,6 +2848,7 @@ async def listallfriendgroups(
                             {
                                 "user_id": res.created_by,
                                 "email_id": get_user.email_id,
+                                "member_arn": get_user.chime_user_id if get_user.chime_user_id else "",
                                 "first_name": get_user.first_name,
                                 "last_name": get_user.last_name,
                                 "display_name": get_user.display_name,
@@ -2913,11 +2914,11 @@ async def listallfriendgroups(
                                 if res.group_icon
                                 else defaultimage("group_icon"),
                                 "group_member_count": (
-                                    gte_frnd_group_count + 1
+                                    get_frnd_group_count + 1
                                     if grouptype == 1
-                                    else gte_frnd_group_count
+                                    else get_frnd_group_count
                                 )
-                                if gte_frnd_group_count
+                                if get_frnd_group_count
                                 else 0,
                                 "locked": 1,
                             }
@@ -2934,11 +2935,11 @@ async def listallfriendgroups(
                                 if res.group_icon
                                 else defaultimage("group_icon"),
                                 "group_member_count": (
-                                    gte_frnd_group_count + 1
+                                    get_frnd_group_count + 1
                                     if grouptype == 1
-                                    else gte_frnd_group_count
+                                    else get_frnd_group_count
                                 )
-                                if gte_frnd_group_count
+                                if get_frnd_group_count
                                 else 0,
                                 "group_owner": res.created_by if res.created_by else 0,
                                 "typing": 0,
@@ -7605,7 +7606,7 @@ async def addevent(
                 # Create Meeting (Chime API Call)
                 chime_meeting_id=None
                 try:
-                    user_id=11 if login_user_id == 88 else 22 if login_user_id == 67 else 33 if login_user_id == 121 else 44 if login_user_id == 728 else 55 if login_user_id == 164 else 66 if login_user_id == 684 else 77
+                    user_id=login_user_id
                     shareScreen=True if user_screenshare == 1 else False
                     joinApprovalRequired=False if event_type == 1 else True 
                     data={'joinApprovalRequired': joinApprovalRequired,'allowOtherToShareScreen':shareScreen,'userId':user_id}
@@ -13720,7 +13721,7 @@ async def addliveevent(
                 # Create Meeting (Chime API Call)
                 chime_meeting_id=None
                 try:
-                    user_id=11 if login_user_id == 88 else 22 if login_user_id == 67 else 33 if login_user_id == 121 else 44 if login_user_id == 728 else 55 if login_user_id == 164 else 66 if login_user_id == 684 else 77
+                    user_id=login_user_id
                    
                     data={'joinApprovalRequired': False,'allowOtherToShareScreen':False,'userId':user_id}
                     headers = {'Content-Type': 'application/json'}
