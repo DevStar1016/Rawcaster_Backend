@@ -2586,8 +2586,8 @@ def EventAccessCheck(db, userid, eventid):
 
 
 def generateOTP():
-    # return random.randint( 100000,999999)
-    return 123456
+    return random.randint( 100000,999999)
+    # return 123456
 
 
 #   --------------------------------------------------
