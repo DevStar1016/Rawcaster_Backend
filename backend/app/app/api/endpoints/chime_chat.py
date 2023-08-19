@@ -208,7 +208,7 @@ async def update_channel_message(db:Session=Depends(deps.get_db),
         
             # Send a channel message
             response = chime.update_channel_message(
-                ChannelArn="arn:aws:chime:us-east-1:562114208112:app-instance/6ea8908f-999b-4b3d-9fae-fa1153129087/channel/218d6efe-15e1-450e-b4b7-0f4453aeeeb5",
+                ChannelArn=channel_id,
                 MessageId=message_id,
                 Content=message,
                 ChimeBearer=chime_user_id,

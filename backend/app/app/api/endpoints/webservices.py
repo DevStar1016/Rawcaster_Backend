@@ -1340,8 +1340,8 @@ def user_profile(db, id):
     if get_user:
         get_account_status=db.query(VerifyAccounts).filter(VerifyAccounts.user_id == get_user.id).first()
         
-        followers_count = db.query(FollowUser).filter_by(following_userid=id).count()
-        following_count = db.query(FollowUser).filter_by(follower_userid=id).count()
+        followers_count = db.query(FollowUser.id).filter_by(following_userid=id).count()
+        following_count = db.query(FollowUser.id).filter_by(follower_userid=id).count()
 
         nugget_count = (
             db.query(Nuggets)
@@ -1356,7 +1356,7 @@ def user_profile(db, id):
         )
     
         event_count = (
-            db.query(Events).filter(Events.created_by == id, Events.status == 1).count()
+            db.query(Events.id).filter(Events.created_by == id, Events.status == 1).count()
         )
 
         friend_count = (
