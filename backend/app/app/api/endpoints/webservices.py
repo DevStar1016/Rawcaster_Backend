@@ -1140,7 +1140,7 @@ async def verifyotpandresetpassword(
         else:
             get_otp_log = (
                 db.query(OtpLog)
-                .filter(OtpLog.id == otp_ref_id, OtpLog.otp == otp, OtpLog.status == 1)
+                .filter(OtpLog.id == otp_ref_id, OtpLog.otp == otp)
                 .first()
             )
 
