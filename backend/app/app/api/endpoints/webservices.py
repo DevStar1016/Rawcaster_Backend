@@ -14001,29 +14001,31 @@ async def editliveevent(
             event_type = int(event_type) if event_type else None
             event_start_date = event_start_date if event_start_date else None
             event_start_time = event_start_time if event_start_time else None
-
-            event_invite_custom = (
-                ast.literal_eval(event_invite_mails) if event_invite_mails else None
-            )
-
-            event_invite_groups = (
-                ast.literal_eval(event_invite_groups) if event_invite_groups else None
-            )
-
-            event_invite_friends = (
-                ast.literal_eval(event_invite_friends) if event_invite_friends else None
-            )
-
-            delete_invite_custom = (
-                ast.literal_eval(delete_invite_mails) if delete_invite_mails else None
-            )
             
-            delete_invite_groups = (
-                ast.literal_eval(delete_invite_groups) if delete_invite_groups else None
-            )
-            delete_invite_friends = (
-                ast.literal_eval(delete_invite_friends) if delete_invite_friends else None
-            )
+            event_invite_custom=json.loads(event_invite_mails) if event_invite_mails else None
+            # event_invite_custom = (
+            #     ast.literal_eval(event_invite_mails) if event_invite_mails else None
+            # )
+            event_invite_groups=json.loads(event_invite_groups) if event_invite_groups else None
+            # event_invite_groups = (
+            #     ast.literal_eval(event_invite_groups) if event_invite_groups else None
+            # )
+            event_invite_friends=json.loads(event_invite_friends) if event_invite_friends else None
+            # event_invite_friends = (
+            #     ast.literal_eval(event_invite_friends) if event_invite_friends else None
+            # )
+            delete_invite_custom=json.loads(delete_invite_mails) if delete_invite_mails else None
+            # delete_invite_custom = (
+            #     ast.literal_eval(delete_invite_mails) if delete_invite_mails else None
+            # )
+            delete_invite_groups=json.loads(delete_invite_groups) if delete_invite_groups else None
+            # delete_invite_groups = (
+            #     ast.literal_eval(delete_invite_groups) if delete_invite_groups else None
+            # )
+            delete_invite_friends=json.loads(delete_invite_friends) if delete_invite_friends else None
+            # delete_invite_friends = (
+            #     ast.literal_eval(delete_invite_friends) if delete_invite_friends else None
+            # )
 
             event_exist = (
                 db.query(Events)
