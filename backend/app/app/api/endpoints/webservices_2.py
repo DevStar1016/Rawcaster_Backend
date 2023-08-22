@@ -1130,37 +1130,36 @@ async def temp_file_upload(
 @router.post("/text_to_speech")
 async def text_to_speech(
     db: Session = Depends(deps.get_db)
-):
-    # engine = pyttsx3.init()
-    # engine.say("This is Text-To-Speech Engine Pyttsx3")
-    # engine.runAndWait()
-    # engine.stop()
-    
-    translator = googletrans.Translator()
-    text = 'Rawcaster allows you to configure your meeting to either allow anyone to join or restrict it to a select few. Break out rooms, schmoozing, online chats, voting are some of the features Rawcaster provides with this feature.'
-    translated = translator.translate(text)
-    engine = pyttsx3.init()
-    # return translated.text
-    
-
-    rate = engine.getProperty('rate')
-    engine.setProperty('rate', rate - 50) 
-    
-    voices = engine.getProperty('voices')
-   
-    for voice in voices:
-        print(voice)
-        if 'in' in voice.id:
-            print(voice.id)
-            engine.setProperty('voice', voice.id)
-            break
+    ):
+    import pyttsx3
+    import bcrypt
+    def select_voice_by_language(engine, language,accent):
+        voices = engine.getProperty('voices')
         
-    # Save the audio to a file
-    print(translated.text)
-    output_file = "output.wav"
-    engine.save_to_file(translated.text, output_file)
+        for voice in voices:
+            print(voice.languages[0].descrypt('utf-8'))
+            langugae_code=f'{language}-{accent}'
+            if langugae_code in voice.languages[0]:
+                print(voice)
+                break
+            else:
+                print('NO')
+    #         if target_language in voice.languages[0]:
+    #             return voice
+    #     return None
 
-    engine.runAndWait()
+    engine = pyttsx3.init()
+
+    target_language = 'ta'  # Example language code with country code
+    accent='in'
+    selected_voice = select_voice_by_language(engine, target_language,accent)
+    
+    # if selected_voice:
+    #     engine.setProperty('voice', selected_voice.id)
+    #     engine.say("Hello, this is a sample text.")
+    #     engine.runAndWait()
+    # else:
+    #     print("Voice not found for the specified language.")
 
     
 # # 92  Text To Audio Conversion (Nugget Content)
