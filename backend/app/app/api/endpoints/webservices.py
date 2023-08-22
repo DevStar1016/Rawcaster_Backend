@@ -8689,8 +8689,8 @@ async def editevent(
                     "msg": "You need to complete your account validation before you can do this",
                 }
           
-            delete_invite_custom=delete_invite_mails.split(',') if delete_invite_mails else []
-            
+            # delete_invite_custom=delete_invite_mails.split(',') if delete_invite_mails else []
+            delete_invite_custom=json.loads(delete_invite_mails) if delete_invite_mails else None
             delete_invite_groups = (
                 json.loads(delete_invite_groups) if delete_invite_groups else None
             )
@@ -8734,6 +8734,9 @@ async def editevent(
                     db.commit()
 
                 if delete_invite_custom:
+                    print(delete_invite_custom)
+                    print(type(delete_invite_custom))
+                    
                     delete_invite_mails = (
                         db.query(EventInvitations)
                         .filter(
@@ -13633,40 +13636,43 @@ async def addliveevent(
             event_start_date = event_start_date if event_start_date else None
             event_start_time = event_start_time if event_start_time else None
 
-            event_invite_custom = (
-                event_invite_mails
-                if event_invite_mails and event_invite_mails.strip() != ""
-                else None
-            )
+            event_invite_custom= json.loads(event_invite_mails) if event_invite_mails else None
+            
+            # event_invite_custom = (
+            #     event_invite_mails
+            #     if event_invite_mails and event_invite_mails.strip() != ""
+            #     else None
+            # )
 
-            if event_invite_custom:
-                event_invite_custom = (
-                    ast.literal_eval(event_invite_custom)
-                    if event_invite_custom
-                    else None
-                )
-
-            event_invite_groups = (
-                event_invite_groups
-                if event_invite_groups and event_invite_groups.strip() != ""
-                else None
-            )
-            if event_invite_groups:
-                event_invite_groups = (
-                    ast.literal_eval(event_invite_groups)
-                    if event_invite_groups
-                    else None
-                )
-
-            event_invite_friends = (
-                event_invite_friends
-                if event_invite_friends and event_invite_friends.strip() != ""
-                else None
-            )
-            if event_invite_friends:
-                event_invite_friends = (
-                    json.loads(event_invite_friends) if event_invite_friends else []
-                )
+            # if event_invite_custom:
+                
+            #     event_invite_custom = (
+            #         ast.literal_eval(event_invite_custom)
+            #         if event_invite_custom
+            #         else None
+            #     )
+            event_invite_groups=json.loads(event_invite_groups) if event_invite_groups else None
+            # event_invite_groups = (
+            #     event_invite_groups
+            #     if event_invite_groups and event_invite_groups.strip() != ""
+            #     else None
+            # )
+            # if event_invite_groups:
+            #     event_invite_groups = (
+            #         ast.literal_eval(event_invite_groups)
+            #         if event_invite_groups
+            #         else None
+            #     )
+            event_invite_friends=json.loads(event_invite_friends) if event_invite_friends else None
+            # event_invite_friends = (
+            #     event_invite_friends
+            #     if event_invite_friends and event_invite_friends.strip() != ""
+            #     else None
+            # )
+            # if event_invite_friends:
+            #     event_invite_friends = (
+            #         json.loads(event_invite_friends) if event_invite_friends else []
+            #     )
 
             if not event_title:
                 return {"status": 0, "msg": "Live event title cant be blank."}
