@@ -8733,10 +8733,8 @@ async def editevent(
                     )
                     db.commit()
 
-                if delete_invite_custom:
-                    print(delete_invite_custom)
-                    print(type(delete_invite_custom))
-                    
+                if delete_invite_custom: 
+                                       
                     delete_invite_mails = (
                         db.query(EventInvitations)
                         .filter(
