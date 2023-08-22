@@ -7462,7 +7462,7 @@ async def addevent(
         json.loads(event_invite_friends) if event_invite_friends else None
     )
     
-    event_invite_custom = event_invite_mails if event_invite_mails else None
+    event_invite_custom = json.loads(event_invite_mails) if event_invite_mails else None
     event_invite_groups = (
         json.loads(event_invite_groups) if event_invite_groups else None
     )
@@ -7873,7 +7873,7 @@ async def addevent(
                         sms_message, body = eventPostNotifcationEmail(db, new_event.id)
 
                     if event_invite_custom:
-                        event_invite_custom=event_invite_custom.split(',')
+                        # event_invite_custom=event_invite_custom.split(',')
                         for value in event_invite_custom:
                             # check if e-mail address is well-formed
                             if check_mail(value):
@@ -9032,7 +9032,8 @@ async def editevent(
 
                     body = event_mail_template(content)
                     if event_invite_mails:
-                        invite_mails=event_invite_mails.split(",")
+                        invite_mails=json.loads(event_invite_mails)
+                        # invite_mails=event_invite_mails.split(",")
                         
                         # event_invite_mails = (
                         #     ast.literal_eval(event_invite_mails)
