@@ -8350,10 +8350,10 @@ async def listevents(
                             .first()
                         )
 
-                        default_host_audio = []
-                        default_host_video = []
-                        default_guest_audio = []
-                        default_guest_video = []
+                        default_host_audio = None
+                        default_host_video = None
+                        default_guest_audio = None
+                        default_guest_video = None
                         # event_default_av = (
                         #     db.query(EventDefaultAv.default_host_audio,EventDefaultAv.default_host_video,EventDefaultAv.default_guest_audio,
                         #              EventDefaultAv.default_guest_video)\
@@ -8362,10 +8362,15 @@ async def listevents(
                         event_default_av=event.event_default_av
                         
                         for def_av in event_default_av:
-                            default_host_audio.append(def_av.default_host_audio)
-                            default_host_video.append(def_av.default_host_video)
-                            default_guest_audio.append(def_av.default_guest_audio)
-                            default_guest_video.append(def_av.default_guest_video)
+                            default_host_audio=def_av.default_host_audio
+                            default_host_video=def_av.default_host_video
+                            default_guest_audio=def_av.default_guest_audio
+                            default_guest_video=def_av.default_guest_video
+                            
+                            # default_host_audio.append(def_av.default_host_audio)
+                            # default_host_video.append(def_av.default_host_video)
+                            # default_guest_audio.append(def_av.default_guest_audio)
+                            # default_guest_video.append(def_av.default_guest_video)
 
                         banner_image = (
                             (
@@ -9041,7 +9046,6 @@ async def editevent(
                         #     if event_invite_mails
                         #     else None
                         # )
-                        print(invite_mails)
                         for invite_mail in invite_mails:
                             check_invite_mail=db.query(EventInvitations).filter(EventInvitations.event_id == event_id,EventInvitations.invite_mail == invite_mail).first()
                             if not check_invite_mail:
