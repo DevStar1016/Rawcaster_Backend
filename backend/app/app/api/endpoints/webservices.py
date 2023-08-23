@@ -8350,10 +8350,10 @@ async def listevents(
                             .first()
                         )
 
-                        default_host_audio = None
-                        default_host_video = None
-                        default_guest_audio = None
-                        default_guest_video = None
+                        default_host_audio = 0
+                        default_host_video = 0
+                        default_guest_audio = 0
+                        default_guest_video = 0
                         # event_default_av = (
                         #     db.query(EventDefaultAv.default_host_audio,EventDefaultAv.default_host_video,EventDefaultAv.default_guest_audio,
                         #              EventDefaultAv.default_guest_video)\
