@@ -8461,16 +8461,16 @@ async def listevents(
                                 
                                 "default_host_audio": default_host_audio
                                 if default_host_audio
-                                else None,
+                                else 0,
                                 "default_host_video": default_host_video
                                 if default_host_video
-                                else None,
+                                else 0,
                                 "default_guest_audio": default_guest_audio
                                 if default_guest_audio
-                                else None,
+                                else 0,
                                 "default_guest_video": default_guest_video
                                 if default_guest_video
-                                else None
+                                else 0
                             }
                         )
                     
