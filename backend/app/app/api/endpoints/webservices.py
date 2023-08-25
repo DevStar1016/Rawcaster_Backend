@@ -5107,7 +5107,7 @@ async def listnuggets(
     db: Session = Depends(deps.get_db),
     token: str = Form(None),
     my_nuggets: str = Form(None),
-    filter_type: str = Form(None, description="1-Influencer"),
+    filter_type: str = Form(None, description="0-For you ,1-Influencer"),
     category: str = Form(None, description="Influencer category"),
     user_id: str = Form(None),
     saved: str = Form(None),
@@ -5243,7 +5243,7 @@ async def listnuggets(
                             NuggetsAttachment.media_type == "audio",
                         )
                     )
-                if filter_type == 1:
+                if filter_type == 1: # Influencer
                     my_followers = []  # my_followers
                     follow_user = (
                         db.query(FollowUser.following_userid)
@@ -5256,9 +5256,8 @@ async def listnuggets(
                     
                     get_nuggets = get_nuggets.filter(
                         or_(
-                            and_(Nuggets.user_id == login_user_id),
-                            and_(Nuggets.user_id.in_(my_followers)),
-                            Nuggets.share_type != 2,
+                            Nuggets.user_id == login_user_id,
+                            and_(Nuggets.user_id.in_(my_followers),Nuggets.share_type != 2)
                         )
                     )
                     
@@ -5401,8 +5400,11 @@ async def listnuggets(
                         )
                     )  
                 else:
-                    get_nuggets=get_nuggets.filter(User.influencer_category.like("%" + category + "%"))
-                    
+                    get_nuggets=get_nuggets.filter(or_(Nuggets.user_id == login_user_id))
+                
+            if category:
+                get_nuggets=get_nuggets.filter(User.influencer_category.like("%" + category + "%"))
+                 
             # Omit blocked users nuggets
             requested_by = None
             request_status = 3  # Rejected
