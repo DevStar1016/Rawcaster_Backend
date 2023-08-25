@@ -14480,7 +14480,6 @@ async def enablegoliveevent(
 
 # 78 actionGetinfluencercategory
 
-
 @router.post("/getinfluencercategory")
 async def getinfluencercategory(
     db: Session = Depends(deps.get_db),
@@ -14494,7 +14493,7 @@ async def getinfluencercategory(
         }
 
     elif auth_code == None or auth_code.strip() == "":
-        return {"status": -1, "msg": "Auth Code is missing"}
+        return {"status": 0, "msg": "Auth Code is missing"}
 
     else:
         result_list = []
@@ -14512,6 +14511,14 @@ async def getinfluencercategory(
                     "msg": "Sorry! your login session expired. please login again.",
                 }
             else:
+                get_token_details = (
+                    db.query(ApiTokens)
+                    .filter(ApiTokens.token == access_token)
+                    .order_by(ApiTokens.id.desc())
+                    .first()
+                        )
+                login_user_id = get_token_details.user_id if get_token_details else None
+
                 GetInfluencerCategory = (
                     db.query(InfluencerCategory)
                     .filter_by(status=1)
@@ -14521,6 +14528,16 @@ async def getinfluencercategory(
                 if not GetInfluencerCategory:
                     return {"status": 0, "msg": "No result found!"}
                 else:
+                    get_followers=db.query(FollowUser).filter(
+                        FollowUser.follower_userid == login_user_id
+                    ).all()
+                    user_ids=set([follower.following_userid for follower in get_followers])
+                    
+                    # Get Category
+                    get_category=db.query(User.influencer_category).filter(User.id.in_(user_ids),User.status == 1,User.influencer_category != None).all()
+                    category_ids=set([category.influencer_category for category in get_category])
+                    influencer_category_ids= [int(item) for sublist in category_ids for item in sublist.split(',')]
+
                     for category in GetInfluencerCategory:
                         result_list.append(
                             {
@@ -14529,6 +14546,7 @@ async def getinfluencercategory(
                                 if category.name
                                 and (category.name != None or category.name != "")
                                 else None,
+                                "my_category":1 if category.id in influencer_category_ids else 0
                             }
                         )
                     return {

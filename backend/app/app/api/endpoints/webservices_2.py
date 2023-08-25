@@ -1131,35 +1131,47 @@ async def temp_file_upload(
 async def text_to_speech(
     db: Session = Depends(deps.get_db)
     ):
+
     import pyttsx3
-    import bcrypt
-    def select_voice_by_language(engine, language,accent):
+
+    def read_text_with_native_accent(text, language, accent):
+        """
+        Reads out the given text in the specified native accent for the given language.
+        
+        Args:
+            text (str): The text to be read out.
+            language (str): The language code (ISO 639-1) for the desired language (e.g., 'en' for English).
+            accent (str): The name of the desired native accent for the specified language.
+        """
+        engine = pyttsx3.init()
+        
+        # Set properties, including language and voice (accent)
+        engine.setProperty('rate', 140)  # Speed of speech
+        engine.setProperty('volume', 0.9)  # Volume level
+        
         voices = engine.getProperty('voices')
+        selected_voice = None
         
         for voice in voices:
-            print(voice.languages[0].descrypt('utf-8'))
-            langugae_code=f'{language}-{accent}'
-            if langugae_code in voice.languages[0]:
-                print(voice)
+            if language.lower() in str(voice.languages[0].lower()) and str(accent.lower() in voice.id.lower()):
+                selected_voice = voice
                 break
-            else:
-                print('NO')
-    #         if target_language in voice.languages[0]:
-    #             return voice
-    #     return None
+        
+        if selected_voice:
+            engine.setProperty('voice', selected_voice.id)
+            # engine.save_to_file(text,"spanish_mexico.mp3")
+            
+            audio_file_path = "output_audio.mp3"  # Output audio file path
+            
+            engine.runAndWait()
+        else:
+            print("Selected voice not found for the specified language and accent.")
 
-    engine = pyttsx3.init()
+    text_to_read = "Rawcaster le permite configurar su reunión para permitir que cualquiera se una o restringirla a unos pocos seleccionados. Salas de descanso, charlas, chats en línea y votaciones son algunas de las funciones que Rawcaster ofrece con esta función."
+    target_language = "es"  # English
+    target_accent = "MX"  # US English accent
 
-    target_language = 'ta'  # Example language code with country code
-    accent='in'
-    selected_voice = select_voice_by_language(engine, target_language,accent)
-    
-    # if selected_voice:
-    #     engine.setProperty('voice', selected_voice.id)
-    #     engine.say("Hello, this is a sample text.")
-    #     engine.runAndWait()
-    # else:
-    #     print("Voice not found for the specified language.")
+    read_text_with_native_accent(text_to_read, target_language, target_accent)
 
     
 # # 92  Text To Audio Conversion (Nugget Content)
