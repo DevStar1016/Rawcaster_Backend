@@ -156,7 +156,7 @@ async def send_channel_message(
                 Type="STANDARD",
                 Persistence="PERSISTENT",
                 ChimeBearer=chime_user_id,
-                Metadata=meta_data if meta_data else None
+                Metadata=meta_data if meta_data else ""
             )
 
             # Check the response
