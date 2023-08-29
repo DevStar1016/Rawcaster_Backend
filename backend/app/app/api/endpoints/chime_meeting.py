@@ -101,8 +101,8 @@ def attendees(db: Session = Depends(deps.get_db),
 
 
 
-@router.post("/delete_meeting")
-def delete_meeting(db: Session = Depends(deps.get_db),
+@router.post("/end_meeting")
+def end_meeting(db: Session = Depends(deps.get_db),
         token: str = Form(None),meeting_id: str = Form(None)):
     if not token:
         return {"status": -1, "msg": "Sorry! your login session expired. please login again."}
