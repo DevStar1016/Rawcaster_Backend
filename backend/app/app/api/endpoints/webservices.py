@@ -5099,8 +5099,7 @@ async def addnuggets(
                         nugget_details, key=lambda x: x["nugget_id"]
                     ),
                 }
-                
-     
+         
 # 26. List Nuggets
 @router.post("/listnuggets")  
 async def listnuggets(
@@ -5660,7 +5659,7 @@ async def listnuggets(
                     "nuggets_list": nuggets_list
                     }     
  
-            
+                
 # 27. Like And Unlike Nugget
 @router.post("/likeandunlikenugget")
 async def likeandunlikenugget(

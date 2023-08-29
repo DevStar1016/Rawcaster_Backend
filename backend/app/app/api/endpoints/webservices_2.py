@@ -1133,7 +1133,7 @@ async def text_to_speech(
     ):
 
     import pyttsx3
-
+   
     def read_text_with_native_accent(text, language, accent):
         """
         Reads out the given text in the specified native accent for the given language.
@@ -1166,12 +1166,12 @@ async def text_to_speech(
             engine.runAndWait()
         else:
             print("Selected voice not found for the specified language and accent.")
-
+            
     text_to_read = "Rawcaster le permite configurar su reunión para permitir que cualquiera se una o restringirla a unos pocos seleccionados. Salas de descanso, charlas, chats en línea y votaciones son algunas de las funciones que Rawcaster ofrece con esta función."
     target_language = "es"  # English
     target_accent = "MX"  # US English accent
 
-    read_text_with_native_accent(text_to_read, target_language, target_accent)
+    s=read_text_with_native_accent(text_to_read, target_language, target_accent)
 
     
 # # 92  Text To Audio Conversion (Nugget Content)

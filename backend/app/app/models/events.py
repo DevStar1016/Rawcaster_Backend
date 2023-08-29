@@ -56,6 +56,8 @@ class Events(Base):
     join_before_host = Column(TINYINT)
     sound_notify = Column(TINYINT)
     user_screenshare = Column(TINYINT)
+    pin_enabled=Column(TINYINT,default=0)
+    pinned_user_id=Column(Integer)
     status = Column(
         TINYINT, default=1, nullable=False, comment=" 0->Inactive, 1->Active "
     )
