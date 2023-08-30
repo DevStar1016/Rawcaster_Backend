@@ -21,12 +21,19 @@ bucket_name = config.bucket_name
 @router.post("/externaluserjoin")
 async def externalUserJoin(
     db: Session = Depends(deps.get_db),email_id:str=Form(None),
-    name:str=Form(None)):
+    name:str=Form(None),
+    reference_id:str=Form(None)):
     
     if not email_id:
         return {"status": 0, "msg": "Email Id is Missing"}
     if not name:
         return {"status": 0, "msg": "Name is Missing"}
+    
+    if reference_id:
+        checkReference=db.query(Events).filter(Events.ref_id == reference_id).first()
+        
+        if not checkReference:
+            return {"status":0,"msg":"Invalid Meeting Code"}
 
     currentTimestamp=int(datetime.now().timestamp())
     
