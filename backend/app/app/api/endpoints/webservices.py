@@ -12271,8 +12271,7 @@ async def eventjoinvalidation(
     emailid: str = Form(None),
     name: str = Form(None),
 ):
-    if token == None or token.strip() == "":
-        return {"status": 0, "msg": "Token Missing"}
+
     if eventid == None:
         return {"status": 0, "msg": "Event ID Missing"}
     elif emailid == None:
@@ -12281,7 +12280,10 @@ async def eventjoinvalidation(
         return {"status": 0, "msg": "Name Missing"}
     else:
         userid = 0
-
+        emailid=emailid.strip()
+        name=name.strip()
+        eventid=eventid.strip()
+        
         result_list = {}
 
         userdetails = (
@@ -12291,12 +12293,14 @@ async def eventjoinvalidation(
             userid = userdetails.id
         else:
             access_token = 0
-            access_token = checkToken(db, token)
-            get_token_details = (
-                db.query(ApiTokens).filter(ApiTokens.token == access_token).all()
-            )
-            for res in get_token_details:
-                userid = res.user_id
+            if token:
+                access_token = checkToken(db, token)
+                
+                get_token_details = (
+                    db.query(ApiTokens).filter(ApiTokens.token == access_token).all()
+                )
+                for res in get_token_details:
+                    userid = res.user_id
 
             userdetails = (
                 db.query(User).filter(User.id == userid, User.status == 1).first()
@@ -12499,6 +12503,7 @@ async def eventjoinvalidation(
                     )
 
                 else:
+                    
                     userdetail.update(
                         {
                             "id": random.randint(100, 999),

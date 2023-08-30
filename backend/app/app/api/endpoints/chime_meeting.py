@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, Form
 from app.models import *
 from app.core.security import *
-from app.utils import checkToken
+from app.utils import checkToken,defaultimage
 from app.api import deps
 from sqlalchemy.orm import Session
 from app.core import config
 import requests
-import json
+import json,random
 
 router = APIRouter()
 
@@ -16,6 +16,29 @@ bucket_name = config.bucket_name
 
 
 
+
+#   62.Event Join Validation
+@router.post("/externaluserjoin")
+async def externalUserJoin(
+    db: Session = Depends(deps.get_db),email_id:str=Form(None),
+    name:str=Form(None)):
+    
+    if not email_id:
+        return {"status": 0, "msg": "Email Id is Missing"}
+    if not name:
+        return {"status": 0, "msg": "Name is Missing"}
+
+    currentTimestamp=int(datetime.now().timestamp())
+    
+    return  {   "status":1,
+                "msg":"Success",
+                "id": int(f"{currentTimestamp}{random.randint(100, 999)}"),
+                "email": email_id,
+                "name": name,
+                "profile_image": defaultimage("profile_img"),
+                "user_status_type": 1,
+            }
+    
 
 @router.post("/join_meeting")
 def join_meeting(db: Session = Depends(deps.get_db),
