@@ -32,11 +32,13 @@ async def externalUserJoin(
     
     return  {   "status":1,
                 "msg":"Success",
-                "id": int(f"{currentTimestamp}{random.randint(100, 999)}"),
-                "email": email_id,
-                "name": name,
-                "profile_image": defaultimage("profile_img"),
-                "user_status_type": 1,
+                "user":{
+                    "user_id": int(f"{currentTimestamp}{random.randint(100, 999)}"),
+                    "email": email_id,
+                    "name": name,
+                    "profile_image": defaultimage("profile_img"),
+                    "user_status_type": 1
+                }
             }
     
 
