@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Form
 from app.models import *
 from app.core.security import *
-from app.utils import checkToken,defaultimage
+from app.utils import checkToken,defaultimage,get_event_detail
 from app.api import deps
 from sqlalchemy.orm import Session
 from app.core import config
@@ -28,25 +28,31 @@ async def externalUserJoin(
         return {"status": 0, "msg": "Email Id is Missing"}
     if not name:
         return {"status": 0, "msg": "Name is Missing"}
+    if not reference_id:
+        return {"status": 0, "msg": "Reference Id Required"}
     
-    if reference_id:
-        checkReference=db.query(Events).filter(Events.ref_id == reference_id).first()
+    
+    checkReference=db.query(Events).filter(Events.ref_id == reference_id).first()
+    
+    if not checkReference:
+        return {"status":0,"msg":"Invalid Meeting Code"}
+    else:
         
-        if not checkReference:
-            return {"status":0,"msg":"Invalid Meeting Code"}
-
-    currentTimestamp=int(datetime.now().timestamp())
-    
-    return  {   "status":1,
-                "msg":"Success",
-                "user":{
-                    "user_id": int(f"{currentTimestamp}{random.randint(100, 999)}"),
-                    "email": email_id,
-                    "name": name,
-                    "profile_image": defaultimage("profile_img"),
-                    "user_status_type": 1
+        event = get_event_detail(db, checkReference.id,None)
+        
+        currentTimestamp=int(datetime.now().timestamp())
+        
+        return  {   "status":1,
+                    "msg":"Success",
+                    "user":{
+                        "user_id": int(f"{currentTimestamp}{random.randint(100, 999)}"),
+                        "email": email_id,
+                        "name": name,
+                        "profile_image": defaultimage("profile_img"),
+                        "user_status_type": 1
+                    },
+                    "event":event
                 }
-            }
     
 
 @router.post("/join_meeting")

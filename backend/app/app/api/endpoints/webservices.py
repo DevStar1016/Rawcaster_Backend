@@ -7601,7 +7601,7 @@ async def addevent(
                 
                 
                 reference_id = (
-                    f"RC{random.randint(1,499)}{datetime.datetime.utcnow().timestamp()}"
+                    f"RC{random.randint(1,499)}{int(datetime.datetime.utcnow().timestamp())}"
                 )
                 
                 # Create Meeting (Chime API Call)
@@ -14358,7 +14358,7 @@ async def addgoliveevent(
                 )
                 hours, remainder = divmod(duration.seconds, 3600)
                 minutes, seconds = divmod(remainder, 60)
-                duration_str = f"{hours}:{minutes}:{seconds}"
+                # duration_str = f"{hours}:{minutes}:{seconds}"
 
                 reference_id = f"RC{random.randint(1,499)}{int(datetime.datetime.utcnow().timestamp())}"
 
