@@ -15228,7 +15228,7 @@ async def influencerfollow(
                         User.id != login_user_id, User.status == 1
                     )
                     criteria = criteria.filter(FollowUser.id == None)
-                    
+
                     if search_key:
                         criteria = criteria.filter(
                                 and_(
@@ -15259,9 +15259,9 @@ async def influencerfollow(
                         criteria=criteria.filter(User.influencer_category.like("%"+category+"%"))
                     
                     # Selected Influencer
-                    selected_follow_userid = eval(follow_userid)
+                    # selected_follow_userid = eval(follow_userid)
 
-                    follow_userids = [ref_id.user_ref_id for ref_id in criteria] + selected_follow_userid
+                    follow_userids = [ref_id.user_ref_id for ref_id in criteria] 
 
                 else:
                     follow_userids = eval(follow_userid)
