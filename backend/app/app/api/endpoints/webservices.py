@@ -4703,7 +4703,7 @@ async def addnuggets(
                                     # Generate the random string
                                     random_string = "".join(random.choice(characters) for i in range(18))
 
-                                    filename = f"uploadfile_{random_string}{ext}"
+                                    filename = f"uploadfile_{random_string}.mp3"
 
                                     sub_process_path = f"{output_dir}{filename}"
                                     
@@ -4712,7 +4712,7 @@ async def addnuggets(
                                         subprocess.run(ffmpeg_command, check=True)
                                         print('Audio conversion successful!')
                                     except subprocess.CalledProcessError as e:
-                                        print('Error:', e)
+                                        print('Error.:', e)
                                     
                                     s3_file_path = f"nuggets/audio_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp3"
 
