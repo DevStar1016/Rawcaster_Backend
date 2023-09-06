@@ -637,7 +637,8 @@ def get_nugget_detail(db, nugget_id, login_user_id):
 
                 if type == 1:
                     friend_groups = (
-                        db.query(FriendGroups.group_name, FriendGroups.group_icon)
+                        db.query(FriendGroups.group_name, FriendGroups.group_icon,
+                                 FriendGroups.id)
                         .filter(FriendGroups.id.in_(shared_group_ids))
                         .all()
                     )
