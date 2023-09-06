@@ -708,7 +708,7 @@ async def resendotp(
                 # return {"status":1,"otp_ref_id":otp_ref_id,"msg":"Success"}
 
         get_otp_log = (
-            db.query(OtpLog).filter(OtpLog.id == otp_ref_id, OtpLog.status == 0).first()
+            db.query(OtpLog).filter(OtpLog.id == otp_ref_id).first()
         )
 
         if not get_otp_log:
