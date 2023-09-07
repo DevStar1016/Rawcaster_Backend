@@ -2020,7 +2020,7 @@ async def searchrawcasterusers(
                                 else "",
                                 "friend_request_status": user.friend_request_status
                                 if user.friend_request_status != None
-                                else "",
+                                else 0,
                                 "follow": True if get_follow_user else False,
                                 "follow_count": follow_count,
                                 "location": user.geo_location
@@ -3603,9 +3603,7 @@ async def addfriendgroup(
                                 )
 
                         # Add Members to Channel
-                        channel_arn = (
-                            channel_response["ChannelArn"] if channel_response else None
-                        )
+                        channel_arn = add_friend_group.group_arn 
                         try:
                             addmembers(channel_arn, chime_bearer, member_id)
                         except Exception as e:
@@ -5099,6 +5097,7 @@ async def addnuggets(
                         nugget_details, key=lambda x: x["nugget_id"]
                     ),
                 }
+         
          
 # 26. List Nuggets
 @router.post("/listnuggets")  
@@ -8934,9 +8933,6 @@ async def editevent(
                             
                             if type == "video" and file_ext != ".mp4":
                                 s3_file_path = f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{edit_event.id}{int(datetime.datetime.utcnow().timestamp())}.mp4"
-                                # upload_file_path = video_file_upload(
-                                #     event_melody, compress=1, file_ext=file_ext
-                                # )
 
                             result = upload_to_s3(uploaded_file_path, s3_file_path)
 
@@ -15843,67 +15839,67 @@ async def groupabusereport(
             message = message.strip()
 
             # Get Report
-            get_report = (
-                db.query(GroupReport)
-                .filter_by(user_id=login_user_id, group_id=groupid)
-                .first()
+            # get_report = (
+            #     db.query(GroupReport)
+            #     .filter_by(user_id=login_user_id, group_id=groupid)
+            #     .first()
+            # )
+            # if not get_report:
+            group = (
+                db.query(FriendGroups).filter(FriendGroups.id == groupid).first()
             )
-            if not get_report:
-                group = (
-                    db.query(FriendGroups).filter(FriendGroups.id == groupid).first()
+            if group:
+                add_report = GroupReport(
+                    user_id=login_user_id,
+                    group_id=group.id,
+                    message=message,
+                    reported_date=datetime.datetime.utcnow(),
+                    status=1,
                 )
-                if group:
-                    add_report = GroupReport(
-                        user_id=login_user_id,
-                        group_id=group.id,
-                        message=message,
-                        reported_date=datetime.datetime.utcnow(),
-                        status=1,
-                    )
-                    db.add(add_report)
-                    db.commit()
-                    db.refresh(add_report)
+                db.add(add_report)
+                db.commit()
+                db.refresh(add_report)
 
-                    if add_report:
-                        if group.created_by == login_user_id:
+                if add_report:
+                    if group.created_by == login_user_id:
+                        return {
+                            "status": 1,
+                            "msg": "Thanks for the reporting, we will take the action",
+                        }
+                    else:
+                        # Delete Friend Group
+                        try:
+                            group_members = (
+                                db.query(FriendGroupMembers)
+                                .filter(
+                                    FriendGroupMembers.group_id == group_id,
+                                    FriendGroupMembers.user_id == login_user_id,
+                                )
+                                .delete()
+                            )
+                            # UnFollow User
+                            del_follow_user = (
+                                db.query(FollowUser)
+                                .filter(
+                                    FollowUser.follower_userid == login_user_id,
+                                    FollowUser.following_userid == group.created_by,
+                                )
+                                .delete()
+                            )
+                            db.commit()
+
                             return {
                                 "status": 1,
                                 "msg": "Thanks for the reporting, we will take the action",
                             }
-                        else:
-                            # Delete Friend Group
-                            try:
-                                group_members = (
-                                    db.query(FriendGroupMembers)
-                                    .filter(
-                                        FriendGroupMembers.group_id == group_id,
-                                        FriendGroupMembers.user_id == login_user_id,
-                                    )
-                                    .delete()
-                                )
-                                # UnFollow User
-                                del_follow_user = (
-                                    db.query(FollowUser)
-                                    .filter(
-                                        FollowUser.follower_userid == login_user_id,
-                                        FollowUser.following_userid == group.created_by,
-                                    )
-                                    .delete()
-                                )
-                                db.commit()
-
-                                return {
-                                    "status": 1,
-                                    "msg": "Thanks for the reporting, we will take the action",
-                                }
-                            except:
-                                return {
-                                    "status": 0,
-                                    "msg": "Failed to Exit from the group",
-                                }
-                    else:
-                        return {"status": 0, "msg": "Failed to add report"}
+                        except:
+                            return {
+                                "status": 0,
+                                "msg": "Failed to Exit from the group",
+                            }
                 else:
-                    return {"status": 0, "msg": "Group ID not correct"}
+                    return {"status": 0, "msg": "Failed to add report"}
             else:
-                return {"status": 0, "msg": "You have already reported this group."}
+                return {"status": 0, "msg": "Group ID not correct"}
+            # else:
+            #     return {"status": 0, "msg": "You have already reported this group."}
