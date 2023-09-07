@@ -71,7 +71,6 @@ def EncryptandDecrypt(otp, flag=1):
         return decrypted
 
 def upload_file_using_ffmpeg(input_file,ext):
-    # base_dir = f"{st.BASE_DIR}rawcaster_uploads"
     base_dir = f"rawcaster_uploads/uploadfile_{random.randint(1111,9999)}{ext}"
 
     try:
