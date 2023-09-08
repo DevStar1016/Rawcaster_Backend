@@ -5957,12 +5957,13 @@ async def nuggetcommentlist(
                                     NuggetsCommentsLikes.comment_id == reply.id,
                                 )
 
-                                if ilike:
+                                if likes:
                                     user_like = likes.filter(
                                         NuggetsCommentsLikes.user_id == reply.user_id
                                     ).first()
                                     if user_like:
                                         ilike = True
+                                        
                                 total_like = likes.count()
                                 replyarray.append(
                                     {
@@ -15903,3 +15904,127 @@ async def groupabusereport(
                 return {"status": 0, "msg": "Group ID not correct"}
             # else:
             #     return {"status": 0, "msg": "You have already reported this group."}
+
+
+
+
+# Chat Enable and disable
+@router.post("/geturlmetadata")
+async def getUrlMetaData(
+    db: Session = Depends(deps.get_db),
+    token: str = Form(None),
+    url:str=Form(None)
+    ):
+    if token == None or token.strip() == "":
+        return {
+            "status": -1,
+            "msg": "Sorry! your login session expired. please login again.",
+        }
+    if not url:
+        return {"status": 0, "msg": "URL is Missing"}
+   
+    else:
+        access_token = checkToken(db, token)
+
+        if access_token == False:
+            return {
+                "status": -1,
+                "msg": "Sorry! your login session expired. please login again.",
+            }
+        else:
+            import requests
+            from bs4 import BeautifulSoup
+
+            def get_url_metadata(url):
+                try:
+                    # Send a GET request to the URL
+                    response = requests.get(url)
+
+                    # Parse the HTML content of the page using BeautifulSoup
+                    soup = BeautifulSoup(response.text, 'html.parser')
+
+                    # Extract metadata from the <head> section
+                    metadata = {
+                        'title': soup.title.string.strip() if soup.title else None,
+                        'description': soup.find('meta', attrs={'name': 'description'})['content'] if soup.find('meta', attrs={'name': 'description'}) else None,
+                        'og_title': soup.find('meta', attrs={'property': 'og:title'})['content'] if soup.find('meta', attrs={'property': 'og:title'}) else None,
+                        'og_description': soup.find('meta', attrs={'property': 'og:description'})['content'] if soup.find('meta', attrs={'property': 'og:description'}) else None,
+                        'og_image': soup.find('meta', attrs={'property': 'og:image'})['content'] if soup.find('meta', attrs={'property': 'og:image'}) else None,
+                    }
+
+                    return metadata
+                except Exception as e:
+                    print(f"Error: {e}")
+                    return None
+
+            # Example usage:
+            metadata = get_url_metadata(url)
+
+            if metadata:
+                return {"status":1,
+                        "msg":"Success",
+                        "data":{
+                            "title":metadata['title'],
+                            "description":metadata['description'],
+                            "open_graph_title": metadata['og_title'],
+                            "open_graph_description": metadata['og_description'],
+                            "open_graph_image":metadata['og_image']
+                        }}
+              
+            else:
+                return {"status":1,"msg":"Failed to retrieve metadata."}
+            
+           
+
+
+
+
+# Chat Enable and disable
+@router.post("/chat_enable_disable")
+async def chatEnableDisable(
+    db: Session = Depends(deps.get_db),
+    token: str = Form(None),
+    group_id:str=Form(None),
+    chat_access: str = Form(None),
+):
+    if token == None or token.strip() == "":
+        return {
+            "status": -1,
+            "msg": "Sorry! your login session expired. please login again.",
+        }
+    if not group_id or not group_id.isnumeric():
+        return {"status": 0, "msg": "Group ID is Missing"}
+    
+    if not chat_access or not chat_access.isnumeric():
+        return {"status": 0, "msg": "access type is missing"}
+    
+
+    else:
+        access_type=int(chat_access)
+        if access_type not in [0,1]:
+            return {"status": 0, "msg": "Invalid Access type "}
+        
+        access_token = checkToken(db, token)
+
+        if access_token == False:
+            return {
+                "status": -1,
+                "msg": "Sorry! your login session expired. please login again.",
+            }
+        else:
+            
+            getFriendGroup = db.query(FriendGroups).filter(FriendGroups.id == group_id,
+                                        FriendGroups.status == 1).first()
+             
+            if getFriendGroup:
+                getFriendGroup.chat_enabled = chat_access
+                db.commit()
+                
+                return {"status":1,"msg":"Enabled Successfully" if access_type == 1 else "Disabled Successfully"}
+                
+            else:
+                return {"status": 0, "msg": "Invalid Group Id"}
+
+
+            
+
