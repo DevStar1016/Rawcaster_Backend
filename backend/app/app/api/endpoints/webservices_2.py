@@ -1077,17 +1077,6 @@ async def validate_qrtoken(
         else:
             return {"status": 0, "msg": "Token expired"}
 
-        #  transcribe_client = boto3.client('transcribe',aws_access_key_id=config.access_key,
-        #     aws_secret_access_key=config.access_secret,
-        #     region_name='us-west-2')
-
-
-# from langdetect import detect
-
-# @router.post("/detect_language")
-# async def detect_language(db:Session=Depends(deps.get_db)):
-#   print(detect("El servicio gratuito Lingvanex traduce instantáneamente palabras, frases a voz, archivos de audio, podcast,"))
-
 
 @router.post("/temp_file_upload")
 async def temp_file_upload(
@@ -1125,53 +1114,6 @@ async def temp_file_upload(
     url = f"https://{bucket_name}.s3.{url_location}.amazonaws.com/{s3_file_path}"
     return {"status": 1, "url": url}
 
-
-
-@router.post("/text_to_speech")
-async def text_to_speech(
-    db: Session = Depends(deps.get_db)
-    ):
-
-    import pyttsx3
-   
-    def read_text_with_native_accent(text, language, accent):
-        """
-        Reads out the given text in the specified native accent for the given language.
-        
-        Args:
-            text (str): The text to be read out.
-            language (str): The language code (ISO 639-1) for the desired language (e.g., 'en' for English).
-            accent (str): The name of the desired native accent for the specified language.
-        """
-        engine = pyttsx3.init()
-        
-        # Set properties, including language and voice (accent)
-        engine.setProperty('rate', 140)  # Speed of speech
-        engine.setProperty('volume', 0.9)  # Volume level
-        
-        voices = engine.getProperty('voices')
-        selected_voice = None
-        
-        for voice in voices:
-            if language.lower() in str(voice.languages[0].lower()) and str(accent.lower() in voice.id.lower()):
-                selected_voice = voice
-                break
-        
-        if selected_voice:
-            engine.setProperty('voice', selected_voice.id)
-            # engine.save_to_file(text,"spanish_mexico.mp3")
-            
-            audio_file_path = "output_audio.mp3"  # Output audio file path
-            
-            engine.runAndWait()
-        else:
-            print("Selected voice not found for the specified language and accent.")
-            
-    text_to_read = "Rawcaster le permite configurar su reunión para permitir que cualquiera se una o restringirla a unos pocos seleccionados. Salas de descanso, charlas, chats en línea y votaciones son algunas de las funciones que Rawcaster ofrece con esta función."
-    target_language = "es"  # English
-    target_accent = "MX"  # US English accent
-
-    s=read_text_with_native_accent(text_to_read, target_language, target_accent)
 
     
 # # 92  Text To Audio Conversion (Nugget Content)
@@ -1234,11 +1176,11 @@ def nuggetcontentaudio(
             .first()
         )
         if get_nugget:
-            text_contnet = get_nugget.nuggets_master.content if get_nugget else None
+            text_content = get_nugget.nuggets_master.content if get_nugget else None
             
-            if text_contnet:
+            if text_content:
                 translator = googletrans.Translator()
-                translated = translator.translate(text_contnet, dest=target_language)   
+                translated = translator.translate(text_content, dest=target_language)   
                 
                 if translation_type == 2:
                     return {
@@ -1249,11 +1191,22 @@ def nuggetcontentaudio(
                 else:
                     
                     text=translated.text
-                    try:
-                        myobj = gTTS(text=text)
-                    except Exception as e:
-                        return {"status":0,"msg":f"Unable to convert- {e}"}
-                    
+                    # Polly
+                    # Initialize the Polly client
+                    polly = boto3.client('polly',aws_access_key_id=config.access_key,
+                                        aws_secret_access_key=config.access_secret,region_name='us-east-1')
+
+                    # Define the voice ID and language code for your desired language
+                    voice_id = 'Joanna'  # Replace 'YourVoiceID' with the appropriate Polly voice ID
+                    language_code = 'en-US'  # Replace 'YourLanguageCode' with the appropriate language code
+
+                    # Request speech synthesis
+                    response = polly.synthesize_speech(
+                        Text=text,
+                        OutputFormat='mp3',  # You can choose other formats like 'ogg_vorbis', 'pcm', etc.
+                        VoiceId=voice_id,
+                        LanguageCode=language_code
+                    )
                     base_dir = "rawcaster_uploads"
 
                     try:
@@ -1268,8 +1221,9 @@ def nuggetcontentaudio(
                     filename = f"converted_{int(datetime.now().timestamp())}.mp3"
 
                     save_full_path = f"{output_dir}{filename}"
-                    
-                    myobj.save(save_full_path)
+                    # Save the speech as an MP3 file
+                    with open(save_full_path, 'wb') as file:
+                        file.write(response['AudioStream'].read())
 
                     s3_file_path = f"nuggets/converted_audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
 
@@ -1283,7 +1237,139 @@ def nuggetcontentaudio(
                         }
                     else:
                         return {"status":0,"msg":"Unable to convert"}
+                
+                    
+                    # GTTs
+                    # try:
+                    #     myobj = gTTS(text=text)
+                    # except Exception as e:
+                    #     return {"status":0,"msg":f"Unable to convert- {e}"}
+                    
+                    # base_dir = "rawcaster_uploads"
+
+                    # try:
+                    #     os.makedirs(base_dir, mode=0o777, exist_ok=True)
+                    # except OSError as e:
+                    #     sys.exit(
+                    #         "Can't create {dir}: {err}".format(dir=base_dir, err=e)
+                    #     )
+
+                    # output_dir = base_dir + "/"
+
+                    # filename = f"converted_{int(datetime.now().timestamp())}.mp3"
+
+                    # save_full_path = f"{output_dir}{filename}"
+                    
+                    # myobj.save(save_full_path)
+
+                    # s3_file_path = f"nuggets/converted_audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
+
+                    # result = upload_to_s3(save_full_path, s3_file_path)
+
+                    # if result["status"] == 1:
+                    #     return {
+                    #         "status": 1,
+                    #         "msg": "success",
+                    #         "file_path": result["url"]
+                    #     }
+                    # else:
+                    #     return {"status":0,"msg":"Unable to convert"}
 
         else:
             return {"status": 0, "msg": "Invalid Nugget"}
 
+
+
+
+
+# @router.post("/polly")
+# async def polly(
+#     db: Session = Depends(deps.get_db),text_content:str=Form(None)
+#     ):
+  
+       
+#         # check Read Out Language
+
+#         get_user_readout_language = (
+#             db.query(
+#                 UserSettings.id.label("user_setting_id"),
+#                 ReadOutLanguage.id.label("read_out_id"),
+#                 ReadOutLanguage.language_code,
+#                 ReadOutLanguage.language_with_country
+#             )
+#             .filter(
+#                 UserSettings.user_id == 539,
+#                 ReadOutLanguage.id == UserSettings.read_out_language_id,
+#             )
+#             .first()
+#         )
+
+#         target_language = (
+#             get_user_readout_language.language_code
+#             if get_user_readout_language
+#             else "en"
+#         )
+#         # Get nuggets
+#         get_nugget = (
+#             db.query(Nuggets)
+#             .filter(Nuggets.id == 4418, Nuggets.status == 1)
+#             .first()
+#         )
+#         if get_nugget:
+#             text_content = get_nugget.nuggets_master.content if get_nugget else None
+            
+#             if text_content:
+#                 translator = googletrans.Translator()
+#                 translated = translator.translate(text_content, dest=target_language)   
+                
+              
+                    
+#                 text=translated.text
+#                 # Polly
+#                 # Initialize the Polly client
+#                 polly = boto3.client('polly',aws_access_key_id=config.access_key,
+#                                     aws_secret_access_key=config.access_secret,region_name='us-east-1')
+
+#                 # Define the voice ID and language code for your desired language
+#                 voice_id = 'Joanna'  # Replace 'YourVoiceID' with the appropriate Polly voice ID
+#                 language_code = 'en-US'  # Replace 'YourLanguageCode' with the appropriate language code
+
+#                 # Request speech synthesis
+#                 response = polly.synthesize_speech(
+#                     Text=text,
+#                     OutputFormat='mp3',  # You can choose other formats like 'ogg_vorbis', 'pcm', etc.
+#                     VoiceId=voice_id,
+#                     LanguageCode=language_code
+#                 )
+#                 base_dir = "rawcaster_uploads"
+
+#                 try:
+#                     os.makedirs(base_dir, mode=0o777, exist_ok=True)
+#                 except OSError as e:
+#                     sys.exit(
+#                         "Can't create {dir}: {err}".format(dir=base_dir, err=e)
+#                     )
+
+#                 output_dir = base_dir + "/"
+
+#                 filename = f"converted_{int(datetime.now().timestamp())}.mp3"
+
+#                 save_full_path = f"{output_dir}{filename}"
+#                 # Save the speech as an MP3 file
+#                 with open(save_full_path, 'wb') as file:
+#                     file.write(response['AudioStream'].read())
+
+#                 s3_file_path = f"nuggets/converted_audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
+                
+#                 result = upload_to_s3(save_full_path, s3_file_path)
+
+#                 if result["status"] == 1:
+#                     return {
+#                         "status": 1,
+#                         "msg": "success",
+#                         "file_path": result["url"]
+#                     }
+#                 else:
+#                     return {"status":0,"msg":"Unable to convert"}
+                
+                    
