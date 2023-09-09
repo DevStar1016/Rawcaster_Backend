@@ -1863,7 +1863,7 @@ async def updatemyprofile(
                             read_file, file_ext, compress=None
                         )
 
-                        s3_file_path = f"coverimage/coverimage_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}"
+                        s3_file_path = f"coverimage/coverimage_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
 
                         result = upload_to_s3(output_dir, s3_file_path)
 
@@ -4646,7 +4646,7 @@ async def addnuggets(
                                     return result
 
                             else:
-                                s3_file_path = f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
+                                s3_file_path = f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.{file_ext}"
 
                                 if type == "video":
                                     video = VideoFileClip(
@@ -6817,7 +6817,7 @@ async def editnugget(
                                         and type == "image"
                                         and file_ext != ".gif"
                                     ):
-                                        s3_file_path = f"nuggets/Image_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}"
+                                        s3_file_path = f"nuggets/Image_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
 
                                         result = upload_to_s3(
                                             uploaded_file_path, s3_file_path
