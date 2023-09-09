@@ -24,4 +24,3 @@ better-profanity
 pyttsx3
 redis
 profanityfilter==2.0.6 
-beautifulsoup4==4 4.12.2
