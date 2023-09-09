@@ -1848,7 +1848,7 @@ def defaultimage(flag):
     return url
 
 
-def GetGroupDetails(db, user_id, id):
+def GetGroupDetails(db, user_id, id):  # Id -Group ID
     members = []
     memberlist = []
 
