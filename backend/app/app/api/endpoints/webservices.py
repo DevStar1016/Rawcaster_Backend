@@ -1935,9 +1935,15 @@ async def searchrawcasterusers(
                     MyFriends.request_status.label('friend_request_status'),
                     FollowUser.id.label('follow_id')
                 ).select_from(User).outerjoin(MyFriends, 
-                    ((MyFriends.sender_id == User.id) | (MyFriends.receiver_id == User.id))
-                    & (MyFriends.status == 1)
-                    & ((MyFriends.sender_id == login_user_id) | (MyFriends.receiver_id == login_user_id))
+                   MyFriends.status == 1,
+                                or_(
+                                    MyFriends.sender_id == login_user_id,
+                                    MyFriends.sender_id == User.id,
+                                ),
+                                or_(
+                                    MyFriends.receiver_id == User.id,
+                                    MyFriends.receiver_id == login_user_id,
+                                )
                 ).outerjoin(FollowUser,
                     (FollowUser.following_userid == User.id)
                     & (FollowUser.follower_userid == login_user_id)
@@ -1989,7 +1995,7 @@ async def searchrawcasterusers(
                     user_list = []
                     
                     for user in get_user:
-
+                        
                         get_follow_user_details = db.query(FollowUser).filter(
                             FollowUser.following_userid == user.id
                         )
