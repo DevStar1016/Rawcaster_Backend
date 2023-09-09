@@ -3646,7 +3646,7 @@ async def addfriendgroup(
                         "data": {"refer_id": add_friend_group.id, "type": "add_group"},
                         "type": "callend",
                     }
-                    notify_members = group_details["group_member_ids"]
+                    notify_members = group_details["group_member_ids"] if group_details["group_member_ids"] else []
 
                     if add_friend_group.created_by in notify_members:
                         notify_members.remove(add_friend_group.created_by)
@@ -5193,6 +5193,7 @@ async def listnuggets(
                         User.display_name.ilike("%" + search_key + "%"),
                         User.first_name.ilike("%" + search_key + "%"),
                         User.last_name.ilike("%" + search_key + "%"),
+                        User.email_id.ilike("%"+ search_key +"%")
                     )
                 )
             if access_token == "RAWCAST":
@@ -11486,7 +11487,9 @@ async def updateusersettings(
                     settings.lock_my_influencer = lock_my_influencer
                     settings.live_event_banner = live_banner
                     settings.talkshow_event_banner = talkshow_banner
-                    settings.read_out_language_id = read_out_language_id
+                    settings.read_out_language_id = (read_out_language_id 
+                                    if read_out_language_id 
+                                    else settings.read_out_language_id)
 
                     db.commit()
                     if groupid and profile_field_name:
