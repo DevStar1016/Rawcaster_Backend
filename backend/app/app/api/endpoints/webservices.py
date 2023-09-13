@@ -2020,7 +2020,7 @@ async def searchrawcasterusers(
                                 else "",
                                 "friend_request_status": user.friend_request_status
                                 if user.friend_request_status != None
-                                else 0,
+                                else 2,
                                 "follow": True if get_follow_user else False,
                                 "follow_count": follow_count,
                                 "location": user.geo_location
@@ -2772,6 +2772,7 @@ async def listallfriendgroups(
                     )
                     grouptype = 1
                     groupname = res.group_name
+                    my_group=1
 
                     # View Access
                     group_access = 0
@@ -2828,6 +2829,7 @@ async def listallfriendgroups(
                         grouptype = 1
                         group_category = 2
                         groupname = f"Influencer: {(res.user.display_name if res.user.display_name else '') if res.created_by else ''}"
+                        my_group=0
 
                     elif groupname != "My Fans":
                         grouptype = 2
@@ -2921,6 +2923,8 @@ async def listallfriendgroups(
                                 if get_frnd_group_count
                                 else 0,
                                 "locked": 1,
+                                "my_group": my_group
+                                
                             }
                         )
                     else:
@@ -2962,6 +2966,7 @@ async def listallfriendgroups(
                                 "result_list": 3,
                                 "group_member_ids": members,
                                 "group_members_list": memberlist,
+                                "my_group": my_group
                             }
                         )
 
@@ -6521,7 +6526,6 @@ async def nuggetandcommentlikeeduserlist(
 @router.post("/editnugget")
 async def editnugget(
     *,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(deps.get_db),
     token: str = Form(None),
     nugget_id: str = Form(None),
@@ -6673,10 +6677,11 @@ async def editnugget(
                         if share_with:
                             for key, val in share_with.items():
                                 if val:
+                                    
                                     if key == "groups" and (
                                         share_type == 3 or share_type == 5
                                     ):
-                                        query = db.query(FriendGroups).filter(
+                                        query = db.query(FriendGroups).filter( 
                                             FriendGroups.id.in_(val),
                                             FriendGroups.status == 1,
                                             FriendGroups.created_by == login_user_id,
@@ -6684,7 +6689,7 @@ async def editnugget(
                                         get_groups = {
                                             group.id: group.id for group in query.all()
                                         }
-
+                                        
                                         if len(get_groups) != len(val):
                                             anyissue = 1
 
