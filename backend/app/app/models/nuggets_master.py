@@ -9,7 +9,7 @@ class NuggetsMaster(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("user.id"))
     content = Column(Text)
-    _metadata = Column(BLOB)  # BLOB
+    _metadata = Column("metadata", BLOB)  # BLOB
     poll_duration = Column(String(15))
     created_date = Column(DateTime)
     modified_date = Column(DateTime)
