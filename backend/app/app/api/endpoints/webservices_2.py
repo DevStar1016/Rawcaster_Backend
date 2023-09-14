@@ -1206,7 +1206,7 @@ def nuggetcontentaudio(
                         OutputFormat='mp3',  # You can choose other formats like 'ogg_vorbis', 'pcm', etc.
                         VoiceId=voice_id,
                         LanguageCode=(get_user_readout_language.language_with_country 
-                                      if get_user_readout_language.language_with_country 
+                                      if get_user_readout_language 
                                       else "en-US")
                     )
                     base_dir = "rawcaster_uploads"
