@@ -14545,7 +14545,7 @@ async def getinfluencercategory(
                     user_ids=set([follower.following_userid for follower in get_followers])
                     
                     # Get Category
-                    get_category=db.query(User.influencer_category).filter(User.id.in_(user_ids),User.status == 1,User.influencer_category != None).all()
+                    get_category=db.query(User.influencer_category).filter(User.id != login_user_id,User.id.in_(user_ids),User.status == 1,User.influencer_category != None).all()
                     category_ids=set([category.influencer_category for category in get_category])
                     influencer_category_ids= [int(item) for sublist in category_ids for item in sublist.split(',')]
 
