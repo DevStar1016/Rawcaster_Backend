@@ -685,106 +685,85 @@ async def texttoaudio(
             "msg": "Sorry! your login session expired. please login again.",
         }
     else:
-        # Create an instance of the Polly client
-        polly_client = boto3.Session(
-            aws_access_key_id=config.access_key,
-            aws_secret_access_key=config.access_secret,
-            region_name="us-west-2",  # Replace with your desired AWS region
-        ).client("polly")
-
-        # Specify the desired voice and output format
-        voice_id = "Joanna"
-        output_format = "mp3"
-
-        # Detect Language
-        def detect_language(text):
-            comprehend = boto3.client(
-                "comprehend",
-                aws_access_key_id=config.access_key,
-                aws_secret_access_key=config.access_secret,
-                region_name="us-west-2",
-            )
-
-            response = comprehend.detect_dominant_language(Text=text)
-            languages = response["Languages"]
-
-            if len(languages) > 0:
-                detected_language = languages[0]["LanguageCode"]
-                return detected_language
-            return None
-
-        language_code = detect_language(message)
-        supported_language = [
-            "ar-AE",
-            "en-US",
-            "en-IN",
-            "es-MX",
-            "en-ZA",
-            "tr-TR",
-            "ru-RU",
-            "ro-RO",
-            "pt-PT",
-            "pl-PL",
-            "nl-NL",
-            "it-IT",
-            "is-IS",
-            "fr-FR",
-            "fi-FI",
-            "es-ES",
-            "de-DE",
-            "yue-CN",
-            "ko-KR",
-            "en-NZ",
-            "en-GB-WLS",
-            "hi-IN",
-            "arb",
-            "cy-GB",
-            "cmn-CN",
-            "da-DK",
-            "en-AU",
-            "pt-BR",
-            "nb-NO",
-            "sv-SE",
-            "ja-JP",
-            "es-US",
-            "ca-ES",
-            "fr-CA",
-            "en-GB",
-            "de-AT",
-        ]
-
-        matching_languages = [
-            lang for lang in supported_language if lang.startswith(language_code)
-        ]
-
-        response = polly_client.synthesize_speech(
-            Text=message,
-            VoiceId=voice_id,
-            OutputFormat=output_format,
-            LanguageCode=matching_languages[0] if matching_languages else "en-US",
+        get_token_details = (
+            db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
         )
-        # Upload File
-        base_dir = "rawcaster_uploads"
+        login_user_id = get_token_details.user_id if get_token_details else None
 
-        try:
-            os.makedirs(base_dir, mode=0o777, exist_ok=True)
-        except OSError as e:
-            print(e)
-            sys.exit("Can't create {dir}: {err}".format(dir=base_dir, err=e))
+        get_user_readout_language = (
+            db.query(
+                UserSettings.id.label("user_setting_id"),
+                ReadOutLanguage.id.label("read_out_id"),
+                ReadOutLanguage.language_code,
+                ReadOutLanguage.language_with_country
+            )
+            .filter(
+                UserSettings.user_id == login_user_id,
+                ReadOutLanguage.id == UserSettings.read_out_language_id,
+            )
+            .first()
+        )
 
-        output_dir = base_dir + "/"
+        target_language = (
+            get_user_readout_language.language_code
+            if get_user_readout_language
+            else "en"
+        )
+      
+        
+        text_content = message
+            
+        if text_content:
+            translator = googletrans.Translator()
+            translated = translator.translate(text_content, dest=target_language)   
 
-        filename = f"converted_{int(datetime.now().timestamp())}.mp3"
+            text=translated.text
 
-        save_full_path = f"{output_dir}{filename}"
+            # Initialize the Polly client
+            polly = boto3.client('polly',aws_access_key_id=config.access_key,
+                                aws_secret_access_key=config.access_secret,region_name='us-east-1')
 
-        with open(save_full_path, "wb") as file:
-            file.write(response["AudioStream"].read())
+            voice_id = 'Joanna'
 
-        s3_file_path = f"nuggets/converted_audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
+            # Request speech synthesis
+            response = polly.synthesize_speech(
+                Text=text,
+                OutputFormat='mp3',
+                VoiceId=voice_id,
+                LanguageCode=(get_user_readout_language.language_with_country 
+                                if get_user_readout_language 
+                                else "en-US")
+            )
+            base_dir = "rawcaster_uploads"
 
-        result = upload_to_s3(save_full_path, s3_file_path)
-        return result
+            try:
+                os.makedirs(base_dir, mode=0o777, exist_ok=True)
+            except OSError as e:
+                sys.exit(
+                    "Can't create {dir}: {err}".format(dir=base_dir, err=e)
+                )
+
+            output_dir = base_dir + "/"
+
+            filename = f"converted_{int(datetime.now().timestamp())}.mp3"
+
+            save_full_path = f"{output_dir}{filename}"
+            # Save the speech as an MP3 file
+            with open(save_full_path, 'wb') as file:
+                file.write(response['AudioStream'].read())
+
+            s3_file_path = f"nuggets/converted_ai_audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
+
+            result = upload_to_s3(save_full_path, s3_file_path)
+
+            if result["status"] == 1:
+                return {
+                    "status": 1,
+                    "url": result["url"]
+                }
+            else:
+                return {"status":0,"msg":"Unable to convert"}
+            
 
 
 # Audio to Text

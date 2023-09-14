@@ -4651,7 +4651,7 @@ async def addnuggets(
                                     return result
 
                             else:
-                                s3_file_path = f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.{file_ext}"
+                                s3_file_path = f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
 
                                 if type == "video":
                                     video = VideoFileClip(
@@ -6791,8 +6791,10 @@ async def editnugget(
 
                             # Nuggets Media
                             if nuggets_media:
-                                master_id = check_nuggets.nuggets_id
-
+                                # Remove previous attachment
+                                removeAttachments=db.query(NuggetsAttachment).filter(NuggetsAttachment.nugget_id == check_nuggets.nuggets_id).delete()
+                                db.commit()
+                                
                                 for nugget_media in nuggets_media:
                                     file_name = nugget_media.filename
                                     file_temp = nugget_media.content_type
