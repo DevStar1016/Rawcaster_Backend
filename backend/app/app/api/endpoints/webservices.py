@@ -5407,7 +5407,7 @@ async def listnuggets(
                     get_nuggets=get_nuggets.filter(or_(Nuggets.user_id == login_user_id))
                 
             if category:
-                get_nuggets=get_nuggets.filter(User.influencer_category.like("%" + category + "%"))
+                get_nuggets=get_nuggets.filter(User.influencer_category.like("%" + category + "%"),Nuggets.user_id != login_user_id)
                  
             # Omit blocked users nuggets
             requested_by = None
