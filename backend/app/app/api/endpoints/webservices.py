@@ -4574,7 +4574,7 @@ async def addnuggets(
                     add_nuggets_master = NuggetsMaster(
                         user_id=login_user_id,
                         content=nugget_content if looping_count == content_location else None,
-                        _metadata=metadata,
+                        _metadata=metadata.encode('utf-8') if metadata else None,
                         poll_duration=poll_duration,
                         created_date=datetime.datetime.utcnow(),
                         status=0,
@@ -6773,7 +6773,7 @@ async def editnugget(
                                 .update(
                                     {
                                         "content": content,
-                                        "_metadata": metadata,
+                                        "_metadata": metadata.encode('utf-8') if metadata else None,
                                         "modified_date": datetime.datetime.utcnow(),
                                     }
                                 )
