@@ -1308,3 +1308,27 @@ def nuggetcontentaudio(
                     #     }
                     # else:
                     #     return {"status":0,"msg":"Unable to convert"}
+                    
+
+
+
+
+@router.post("/usingGTTS")
+async def gtts(
+    db: Session = Depends(deps.get_db),text_content:str=Form(None)
+    ):
+    from gtts import gTTS
+    import os
+
+    # Specify the language and accent (e.g., French, British English, etc.)
+    language = 'en'  # French accent
+    accent = 'fr'    # French accent
+
+    # Create a gTTS object
+    tts = gTTS(text_content, lang=language, tld=accent)
+
+    # Save the speech to an audio file (optional)
+    tts.save("output.mp3")
+
+    # Play the audio using the default audio player (e.g., on Windows)
+    os.system("start output.mp3")

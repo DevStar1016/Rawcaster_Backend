@@ -1418,7 +1418,7 @@ def user_profile(db, id):
                 "geo_location": get_user.geo_location if get_user.geo_location else "",
                 "latitude": get_user.latitude if get_user.latitude else "",
                 "longitude": get_user.longitude if get_user.longitude else "",
-                "date_of_join": common_date(get_user.created_at)
+                "date_of_join": get_user.created_at
                 if get_user.created_at
                 else "",
                 "user_type": get_user.user_type_master.name
@@ -2957,7 +2957,7 @@ async def listallfriendgroups(
                                 if get_group_chat
                                 else "",
                                 "last_msg_datetime": (
-                                    common_date(get_group_chat.sent_datetime)
+                                    get_group_chat.sent_datetime
                                     if get_group_chat.sent_datetime
                                     else ""
                                 )
@@ -3257,7 +3257,7 @@ async def listallfriends(
                                     online,
                                 ),
                                 "last_seen": (
-                                    common_date(friend_requests.user2.last_seen)
+                                    friend_requests.user2.last_seen
                                     if friend_requests.user2.last_seen
                                     else ""
                                 )
@@ -3270,7 +3270,7 @@ async def listallfriends(
                                 if get_last_msg
                                 else "",
                                 "last_msg_datetime": (
-                                    common_date(get_last_msg.sent_datetime)
+                                    get_last_msg.sent_datetime
                                     if get_last_msg.sent_datetime
                                     else ""
                                 )
@@ -3351,7 +3351,7 @@ async def listallfriends(
                                 if get_last_msg
                                 else "",
                                 "last_msg_datetime": (
-                                    common_date(get_last_msg.sent_datetime)
+                                    get_last_msg.sent_datetime
                                     if get_last_msg.sent_datetime
                                     else ""
                                 )
@@ -5621,7 +5621,7 @@ async def listnuggets(
                     nuggets_list.append({"nugget_id":nuggets.id,
                                         "content": nuggets.nuggets_master.content,
                                         "metadata": nuggets.nuggets_master._metadata,
-                                        'created_date':common_date(nuggets.created_date),
+                                        'created_date':nuggets.created_date,
                                         'user_id':nuggets.user_id,
                                         'user_ref_id':nuggets.user.user_ref_id,
                                         'account_verify_type':1 if check_verify else 0,
@@ -6116,7 +6116,7 @@ async def addnuggetcomment(
                             "comment": nugget_comment.content
                             if nugget_comment.content
                             else "",
-                            "commented_date": common_date(nugget_comment.created_date)
+                            "commented_date": nugget_comment.created_date
                             if nugget_comment.created_date
                             else "",
                             "liked": False,
@@ -8416,20 +8416,20 @@ async def listevents(
                                 if event.description
                                 else "",
                                 "start_date_time": (
-                                    common_date(event.start_date_time)
+                                    event.start_date_time
                                     if event.start_date_time
                                     else ""
                                 )
                                 if event.created_at
                                 else "",
                                 "start_date": (
-                                    common_date(event.start_date_time)
+                                    event.start_date_time
                                     if event.start_date_time
                                     else ""
                                 )
                                 if event.created_at
                                 else "",
-                                "start_time": common_date(event.start_date_time)
+                                "start_time": event.start_date_time
                                 if event.start_date_time
                                 else ""
                                 if event.created_at
@@ -8441,7 +8441,7 @@ async def listevents(
                                 # "banner_image":event.cover_img if event.cover_img else "",
                                 "banner_image": banner_image,  # Event Images displayed event type wise
                                 "is_host": 1 if event.created_by == login_user_id else 0,
-                                "created_at": common_date(event.created_at)
+                                "created_at": event.created_at
                                 if event.created_at
                                 else "",
                                 "original_user_name": event.user.display_name,
@@ -9230,12 +9230,12 @@ async def listchatmessages(
                             "type": res.type if res.type else None,
                             "message": res.message if res.message else None,
                             "path": res.path if res.path else None,
-                            "sent_datetime": common_date(res.sent_datetime)
+                            "sent_datetime": res.sent_datetime
                             if res.sent_datetime
                             else None,
                             "is_read": res.is_read if res.is_read else None,
                             "is_edited": res.is_edited if res.is_edited else None,
-                            "read_datetime": common_date(res.read_datetime)
+                            "read_datetime": res.read_datetime
                             if res.read_datetime
                             else None,
                             "is_deleted_for_both": res.is_deleted_for_both
@@ -9247,14 +9247,10 @@ async def listchatmessages(
                             "receiver_delete": res.receiver_delete
                             if receiver_delete
                             else None,
-                            "sender_deleted_datetime": common_date(
-                                res.sender_deleted_datetime
-                            )
+                            "sender_deleted_datetime": res.sender_deleted_datetime
                             if res.sender_deleted_datetime
                             else None,
-                            "receiver_deleted_datetime": common_date(
-                                res.receiver_deleted_datetime
-                            )
+                            "receiver_deleted_datetime": res.receiver_deleted_datetime
                             if res.receiver_deleted_datetime
                             else None,
                             "call_status": res.call_status if res.call_status else None,
@@ -9527,7 +9523,7 @@ async def listnotifications(
                                 "content": get_nugget.nuggets_master.content
                                 if get_nugget
                                 else "",
-                                "created_datetime": common_date(res.created_datetime)
+                                "created_datetime": res.created_datetime
                                 if res.created_datetime
                                 else None,
                                 "is_read": res.is_read if res.is_read else 0,
@@ -9551,12 +9547,10 @@ async def listnotifications(
                                 else "",
                                 "type": res.notification_type,
                                 "content": get_event.title if get_event else "",
-                                "event_start_time": common_date(
-                                    get_event.start_date_time
-                                )
+                                "event_start_time": get_event.start_date_time
                                 if get_event
                                 else "",
-                                "created_datetime": common_date(res.created_datetime)
+                                "created_datetime": res.created_datetime
                                 if res.created_datetime
                                 else None,
                                 "is_read": res.is_read if res.is_read else 0,
@@ -9579,10 +9573,10 @@ async def listnotifications(
                                 "friend_request_status": friend_request_status,
                                 "ref_id": res.ref_id if res.ref_id else None,
                                 "is_read": res.is_read if res.is_read else 0,
-                                "read_datetime": common_date(res.read_datetime)
+                                "read_datetime": res.read_datetime
                                 if res.read_datetime
                                 else None,
-                                "created_datetime": common_date(res.created_datetime)
+                                "created_datetime": res.created_datetime
                                 if res.created_datetime
                                 else None,
                             }
@@ -9613,10 +9607,10 @@ async def listnotifications(
                                 "ref_id": res.ref_id if res.ref_id else None,
                                 "group_id":get_group_details.group_id if get_group_details else None,
                                 "is_read": res.is_read if res.is_read else None,
-                                "read_datetime": common_date(res.read_datetime)
+                                "read_datetime": res.read_datetime
                                 if res.read_datetime
                                 else None,
-                                "created_datetime": common_date(res.created_datetime)
+                                "created_datetime": es.created_datetime
                                 if res.created_datetime
                                 else None,
                             }
@@ -9634,7 +9628,7 @@ async def listnotifications(
                                 else "",
                                 "type": res.notification_type,
                                 "content": "Following",
-                                "created_datetime": common_date(res.created_datetime)
+                                "created_datetime": res.created_datetime
                                 if res.created_datetime
                                 else None,
                                 "is_read": res.is_read if res.is_read else 0,
@@ -9679,9 +9673,7 @@ async def listnotifications(
                                 "poll_option": poll_options,
                                 "type": 16,
                                 "total_vote": total_vote,
-                                "created_datetime": common_date(
-                                    res.nuggets_master.created_date
-                                )
+                                "created_datetime":res.nuggets_master.created_date
                                 if res.nuggets_master.created_date
                                 else None,
                             }
@@ -9702,10 +9694,10 @@ async def listnotifications(
                                 "friend_request_status": friend_request_status,
                                 "ref_id": res.ref_id if res.ref_id else None,
                                 "is_read": res.is_read if res.is_read else None,
-                                "read_datetime": common_date(res.read_datetime)
+                                "read_datetime": res.read_datetime
                                 if res.read_datetime
                                 else None,
-                                "created_datetime": common_date(res.created_datetime)
+                                "created_datetime": res.created_datetime
                                 if res.created_datetime
                                 else None,
                             }
@@ -10136,7 +10128,7 @@ async def getothersprofile(
                             "longitude": get_user.longitude
                             if get_user.longitude
                             else "",
-                            "date_of_join": common_date(get_user.created_at)
+                            "date_of_join": get_user.created_at
                             if get_user.created_at
                             else "",
                             "user_type": get_user.user_type_master.name
@@ -10309,7 +10301,7 @@ async def listallblockedusers(
                                 else "",
                                 "last_seen": (
                                     (
-                                        common_date(frnd_req.user2.last_seen)
+                                       frnd_req.user2.last_seen
                                         if frnd_req.user2.last_seen
                                         else ""
                                     )
@@ -10355,7 +10347,7 @@ async def listallblockedusers(
                                 else "",
                                 "last_seen": (
                                     (
-                                        common_date(frnd_req.user1.last_seen)
+                                        frnd_req.user1.last_seen
                                         if frnd_req.user1.last_seen
                                         else ""
                                     )
@@ -12556,7 +12548,7 @@ async def geteventdetails(
                 "reference_id": event.ref_id if event.ref_id else "",
                 "chime_meeting_id":event.chime_meeting_id if event.chime_meeting_id else "",
                 "message": event.description if event.description else "",
-                "start_date_time": common_date(event.start_date_time)
+                "start_date_time": event.start_date_time
                 if event.start_date_time
                 else "",
                 "start_date": event.start_date_time.strftime("%b %d"),
@@ -12930,7 +12922,7 @@ async def getopennuggetdetail(
                         "nugget_id": get_nugget.id,
                         "content": get_nugget.nuggets_master.content,
                         "metadata": get_nugget.nuggets_master._metadata,
-                        "created_date": common_date(get_nugget.created_date)
+                        "created_date": get_nugget.created_date
                         if get_nugget.created_date
                         else "",
                         "user_id": get_nugget.user_id if get_nugget.user_id else "",
@@ -13341,7 +13333,7 @@ async def getfollowlist(
                                 follow.user2.online,
                             ),
                             "last_seen": (
-                                common_date(follow.user2.last_seen)
+                                follow.user2.last_seen
                                 if follow.user2.last_seen
                                 else ""
                             )
@@ -13396,7 +13388,7 @@ async def getfollowlist(
                             ),
                             "last_seen": (
                                 (
-                                    common_date(follow.user1.last_seen)
+                                    follow.user1.last_seen
                                     if follow.user1.last_seen
                                     else ""
                                 )
