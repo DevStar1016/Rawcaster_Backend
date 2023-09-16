@@ -1160,7 +1160,7 @@ def nuggetcontentaudio(
             if text_content:
                 translator = googletrans.Translator()
                 
-                text_content=f".{text_content}" if translation_type == 2 else text_content
+                text_content=f".{text_content}" if translation_type == 1 else text_content
                  
                 translated = translator.translate(f"{text_content}", dest=target_language)   
                     
