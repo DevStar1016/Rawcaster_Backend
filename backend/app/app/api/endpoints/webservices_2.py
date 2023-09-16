@@ -1159,8 +1159,11 @@ def nuggetcontentaudio(
             
             if text_content:
                 translator = googletrans.Translator()
-                translated = translator.translate(text_content, dest=target_language)   
-                
+                try:
+                    translated = translator.translate(f"{text_content}", dest=target_language)   
+                except:
+                    translated = translator.translate(f". {text_content}", dest=target_language)   
+                    
                 if translation_type == 2:
                     return {
                         "status": 1,
@@ -1321,14 +1324,19 @@ async def gtts(
     import os
 
     # Specify the language and accent (e.g., French, British English, etc.)
-    language = 'en'  # French accent
-    accent = 'fr'    # French accent
-
+    language = 'ig'  # French accent
+    accent = 'ng'    # French accent
+    
+    translator = googletrans.Translator()
+    
+    translated = translator.translate(f" {text_content}", dest=language)   
+    # return translated.text
+    print(translated.text)        
     # Create a gTTS object
-    tts = gTTS(text_content, lang=language, tld=accent)
+    tts = gTTS(translated.text, tld=accent)
 
     # Save the speech to an audio file (optional)
-    tts.save("output.mp3")
+    tts.save("igbo_with_swahili.mp3")
 
     # Play the audio using the default audio player (e.g., on Windows)
-    os.system("start output.mp3")
+    # os.system("start output.mp3")

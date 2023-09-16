@@ -7956,11 +7956,12 @@ async def listevents(
     token: str = Form(None),
     user_id: str = Form(None),
     event_type: str = Form(
-        0, description="1->My Events, 2->Invited Events, 3->Public Events"
+        None, description="1->My Events, 2->Invited Events, 3->Public Events,4-Past Event"
     ),
     type_filter: str = Form(None, description="1 - Event,2 - Talkshow,3 - Live"),
     page_number: str = Form(default=1),
 ):
+    
     if token == None or token.strip() == "":
         return {
             "status": -1,
@@ -7977,11 +7978,11 @@ async def listevents(
 
     else:
         type_filter = int(type_filter) if type_filter else None
-        event_type = int(event_type) if event_type else None
+        event_type = int(event_type) if event_type else 0
         user_id = int(user_id) if user_id else None
 
         access_token = checkToken(db, token)
-
+        print(event_type)
         if access_token == False:
             return {
                 "status": -1,
@@ -8295,7 +8296,7 @@ async def listevents(
 
                 else:  # Mine only
                     event_list = event_list.filter(Events.created_by == login_user_id)
-
+            
             if event_type == 4:
                 event_list = event_list.filter(
                     Events.start_date_time < datetime.datetime.utcnow()
@@ -8305,12 +8306,21 @@ async def listevents(
                 event_list = event_list
 
             else:
-                event_list = event_list.filter(
-                    text(
-                        "DATE_ADD(events.start_date_time, INTERVAL SUBSTRING(events.duration, 1, CHAR_LENGTH(events.duration) - 3) HOUR_MINUTE) > :current_datetime"
-                    )
-                ).params(current_datetime=datetime.datetime.utcnow())
+                
+                
 
+                
+                # now = func.date(datetime.datetime.now())
+                # event_list = event_list.filter(
+                #     text("DATE_ADD(events.start_date_time, INTERVAL SUBSTRING(events.duration, 1, CHAR_LENGTH(events.duration) - 3) HOUR_MINUTE) > :now")
+                #     ).params(now=now)
+                current_datetime = datetime.datetime.utcnow()
+                event_list=event_list.filter(
+                        text(
+                            "DATE_ADD(events.start_date_time, INTERVAL SUBSTRING(events.duration, 1, CHAR_LENGTH(events.duration) - 3) HOUR_MINUTE) > :current_datetime"
+                        )
+                    ).params(current_datetime=current_datetime)
+                
             event_list = event_list.filter(Events.status == 1)
 
             if type_filter:
