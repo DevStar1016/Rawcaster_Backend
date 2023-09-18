@@ -9626,7 +9626,7 @@ async def listnotifications(
                                 "read_datetime": res.read_datetime
                                 if res.read_datetime
                                 else None,
-                                "created_datetime": es.created_datetime
+                                "created_datetime": res.created_datetime
                                 if res.created_datetime
                                 else None,
                             }
