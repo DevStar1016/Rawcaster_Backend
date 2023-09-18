@@ -2447,7 +2447,7 @@ async def respondtofriendrequests(
                     # Add Members to Channel
                     member_id=my_friends.user1.chime_user_id if my_friends.sender_id else None
                     try:
-                        addmembers(channel_arn, chime_bearer, member_id)
+                        addmembers(channel_arn, chime_bearer, list(member_id))
                     except Exception as e:
                         print(e)
                 
@@ -7982,7 +7982,7 @@ async def listevents(
         user_id = int(user_id) if user_id else None
 
         access_token = checkToken(db, token)
-        print(event_type)
+        
         if access_token == False:
             return {
                 "status": -1,
@@ -8306,22 +8306,14 @@ async def listevents(
                 event_list = event_list
 
             else:
-                
-                
-
-                
-                # now = func.date(datetime.datetime.now())
-                # event_list = event_list.filter(
-                #     text("DATE_ADD(events.start_date_time, INTERVAL SUBSTRING(events.duration, 1, CHAR_LENGTH(events.duration) - 3) HOUR_MINUTE) > :now")
-                #     ).params(now=now)
-                current_datetime = datetime.datetime.utcnow()
                 event_list=event_list.filter(
                         text(
-                            "DATE_ADD(events.start_date_time, INTERVAL SUBSTRING(events.duration, 1, CHAR_LENGTH(events.duration) - 3) HOUR_MINUTE) > :current_datetime"
-                        )
-                    ).params(current_datetime=current_datetime)
+                    "DATE_ADD(events.start_date_time, "
+                    "INTERVAL SUBSTRING(events.duration, 1, CHAR_LENGTH(events.duration) - 3) HOUR_MINUTE) > NOW()"
+                    ))
                 
-            event_list = event_list.filter(Events.status == 1)
+                
+            event_list = event_list.filter(Events.status == 1).order_by(Events.start_date_time.desc())
 
             if type_filter:
                 event_list = event_list.filter(Events.type.in_([type_filter]))
@@ -8355,6 +8347,7 @@ async def listevents(
                 event_list = event_list.all()
 
                 result_list = []
+                
                 if event_list:
                     for event in event_list:
                         
@@ -8412,86 +8405,99 @@ async def listevents(
                             if event.type == 3
                             else event.cover_img
                         )
-                        
-                        result_list.append(
-                            {
-                                "event_id": event.id,
-                                "event_name": event.title,
-                                "reference_id": event.ref_id,
-                                "chime_meeting_id":event.chime_meeting_id if event.chime_meeting_id else "",
-                                "type": event.type,
-                                "event_type_id": event.event_type_id,
-                                "event_layout_id": event.event_layout_id,
-                                "message": event.description
-                                if event.description
-                                else "",
-                                "start_date_time": (
-                                    event.start_date_time
-                                    if event.start_date_time
-                                    else ""
-                                )
-                                if event.created_at
-                                else "",
-                                "start_date": (
-                                    event.start_date_time
-                                    if event.start_date_time
-                                    else ""
-                                )
-                                if event.created_at
-                                else "",
-                                "start_time": event.start_date_time
-                                if event.start_date_time
-                                else ""
-                                if event.created_at
-                                else "",
-                                "duration": event.duration,
-                                "no_of_participants": event.no_of_participants
-                                if event.no_of_participants
-                                else None,
-                                # "banner_image":event.cover_img if event.cover_img else "",
-                                "banner_image": banner_image,  # Event Images displayed event type wise
-                                "is_host": 1 if event.created_by == login_user_id else 0,
-                                "created_at": event.created_at
-                                if event.created_at
-                                else "",
-                                "original_user_name": event.user.display_name,
-                                "original_user_id": event.user.id,
-                                "original_user_image": event.user.profile_img,
-                                "event_melody_id": event.event_melody_id,
-                                "waiting_room": event.waiting_room
-                                if event.waiting_room == 1 or event.waiting_room == 0
-                                else waiting_room,
-                                "join_before_host": event.join_before_host
-                                if event.join_before_host == 1
-                                or event.join_before_host == 0
-                                else join_before_host,
-                                "sound_notify": event.sound_notify
-                                if event.sound_notify == 0 or event.sound_notify == 0
-                                else sound_notify,
-                                "user_screenshare": event.user_screenshare
-                                if event.user_screenshare == 1
-                                or event.user_screenshare == 0
-                                else user_screenshare,
-                                "melodies": {
-                                    "path": default_melody.path,
-                                    "type": default_melody.type,
-                                    "is_default": default_melody.event_id,
-                                } if default_melody else {'path':'','type':'','is_default':""},
+                        entry = 0 
+                        # if event_type == 0:
+                        #     hour,minute,seconds=str(event.duration).split(':')
+                            
+                        #     date_format = "%Y-%m-%d %H:%M:%S"
+                        #     event_start_date=datetime.datetime.strptime(str(event.start_date_time), date_format)
+                            
+                        #     event_start_duration=event_start_date + datetime.timedelta(hours=int(hour),minutes=int(minute),seconds=int(seconds))
+                        #     if event_start_duration <  datetime.datetime.utcnow():
+                        #         entry=1
+                            
                                 
-                                "default_host_audio": default_host_audio
-                                if default_host_audio
-                                else 0,
-                                "default_host_video": default_host_video
-                                if default_host_video
-                                else 0,
-                                "default_guest_audio": default_guest_audio
-                                if default_guest_audio
-                                else 0,
-                                "default_guest_video": default_guest_video
-                                if default_guest_video
-                                else 0
-                            }
-                        )
+                            
+                        if entry == 0:
+                            result_list.append(
+                                {
+                                    "event_id": event.id,
+                                    "event_name": event.title,
+                                    "reference_id": event.ref_id,
+                                    "chime_meeting_id":event.chime_meeting_id if event.chime_meeting_id else "",
+                                    "type": event.type,
+                                    "event_type_id": event.event_type_id,
+                                    "event_layout_id": event.event_layout_id,
+                                    "message": event.description
+                                    if event.description
+                                    else "",
+                                    "start_date_time": (
+                                        event.start_date_time
+                                        if event.start_date_time
+                                        else ""
+                                    )
+                                    if event.created_at
+                                    else "",
+                                    "start_date": (
+                                        event.start_date_time
+                                        if event.start_date_time
+                                        else ""
+                                    )
+                                    if event.created_at
+                                    else "",
+                                    "start_time": event.start_date_time
+                                    if event.start_date_time
+                                    else ""
+                                    if event.created_at
+                                    else "",
+                                    "duration": event.duration,
+                                    "no_of_participants": event.no_of_participants
+                                    if event.no_of_participants
+                                    else None,
+                                    # "banner_image":event.cover_img if event.cover_img else "",
+                                    "banner_image": banner_image,  # Event Images displayed event type wise
+                                    "is_host": 1 if event.created_by == login_user_id else 0,
+                                    "created_at": event.created_at
+                                    if event.created_at
+                                    else "",
+                                    "original_user_name": event.user.display_name,
+                                    "original_user_id": event.user.id,
+                                    "original_user_image": event.user.profile_img,
+                                    "event_melody_id": event.event_melody_id,
+                                    "waiting_room": event.waiting_room
+                                    if event.waiting_room == 1 or event.waiting_room == 0
+                                    else waiting_room,
+                                    "join_before_host": event.join_before_host
+                                    if event.join_before_host == 1
+                                    or event.join_before_host == 0
+                                    else join_before_host,
+                                    "sound_notify": event.sound_notify
+                                    if event.sound_notify == 0 or event.sound_notify == 0
+                                    else sound_notify,
+                                    "user_screenshare": event.user_screenshare
+                                    if event.user_screenshare == 1
+                                    or event.user_screenshare == 0
+                                    else user_screenshare,
+                                    "melodies": {
+                                        "path": default_melody.path,
+                                        "type": default_melody.type,
+                                        "is_default": default_melody.event_id,
+                                    } if default_melody else {'path':'','type':'','is_default':""},
+                                    
+                                    "default_host_audio": default_host_audio
+                                    if default_host_audio
+                                    else 0,
+                                    "default_host_video": default_host_video
+                                    if default_host_video
+                                    else 0,
+                                    "default_guest_audio": default_guest_audio
+                                    if default_guest_audio
+                                    else 0,
+                                    "default_guest_video": default_guest_video
+                                    if default_guest_video
+                                    else 0
+                                }
+                            )
                     
                 return {
                     "status": 1,
