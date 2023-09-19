@@ -5870,6 +5870,8 @@ async def deletenugget(
                 return {"status": 0, "msg": "Invalid nugget id"}
 
 
+
+
 # 29. Nugget Comment List
 @router.post("/nuggetcommentlist")
 async def nuggetcommentlist(
@@ -5914,9 +5916,20 @@ async def nuggetcommentlist(
 
             check_nuggets = db.query(Nuggets).filter_by(id=nugget_id).first()
             if check_nuggets:
+                liked_case = case(
+                        [
+                            (
+                                (NuggetsCommentsLikes.user_id == login_user_id) &
+                                (NuggetsCommentsLikes.comment_id == NuggetsComments.id),
+                                1
+                            ),
+                        ],
+                        else_=0
+                    )
+                
                 commentlist = (
                     db.query(
-                        NuggetsComments, NuggetsCommentsLikes.user_id.label("liked")
+                        NuggetsComments,  liked_case.label('liked')
                     )
                     .outerjoin(
                         NuggetsCommentsLikes,
@@ -5929,7 +5942,7 @@ async def nuggetcommentlist(
                     .order_by(NuggetsComments.modified_date.asc())
                     .all()
                 )
-
+                
                 result_list = []
                 if commentlist:
                     count = 0
@@ -5959,18 +5972,18 @@ async def nuggetcommentlist(
                             for reply in get_cmt_like:
                                 ilike = False
                                 likes = db.query(NuggetsCommentsLikes).filter(
-                                    NuggetsCommentsLikes.nugget_id == nugget_id,
+                                    NuggetsCommentsLikes.nugget_id == reply.nugget_id,
                                     NuggetsCommentsLikes.comment_id == reply.id,
                                 )
 
                                 if likes:
                                     user_like = likes.filter(
-                                        NuggetsCommentsLikes.user_id == reply.user_id
+                                        NuggetsCommentsLikes.user_id == login_user_id
                                     ).first()
                                     if user_like:
                                         ilike = True
                                         
-                                total_like = likes.count()
+                                total_likes_count = likes.count()
                                 replyarray.append(
                                     {
                                         "comment_id": reply.id,
@@ -5983,7 +5996,7 @@ async def nuggetcommentlist(
                                         "comment": reply.content,
                                         "commented_date": reply.created_date,
                                         "liked": ilike,
-                                        "like_count": total_like,
+                                        "like_count": total_likes_count,
                                     }
                                 )
                         result_list.append(
@@ -6002,7 +6015,7 @@ async def nuggetcommentlist(
                                     "NuggetsComments"
                                 ].created_date,
                                 "liked": True
-                                if comment["liked"] and comment["liked"] > 0
+                                if comment.liked > 0
                                 else False,
                                 "like_count": total_like,
                                 "reply": replyarray,

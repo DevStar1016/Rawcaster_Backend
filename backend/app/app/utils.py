@@ -1932,7 +1932,7 @@ def GetGroupDetails(db, user_id, id):  # Id -Group ID
                         "typing": 0,
                     }
                 )
-
+        print(members)
         group_details = {
             "group_id": friendGroup.id,
             "group_name": friendGroup.group_name,
