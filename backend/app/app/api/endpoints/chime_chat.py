@@ -363,10 +363,13 @@ async def auto_individual_channel_create(db: Session = Depends(deps.get_db),toke
             
             getMyFriend=db.query(MyFriends).filter(or_(and_(MyFriends.sender_id == friend_id,MyFriends.receiver_id == login_user_id),and_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == friend_id)),MyFriends.status == 1).first()
             
-            if getMyFriend and getMyFriend.channel_arn == None and getMyFriend.user1.chime_user_id and getMyFriend.user2.chime_user_id:
+            if getMyFriend and getMyFriend.channel_arn == None:
                 # CreateChannel
+                userId= getMyFriend.sender_id if getMyFriend.sender_id == login_user_id else getMyFriend.receiver_id
+                getUser=db.query(User.chime_user_id).filter(User.id == userId,User.chime_user_id == None).first()
+                
                 set_unique_channel=f"RAWCAST{int(datetime.datetime.utcnow().timestamp())}"
-                createchannel=create_channel(chime_bearer=getMyFriend.user1.chime_user_id,
+                createchannel=create_channel(chime_bearer=getUser.chime_user_id,
                                             group_name=set_unique_channel)
                 channel_arn = (
                                 createchannel["ChannelArn"]
@@ -376,14 +379,29 @@ async def auto_individual_channel_create(db: Session = Depends(deps.get_db),toke
                     
                 if channel_arn:               
                     getMyFriend.channel_arn = channel_arn
-                    db.commit()
                     
-                    getMember=getMyFriend.user1.chime_user_id if getMyFriend.sender_id == login_user_id else getMyFriend.user2.chime_user_id
+                    memberId=getMyFriend.receiver_id if getMyFriend.sender_id != login_user_id else getMyFriend.sender_id
+                    createChimeUser=db.query(User).filter(User.id == memberId,User.chime_user_id == None).first()
+                    memberARN=None
+                    if createChimeUser and User.chime_user_id == None:
+                        create_chat_user = chime_chat.createchimeuser(createChimeUser.email_id if createChimeUser.email_id else createChimeUser.mobile_no)
+                        if create_chat_user["status"] == 1:
+                            user_arn = create_chat_user["data"][
+                                "ChimeAppInstanceUserArn"
+                            ]
+                            # Update User Chime ID
+                            createChimeUser.chime_user_id=user_arn
+                            db.commit()
+                            memberARN=user_arn
+                        
+                        
+                    else:
+                        memberARN=createChimeUser.chime_user_id
                     
                     addMemberResponse=addmembers(channel_arn=channel_arn,
                                 chime_bearer=getMyFriend.user1.chime_user_id,
-                                member_id=[getMember])
-
+                                member_id=[memberARN])
+                    db.commit()
                     return {"status":1,"msg":"Success","channel_arn":channel_arn}
                         
                     
