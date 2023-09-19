@@ -1227,116 +1227,13 @@ def nuggetcontentaudio(
 
 
 
-# @router.post("/polly")
-# async def polly(
+# @router.post("/nugget_readout_langugae")
+# async def nugget_readout_langugae(
 #     db: Session = Depends(deps.get_db),text_content:str=Form(None)
 #     ):
-  
-                    
-#         text="Rawcaster allows you to configure your meeting to either allow anyone to join or restrict it to a select few. Break out rooms, schmoozing, online chats, voting are some of the features Rawcaster provides with this feature."
-#         translator = googletrans.Translator()
-#         translated = translator.translate(text, dest='zh-CN')   
-#         print(translated.text)
-#         # Polly
-#         # Initialize the Polly client
-#         polly = boto3.client('polly',aws_access_key_id=config.access_key,
-#                             aws_secret_access_key=config.access_secret,region_name='us-east-1')
-
-#         # Define the voice ID and language code for your desired language
-#         voice_id = 'Joanna'  # Replace 'YourVoiceID' with the appropriate Polly voice ID
-#         language_code = 'cmn-CN'  # Replace 'YourLanguageCode' with the appropriate language code
-
-#         # Request speech synthesis
-#         response = polly.synthesize_speech(
-#             Text=translated.text,
-#             OutputFormat='mp3',  # You can choose other formats like 'ogg_vorbis', 'pcm', etc.
-#             VoiceId=voice_id,
-#             LanguageCode=language_code
-           
-#         )
-#         base_dir = "rawcaster_uploads"
-
-#         try:
-#             os.makedirs(base_dir, mode=0o777, exist_ok=True)
-#         except OSError as e:
-#             sys.exit(
-#                 "Can't create {dir}: {err}".format(dir=base_dir, err=e)
-#             )
-
-#         output_dir = base_dir + "/"
-
-#         filename = f"converted_{int(datetime.now().timestamp())}.mp3"
-
-#         save_full_path = f"{output_dir}{filename}"
-#         # Save the speech as an MP3 file
-#         with open(save_full_path, 'wb') as file:
-#             file.write(response['AudioStream'].read())
-#         return save_full_path
-       
-
-
-
-            # GTTs   (Text To Audio)
-                    # try:
-                    #     myobj = gTTS(text=text)
-                    # except Exception as e:
-                    #     return {"status":0,"msg":f"Unable to convert- {e}"}
-                    
-                    # base_dir = "rawcaster_uploads"
-
-                    # try:
-                    #     os.makedirs(base_dir, mode=0o777, exist_ok=True)
-                    # except OSError as e:
-                    #     sys.exit(
-                    #         "Can't create {dir}: {err}".format(dir=base_dir, err=e)
-                    #     )
-
-                    # output_dir = base_dir + "/"
-
-                    # filename = f"converted_{int(datetime.now().timestamp())}.mp3"
-
-                    # save_full_path = f"{output_dir}{filename}"
-                    
-                    # myobj.save(save_full_path)
-
-                    # s3_file_path = f"nuggets/converted_audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
-
-                    # result = upload_to_s3(save_full_path, s3_file_path)
-
-                    # if result["status"] == 1:
-                    #     return {
-                    #         "status": 1,
-                    #         "msg": "success",
-                    #         "file_path": result["url"]
-                    #     }
-                    # else:
-                    #     return {"status":0,"msg":"Unable to convert"}
-                    
-
-
-
-
-@router.post("/usingGTTS")
-async def gtts(
-    db: Session = Depends(deps.get_db),text_content:str=Form(None)
-    ):
-    from gtts import gTTS
-    import os
-
-    # Specify the language and accent (e.g., French, British English, etc.)
-    language = 'ig'  # French accent
-    accent = 'ng'    # French accent
     
-    translator = googletrans.Translator()
     
-    translated = translator.translate(f" {text_content}", dest=language)   
-    # return translated.text
-    print(translated.text)        
-    # Create a gTTS object
-    tts = gTTS(translated.text, tld=accent)
-
-    # Save the speech to an audio file (optional)
-    tts.save("igbo_with_swahili.mp3")
-
-    # Play the audio using the default audio player (e.g., on Windows)
-    # os.system("start output.mp3")
+    
+    
+    
+   
