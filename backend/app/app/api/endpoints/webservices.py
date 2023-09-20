@@ -3562,17 +3562,17 @@ async def addfriendgroup(
                         if get_token_details.user.chime_user_id
                         else None
                     )
-                    # try:
-                    channel_response = create_channel(chime_bearer, group_name)
-                    add_friend_group.status = 1
-                    # Update Groups ARN
-                    add_friend_group.group_arn = (
-                        channel_response["ChannelArn"] if channel_response else None
-                    )
-                    db.commit()
+                    try:
+                        channel_response = create_channel(chime_bearer, group_name)
+                        add_friend_group.status = 1
+                        # Update Groups ARN
+                        add_friend_group.group_arn = (
+                            channel_response["ChannelArn"] if channel_response else None
+                        )
+                        db.commit()
                         
-                    # except Exception as e:
-                    #    return {"status":0,"msg":"Something went wrong"}
+                    except Exception as e:
+                       return {"status":0,"msg":"Something went wrong"}
 
                     if group_members:
                         group_members = (
@@ -4670,7 +4670,7 @@ async def addnuggets(
                                                 uploaded_file_path
                                             )
                                     total_duration = video.duration
-                                    if total_duration < 360:
+                                    if 300 < total_duration < 330:
                                         s3_file_path = f"nuggets/audio_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
 
                                         result = upload_to_s3(
