@@ -1128,42 +1128,52 @@ def nuggetcontentaudio(
             db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
         )
         login_user_id = get_token_details.user_id if get_token_details else None
-
+       
         get_user_readout_language = (
             db.query(
                 UserSettings.id.label("user_setting_id"),
                 ReadOutLanguage.id.label("read_out_id"),
+                ReadOutAccent.id.label("read_out_accent_id"),
+                ReadOutAccent.accent_code,
                 ReadOutLanguage.language_code,
                 ReadOutLanguage.language_with_country
-            )
+            ).outerjoin(ReadOutAccent,ReadOutAccent.id == UserSettings.read_out_accent_id)
+            .join(ReadOutLanguage,ReadOutLanguage.id == UserSettings.read_out_language_id,isouter=True)
             .filter(
-                UserSettings.user_id == login_user_id,
-                ReadOutLanguage.id == UserSettings.read_out_language_id,
+                UserSettings.user_id == login_user_id
+                
             )
             .first()
         )
-
+        
         target_language = (
             get_user_readout_language.language_code
             if get_user_readout_language
             else "en"
         )
+        accent=(get_user_readout_language.accent_code
+            if get_user_readout_language.accent_code
+            else "com")
+        
         # Get nuggets
         get_nugget = (
             db.query(Nuggets)
             .filter(Nuggets.id == nugget_id, Nuggets.status == 1)
             .first()
         )
+        
         if get_nugget:
             text_content = get_nugget.nuggets_master.content if get_nugget else None
             
             if text_content:
                 translator = googletrans.Translator()
                 
-                text_content=f".{text_content}" if translation_type == 1 else text_content
-                 
-                translated = translator.translate(f"{text_content}", dest=target_language)   
-                    
+                text_content=f"{text_content}" if translation_type == 1 else text_content
+                try:
+                    translated = translator.translate(f"{text_content}", dest=target_language)   
+                except:
+                    return {"status":0,"msg":"Unable to translate"}  
+                
                 if translation_type == 2:
                     return {
                         "status": 1,
@@ -1173,24 +1183,11 @@ def nuggetcontentaudio(
                 else:
                     
                     text=translated.text
-
-                    # Initialize the Polly client
-                    polly = boto3.client('polly',aws_access_key_id=config.access_key,
-                                        aws_secret_access_key=config.access_secret,region_name='us-east-1')
-
-                    # Define the voice ID and language code for your desired language
-                    voice_id = 'Joanna'  # Replace 'YourVoiceID' with the appropriate Polly voice ID
-                    language_code = 'en-US'  # Replace 'YourLanguageCode' with the appropriate language code
-
-                    # Request speech synthesis
-                    response = polly.synthesize_speech(
-                        Text=text,
-                        OutputFormat='mp3',  # You can choose other formats like 'ogg_vorbis', 'pcm', etc.
-                        VoiceId=voice_id,
-                        LanguageCode=(get_user_readout_language.language_with_country 
-                                      if get_user_readout_language 
-                                      else "en-US")
-                    )
+                    try:
+                        tts = gTTS(text, lang=target_language,tld=accent)
+                    except:
+                        return {"status":0,"msg":"Unable to translate"}  
+            
                     base_dir = "rawcaster_uploads"
 
                     try:
@@ -1206,8 +1203,14 @@ def nuggetcontentaudio(
 
                     save_full_path = f"{output_dir}{filename}"
                     # Save the speech as an MP3 file
-                    with open(save_full_path, 'wb') as file:
-                        file.write(response['AudioStream'].read())
+                    # try:
+                    tts.save(save_full_path)
+                    # except:
+                    #     return {"status":0,"msg":"Unable to translate"}  
+                        
+                    
+                    # with open(save_full_path, 'wb') as file:
+                    #     file.write(response['AudioStream'].read())
 
                     s3_file_path = f"nuggets/converted_audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
 
@@ -1227,13 +1230,21 @@ def nuggetcontentaudio(
 
 
 
-# @router.post("/nugget_readout_langugae")
-# async def nugget_readout_langugae(
-#     db: Session = Depends(deps.get_db),text_content:str=Form(None)
-#     ):
-    
-    
-    
-    
-    
-   
+
+# # Initialize the Polly client
+# polly = boto3.client('polly',aws_access_key_id=config.access_key,
+#                     aws_secret_access_key=config.access_secret,region_name='us-east-1')
+
+# # Define the voice ID and language code for your desired language
+# voice_id = 'Joanna'  # Replace 'YourVoiceID' with the appropriate Polly voice ID
+# language_code = 'en-US'  # Replace 'YourLanguageCode' with the appropriate language code
+
+# # Request speech synthesis
+# response = polly.synthesize_speech(
+#     Text=text,
+#     OutputFormat='mp3',  # You can choose other formats like 'ogg_vorbis', 'pcm', etc.
+#     VoiceId=voice_id,
+#     LanguageCode=(get_user_readout_language.language_with_country 
+#                   if get_user_readout_language 
+#                   else "en-US")
+# )

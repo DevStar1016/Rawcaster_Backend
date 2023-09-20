@@ -61,3 +61,4 @@ from .verify_accounts import VerifyAccounts
 from .nugget_content_audio import NuggetContentAudio
 from .read_out_language import ReadOutLanguage
 from .qr_tokens import QrTokens
+from .read_out_accent import ReadOutAccent

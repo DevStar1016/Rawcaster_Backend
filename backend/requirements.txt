@@ -17,7 +17,7 @@ playsound
 chime
 openai
 translate
-googletrans==4.0.0rc1
+googletrans==3.1.0a0
 SpeechRecognition
 pydub
 better-profanity
