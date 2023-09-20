@@ -383,7 +383,7 @@ async def auto_individual_channel_create(db: Session = Depends(deps.get_db),toke
                     memberId=getMyFriend.receiver_id if getMyFriend.sender_id != login_user_id else getMyFriend.sender_id
                     createChimeUser=db.query(User).filter(User.id == memberId).first()
                     memberARN=None
-                    if createChimeUser and User.chime_user_id == None:
+                    if createChimeUser and createChimeUser.chime_user_id == None:
                         create_chat_user = chime_chat.createchimeuser(createChimeUser.email_id if createChimeUser.email_id else createChimeUser.mobile_no)
                         if create_chat_user["status"] == 1:
                             user_arn = create_chat_user["data"][
