@@ -3562,17 +3562,17 @@ async def addfriendgroup(
                         if get_token_details.user.chime_user_id
                         else None
                     )
-                    try:
-                        channel_response = create_channel(chime_bearer, group_name)
-                        add_friend_group.status = 1
-                        # Update Groups ARN
-                        add_friend_group.group_arn = (
-                            channel_response["ChannelArn"] if channel_response else None
-                        )
-                        db.commit()
+                    # try:
+                    channel_response = create_channel(chime_bearer, group_name)
+                    add_friend_group.status = 1
+                    # Update Groups ARN
+                    add_friend_group.group_arn = (
+                        channel_response["ChannelArn"] if channel_response else None
+                    )
+                    db.commit()
                         
-                    except Exception as e:
-                       return {"status":0,"msg":"Something went wrong"}
+                    # except Exception as e:
+                    #    return {"status":0,"msg":"Something went wrong"}
 
                     if group_members:
                         group_members = (
