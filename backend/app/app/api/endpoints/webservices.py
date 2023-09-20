@@ -3652,7 +3652,7 @@ async def addfriendgroup(
                         "type": "callend",
                     }
                     print(group_details)
-                    notify_members = group_details["group_member_ids"] if group_details["group_member_ids"] else []
+                    notify_members = group_details["group_member_ids"] if group_details else []
 
                     if add_friend_group.created_by in notify_members:
                         notify_members.remove(add_friend_group.created_by)
