@@ -13121,11 +13121,24 @@ async def followandunfollow(
                             if friend_groups.user.chime_user_id
                             else None
                         )
-                        member_id = (
+                       
+                        member_id=None
+                        if not add_frnd_group.user.chime_user_id:
+                            create_chat_user = chime_chat.createchimeuser(add_frnd_group.user.email_id if add_frnd_group.user.email_id else add_frnd_group.user.mobile_no)
+                            if create_chat_user["status"] == 1:
+                                user_arn = create_chat_user["data"][
+                                    "ChimeAppInstanceUserArn"
+                                ]
+                                # Update User Chime ID
+                                get_user=db.query(User).filter(User.id == add_frnd_group.user_id).update({"chime_user_id":user_arn})
+                                member_id=user_arn
+                        else:
+                            member_id = (
                             list(add_frnd_group.user.chime_user_id)
                             if add_frnd_group.user.chime_user_id
                             else None
                         )
+                             
                         try:
                             addmembers(channel_arn, chime_bearer, member_id)
                         except Exception as e:

@@ -399,7 +399,7 @@ async def auto_individual_channel_create(db: Session = Depends(deps.get_db),toke
                         memberARN=createChimeUser.chime_user_id
                     
                     addMemberResponse=addmembers(channel_arn=channel_arn,
-                                chime_bearer=getMyFriend.user1.chime_user_id,
+                                chime_bearer=getUser.chime_user_id,
                                 member_id=[memberARN])
                     db.commit()
                     return {"status":1,"msg":"Success","channel_arn":channel_arn}
