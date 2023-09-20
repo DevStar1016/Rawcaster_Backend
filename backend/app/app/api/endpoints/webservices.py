@@ -3515,9 +3515,7 @@ async def addfriendgroup(
             "status": -1,
             "msg": "Sorry! your login session expired. please login again.",
         }
-    # elif group_name == None or group_name.strip() == "":
-    #     return {"status":0,"msg":"Sorry! Group name can not be empty."}
-
+    
     else:
         access_token = checkToken(db, token)
 
@@ -3539,7 +3537,7 @@ async def addfriendgroup(
                     FriendGroups.created_by == login_user_id,
                     FriendGroups.group_name == group_name,
                 )
-                .count()
+                .first()
             )
             if get_row_count:
                 return {"status": 0, "msg": "Group name already exists"}
@@ -3555,7 +3553,8 @@ async def addfriendgroup(
                 )
                 db.add(add_friend_group)
                 db.commit()
-
+                db.refresh(add_friend_group)
+                
                 if add_friend_group:
                     # Add Friend Group
                     chime_bearer = (
@@ -3573,7 +3572,7 @@ async def addfriendgroup(
                         db.commit()
                         
                     except Exception as e:
-                        print(e)
+                       return {"status":0,"msg":"Something went wrong"}
 
                     if group_members:
                         group_members = (
@@ -3584,11 +3583,23 @@ async def addfriendgroup(
                             get_user = db.query(User).filter(User.id == member).first()
 
                             if get_user:
-                                member_id.append(
-                                    get_user.chime_user_id
-                                    if get_user.chime_user_id
-                                    else None
-                                )
+                                if get_user.chime_user_id == None:
+                                    create_chat_user = chime_chat.createchimeuser(get_user.email_id if get_user.email_id else get_user.mobile_no)
+                                    if create_chat_user["status"] == 1:
+                                        user_arn = create_chat_user["data"][
+                                            "ChimeAppInstanceUserArn"
+                                        ]
+                                        # Update User Chime ID
+                                        get_user.chime_user_id=user_arn
+                                        db.commit()
+                                        member_id.append(user_arn)
+                                
+                                else:
+                                    member_id.append(
+                                        get_user.chime_user_id
+                                        if get_user.chime_user_id
+                                        else None
+                                    )
                                 # add Friend Group member
                                 add_member = FriendGroupMembers(
                                     group_id=add_friend_group.id,
@@ -3651,7 +3662,7 @@ async def addfriendgroup(
                         "data": {"refer_id": add_friend_group.id, "type": "add_group"},
                         "type": "callend",
                     }
-                    print(group_details)
+                    
                     notify_members = group_details["group_member_ids"] if group_details else []
 
                     if add_friend_group.created_by in notify_members:
