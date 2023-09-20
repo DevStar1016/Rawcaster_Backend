@@ -366,7 +366,7 @@ async def auto_individual_channel_create(db: Session = Depends(deps.get_db),toke
             if getMyFriend and getMyFriend.channel_arn == None:
                 # CreateChannel
                 userId= getMyFriend.sender_id if getMyFriend.sender_id == login_user_id else getMyFriend.receiver_id
-                getUser=db.query(User.chime_user_id).filter(User.id == userId,User.chime_user_id == None).first()
+                getUser=db.query(User.chime_user_id).filter(User.id == userId).first()
                 
                 set_unique_channel=f"RAWCAST{int(datetime.datetime.utcnow().timestamp())}"
                 createchannel=create_channel(chime_bearer=getUser.chime_user_id,
@@ -381,7 +381,7 @@ async def auto_individual_channel_create(db: Session = Depends(deps.get_db),toke
                     getMyFriend.channel_arn = channel_arn
                     
                     memberId=getMyFriend.receiver_id if getMyFriend.sender_id != login_user_id else getMyFriend.sender_id
-                    createChimeUser=db.query(User).filter(User.id == memberId,User.chime_user_id == None).first()
+                    createChimeUser=db.query(User).filter(User.id == memberId).first()
                     memberARN=None
                     if createChimeUser and User.chime_user_id == None:
                         create_chat_user = chime_chat.createchimeuser(createChimeUser.email_id if createChimeUser.email_id else createChimeUser.mobile_no)
