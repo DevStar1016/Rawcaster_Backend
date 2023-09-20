@@ -14,3 +14,5 @@ class ReadOutLanguage(Base):
     status = Column(TINYINT, default=1, comment="0->Inactive, 1->Active")
 
     user_settings = relationship("UserSettings", back_populates="read_out_language")
+    read_out_accent = relationship("ReadOutAccent", back_populates="read_out_language")
+    

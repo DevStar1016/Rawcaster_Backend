@@ -3651,6 +3651,7 @@ async def addfriendgroup(
                         "data": {"refer_id": add_friend_group.id, "type": "add_group"},
                         "type": "callend",
                     }
+                    print(group_details)
                     notify_members = group_details["group_member_ids"] if group_details["group_member_ids"] else []
 
                     if add_friend_group.created_by in notify_members:
@@ -10799,6 +10800,13 @@ async def getusersettings(db: Session = Depends(deps.get_db), token: str = Form(
                     "read_out_language": get_user_settings.read_out_language.language
                     if get_user_settings.read_out_language_id
                     else "",
+                    "read_out_accent_id":get_user_settings.read_out_accent_id 
+                    if get_user_settings.read_out_accent_id 
+                    else None,
+                    "read_out_accent_name":get_user_settings.read_out_accent.accent 
+                    if get_user_settings.read_out_accent_id 
+                    else ""
+                    
                 }
             )
 
@@ -10872,6 +10880,7 @@ async def updateusersettings(
     groupid: str = Form(None, description="example [1,2,3]"),
     group_update_type: str = Form(None),
     read_out_language_id: str = Form(None),
+    read_out_accent_id:str=Form(None)
 ):
     if token == None or token.strip() == "":
         return {
@@ -10885,6 +10894,8 @@ async def updateusersettings(
         return {"status": 0, "msg": "Group id required"}
     elif read_out_language_id and not read_out_language_id.isnumeric():
         return {"status": 0, "msg": "Invalid read out language"}
+    elif read_out_accent_id and not read_out_accent_id.isnumeric():
+        return {"status": 0, "msg": "Invalid read out accent"}
 
     else:
         access_token = checkToken(db, token.strip())
@@ -11518,6 +11529,10 @@ async def updateusersettings(
                     settings.read_out_language_id = (read_out_language_id 
                                     if read_out_language_id 
                                     else settings.read_out_language_id)
+                    
+                    settings.read_out_accent_id=(read_out_accent_id
+                                    if read_out_accent_id 
+                                    else settings.read_out_accent_id)
 
                     db.commit()
                     if groupid and profile_field_name:
@@ -12706,6 +12721,7 @@ async def getlanguagelist(db: Session = Depends(deps.get_db)):
 
     read_out_languages = []
     for language in get_readout_language:
+        
         read_out_languages.append(
             {
                 "id": language.id,
@@ -12713,6 +12729,7 @@ async def getlanguagelist(db: Session = Depends(deps.get_db)):
                 "language_code": language.language_code
                 if language.language_code
                 else "",
+                "accents":language.read_out_accent
             }
         )
 
@@ -12722,6 +12739,8 @@ async def getlanguagelist(db: Session = Depends(deps.get_db)):
         "language_list": result_list,
         "read_out_language_list": read_out_languages,
     }
+
+
 
 
 # 66  Profile Details Display preference update (Only Group)
@@ -16003,7 +16022,7 @@ async def getUrlMetaData(
                         }}
               
             else:
-                return {"status":1,"msg":"Failed to retrieve metadata."}
+                return {"status":0,"msg":"Failed to retrieve metadata."}
             
            
 

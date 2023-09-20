@@ -53,9 +53,12 @@ class UserSettings(Base):
     live_event_banner = Column(String(500))
     talkshow_event_banner = Column(String(500))
     read_out_language_id = Column(Integer, ForeignKey("read_out_language.id"))
+    read_out_accent_id=Column(Integer,ForeignKey("read_out_accent.id"))
 
     status = Column(TINYINT, default=1)
 
     user = relationship("User", back_populates="user_settings")
     language = relationship("Language", back_populates="user_settings")
     read_out_language = relationship("ReadOutLanguage", back_populates="user_settings")
+    read_out_accent = relationship("ReadOutAccent", back_populates="user_settings")
+    
