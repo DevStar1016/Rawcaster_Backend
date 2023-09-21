@@ -4086,13 +4086,14 @@ async def removefriendsfromgroup(
                             if member_details.user.chime_user_id
                             else None
                         )
-
-                        try:
-                            delete_channel_membership(
-                                channel_arn, chime_bearer, member_id
-                            )
-                        except Exception as e:
-                            return {"status":0,"msg":e}
+                        
+                        if channel_arn and member_id and chime_bearer:
+                            try:
+                                delete_channel_membership(
+                                    channel_arn, chime_bearer, member_id
+                                )
+                            except Exception as e:
+                                return {"status":0,"msg":e}
                         
                         delete_member=get_members.delete()
                         db.commit()
