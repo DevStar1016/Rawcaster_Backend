@@ -626,7 +626,7 @@ async def signupverify(
                                     get_token.device_type,
                                     get_token.voip_token,
                                     get_token.app_type,
-                                    0,
+                                    0
                                 )
                                 return generate_access_token
 
@@ -911,7 +911,7 @@ async def login(
                 login_from,
                 voip_token,
                 app_type,
-                0,
+                0
             )
             return generate_access_token
 
@@ -14762,7 +14762,7 @@ async def socialmedialogin(
                     .count()
                 )
 
-            if check_email_id:
+            if check_email_id > 0:
                 reply = await logins(
                     db,
                     email_id,
@@ -14773,11 +14773,11 @@ async def socialmedialogin(
                     login_from,
                     voip_token,
                     app_type,
-                    1,
+                    1
                 )
                 return reply
 
-            if check_phone:
+            if check_phone > 0:
                 reply = await logins(
                     db,
                     email_id,
@@ -14788,7 +14788,7 @@ async def socialmedialogin(
                     login_from,
                     voip_token,
                     app_type,
-                    1,
+                    1
                 )
                 return reply
 
@@ -14822,7 +14822,7 @@ async def socialmedialogin(
                 password = ""
                 model = User(
                     email_id=email_id,
-                    is_email_id_verified=1,
+                    is_email_id_verified=1, # 0->No, 1->Yes
                     first_name=first_name,
                     last_name=last_name,
                     display_name=display_name,
@@ -14830,11 +14830,11 @@ async def socialmedialogin(
                     dob=dob,
                     country_code=country_code,
                     mobile_no=mobile_no,
-                    is_mobile_no_verified=0,
+                    is_mobile_no_verified=0, # 0->No, 1->Yes
                     country_id=country_id,
                     user_code=None,
                     cover_image=cover_image,
-                    signup_type=1,
+                    signup_type=1, # //1->Web, 2->Facebook, 3->Google;
                     signup_social_ref_id=signup_social_ref_id,
                     profile_img=profile_img,
                     geo_location=geo_location,
@@ -14908,8 +14908,10 @@ async def socialmedialogin(
 
                             # Add Channels
                             chime_bearer = user_arn
-                            group_name = "My Fans"
-                            channel_response = create_channel(chime_bearer, group_name)
+                            
+                            set_unique_channel=f"RAWCAST{int(datetime.datetime.utcnow().timestamp())}"
+
+                            channel_response = create_channel(chime_bearer, set_unique_channel)
 
                             channel_arn = (
                                 channel_response["ChannelArn"]
@@ -15040,7 +15042,7 @@ async def socialmedialogin(
                         login_from,
                         voip_token,
                         app_type,
-                        0,
+                        0
                     )
                     return reply
                 else:
