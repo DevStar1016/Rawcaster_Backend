@@ -276,9 +276,11 @@ def EmailorMobileNoValidation(email_id):
     email_id = email_id
 
     if check_mail(email_id) == True:
+        print("1")
         return {"status": 1, "type": 1, "email": email_id, "mobile": None}
 
     elif email_id.isnumeric():
+        print("2")
         return {"status": 1, "type": 2, "email": None, "mobile": email_id}
 
     else:
@@ -1851,7 +1853,8 @@ def defaultimage(flag):
 def GetGroupDetails(db, user_id, id):  # Id -Group ID
     members = []
     memberlist = []
-
+    my_group=1
+    
     friendGroup = (
         db.query(FriendGroups)
         .filter(FriendGroups.status == 1, FriendGroups.id == id)
@@ -1872,7 +1875,7 @@ def GetGroupDetails(db, user_id, id):  # Id -Group ID
             group_category = 1
         if friendGroup.group_name == "My Fans" and friendGroup.created_by != user_id:
             group_category = 2
-
+            my_group=0
         if friendGroup.created_by == user_id and friendGroup.group_name != "My Fans":
             group_category = 3
 
@@ -1932,11 +1935,11 @@ def GetGroupDetails(db, user_id, id):  # Id -Group ID
                         "typing": 0,
                     }
                 )
-        print(members)
+       
         group_details = {
             "group_id": friendGroup.id,
             "group_name": friendGroup.group_name,
-            "group_arn": friendGroup.group_arn if friendGroup.group_arn else None,
+            "channel_arn": friendGroup.group_arn if friendGroup.group_arn else None,
             "group_icon": friendGroup.group_icon,
             "group_member_count": friend_group_count,
             "group_owner": friendGroup.created_by,
@@ -1946,6 +1949,7 @@ def GetGroupDetails(db, user_id, id):  # Id -Group ID
             "group_member_ids": members,
             "group_members_list": memberlist,
             "typing": 0,
+            "my_group":my_group
         }
         return group_details
 
@@ -2160,7 +2164,7 @@ async def logins(
     login_from,
     voip_token,
     app_type,
-    socual,
+    social
 ):
     username = username.strip() if username else None
 
@@ -2183,12 +2187,12 @@ async def logins(
             return {
                 "status": 2,
                 "type": type["type"],
-                "msg": "Login Failed. Invalid email id or password",
+                "msg": "Login Failed. Invalid email id or password.",
             }
         else:
-            return {"status": 0, "msg": "Login Failed. Invalid email id or password"}
+            return {"status": 0, "msg": "Login Failed. Invalid email id or password.."}
 
-    elif get_user.status == 0:                  # Verification Pending
+    elif get_user.status == 0 and social != 1:                  # Verification Pending
         signup_type = 1 if get_user.email_id else 2
         user_id = get_user.id
         send_otp = await SendOtp(db, user_id, signup_type)
@@ -2231,7 +2235,7 @@ async def logins(
             "remaining_seconds": 90,
         }
 
-    elif get_user.password != password and socual != 1:     #  Invalid password
+    elif get_user.password != password and social != 1:     #  Invalid password
         if get_user.status == 2:                            #  2- Suspended
             return {"status": 0, "msg": "Your account is currently blocked!"}
         else:
