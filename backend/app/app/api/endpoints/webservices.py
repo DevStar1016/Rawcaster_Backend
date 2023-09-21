@@ -4290,7 +4290,7 @@ def process_data(
             db.add(add_nugget_attachment)
             db.commit()
             db.refresh(add_nugget_attachment)
-
+        
         else:
             return {"status": 0, "msg": "Failed to Upload"}
 
@@ -4306,7 +4306,6 @@ def process_data(
         db.add(add_nuggets)
         db.commit()
         db.refresh(add_nuggets)
-        
         nugget_ids.append(add_nuggets.id)
         
         nugget_id = add_nuggets.id
@@ -4575,12 +4574,13 @@ async def addnuggets(
                 }
             else:
                 # Set Content for a first Nugget (Only for splited file upload)
-                splites_flag=0
+               
                 content_location = 1
                 looping_count = len(nuggets_media) if nuggets_media else 1
 
                 nugget_details = []
                 for i in range(looping_count):
+                    splites_flag=0
                     nugget_ids=[]
                     
                     nugget_content=detect_and_remove_offensive(content) if content else None
@@ -4634,7 +4634,7 @@ async def addnuggets(
                             uploaded_file_path = await file_upload(
                                 nuggets_media[i - 1], file_ext, compress=1
                             )
-                                                        
+                                                     
                             file_stat = os.stat(uploaded_file_path)
                             file_size = file_stat.st_size
 
@@ -4660,7 +4660,6 @@ async def addnuggets(
                                     db.add(add_nugget_attachment)
                                     db.commit()
                                     db.refresh(add_nugget_attachment)
-
                                 else:
                                     return result
 
@@ -4672,7 +4671,8 @@ async def addnuggets(
                                                 uploaded_file_path
                                             )
                                     total_duration = video.duration
-                                    if 300 < total_duration < 330:
+                                    
+                                    if total_duration < 330:
                                         s3_file_path = f"nuggets/audio_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
 
                                         result = upload_to_s3(
@@ -4695,6 +4695,7 @@ async def addnuggets(
                                         else:
                                             return result
                                     else:
+                                        
                                         splites_flag=1
                                         splited_video_reposne=process_data(
                                             db,
@@ -4754,6 +4755,7 @@ async def addnuggets(
                                         return result
 
                                 else:
+                                    
                                     result = upload_to_s3(
                                         uploaded_file_path, s3_file_path
                                     )
@@ -4772,6 +4774,7 @@ async def addnuggets(
                                         db.add(add_nugget_attachment)
                                         db.commit()
                                         db.refresh(add_nugget_attachment)
+                                       
                                     else:
                                         return result
                                     
