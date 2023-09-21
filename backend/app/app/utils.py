@@ -70,26 +70,25 @@ def EncryptandDecrypt(otp, flag=1):
         decrypted = f.decrypt(message)
         return decrypted
 
-def upload_file_using_ffmpeg(input_file,ext):
-    base_dir = f"rawcaster_uploads/uploadfile_{random.randint(1111,9999)}{ext}"
+# def upload_file_using_ffmpeg(input_file,ext):
+#     base_dir = f"rawcaster_uploads/uploadfile_{random.randint(1111,9999)}{ext}"
 
-    try:
-        os.makedirs(base_dir, mode=0o777, exist_ok=True)
-    except OSError as e:
-        sys.exit("Can't create {dir}: {err}".format(dir=base_dir, err=e))
+#     try:
+#         os.makedirs(base_dir, mode=0o777, exist_ok=True)
+#     except OSError as e:
+#         sys.exit("Can't create {dir}: {err}".format(dir=base_dir, err=e))
 
     
-    save_full_path = base_dir
+#     save_full_path = base_dir
     
-    ffmpeg_command = ['ffmpeg', '-i', input_file, '-f', 'ftp', save_full_path]
-    subprocess.run(ffmpeg_command)
-    os.remove(input_file)
-    return save_full_path
+#     ffmpeg_command = ['ffmpeg', '-i', input_file, '-f', 'ftp', save_full_path]
+#     subprocess.run(ffmpeg_command)
+#     os.remove(input_file)
+#     return save_full_path
 
 
 async def file_upload(file_name, ext, compress):
     
-    # base_dir = f"{st.BASE_DIR}rawcaster_uploads"
     base_dir = "rawcaster_uploads"
 
     try:
@@ -142,32 +141,32 @@ async def read_file_upload(file_name, ext, compress):
     return save_full_path
 
 
-def video_file_upload(upload_file, compress, file_ext):
-    # base_dir = f"{st.BASE_DIR}rawcaster_uploads"
-    base_dir = "rawcaster_uploads"
+# def video_file_upload(upload_file, compress, file_ext):
+#     # base_dir = f"{st.BASE_DIR}rawcaster_uploads"
+#     base_dir = "rawcaster_uploads"
 
-    try:
-        os.makedirs(base_dir, mode=0o777, exist_ok=True)
-    except OSError as e:
-        sys.exit("Can't create {dir}: {err}".format(dir=base_dir, err=e))
+#     try:
+#         os.makedirs(base_dir, mode=0o777, exist_ok=True)
+#     except OSError as e:
+#         sys.exit("Can't create {dir}: {err}".format(dir=base_dir, err=e))
 
-    output_dir = base_dir + "/"
+#     output_dir = base_dir + "/"
 
-    characters = string.ascii_letters + string.digits
-    # Generate the random string
-    random_string = "".join(random.choice(characters) for i in range(18))
-    filename = f"video_{random_string}{file_ext}"
+#     characters = string.ascii_letters + string.digits
+#     # Generate the random string
+#     random_string = "".join(random.choice(characters) for i in range(18))
+#     filename = f"video_{random_string}{file_ext}"
 
-    save_full_path = f"{output_dir}{filename}"
+#     save_full_path = f"{output_dir}{filename}"
 
-    with open(save_full_path, "wb") as buffer:
-        buffer.write(upload_file.file)
+#     with open(save_full_path, "wb") as buffer:
+#         buffer.write(upload_file.file)
 
-    if compress:
-        command = f"ffmpeg -i {save_full_path} -vcodec libx265 -crf 50 {save_full_path}"
-        subprocess.run(command, shell=True, check=True)
+#     if compress:
+#         command = f"ffmpeg -i {save_full_path} -vcodec libx265 -crf 50 {save_full_path}"
+#         subprocess.run(command, shell=True, check=True)
 
-    return save_full_path
+#     return save_full_path
 
 
 def upload_to_s3(local_file_pth, s3_bucket_path):

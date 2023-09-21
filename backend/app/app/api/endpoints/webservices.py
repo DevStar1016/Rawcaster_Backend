@@ -21,6 +21,8 @@ from mail_templates.mail_template import *
 from moviepy.video.io.VideoFileClip import VideoFileClip
 import subprocess
 from .chime_chat import *
+import requests
+from bs4 import BeautifulSoup
 
 router = APIRouter()
 
@@ -5272,7 +5274,7 @@ async def listnuggets(
                     
                     get_nuggets = get_nuggets.filter(
                         or_(
-                            Nuggets.user_id == login_user_id,
+                            Nuggets.user_id != login_user_id,
                             and_(Nuggets.user_id.in_(my_followers),Nuggets.share_type != 2)
                         )
                     )
@@ -7759,10 +7761,8 @@ async def addevent(
 
                     # Event Melody
                     if event_melody:
-                        # file_name=event_melody.filename
                         file_temp = event_melody.content_type
-                        # read_file=await event_melody.read()
-                        # file_size=len(read_file)
+                       
                         file_ext = os.path.splitext(event_melody.filename)[1]
 
                         uploaded_file_path = await file_upload(
@@ -7791,13 +7791,11 @@ async def addevent(
                             type = "video"
                             media_type = 2
 
-                        if (
-                            file_size > 1000000
-                            and type == "image"
+                        if ( type == "image"
                             and file_ext != ".gif"
                         ):
-                            s3_file_path = f"eventsmelody/eventsmelody{random.randint(11111,99999)}{new_event.id}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                            upload_file_path = uploaded_file_path
+                            s3_file_path = f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{new_event.id}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
+                           
                             result = upload_to_s3(upload_file_path, s3_file_path)
 
                             if result and result["status"] == 1:
@@ -7824,9 +7822,6 @@ async def addevent(
 
                             if type == "video" and file_ext != ".mp4":
                                 s3_file_path = f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{new_event.id}{int(datetime.datetime.utcnow().timestamp())}.mp4"
-                                upload_file_path = video_file_upload(
-                                    event_melody, compress=1, file_ext=file_ext
-                                )
 
                             result = upload_to_s3(upload_file_path, s3_file_path)
 
@@ -10974,10 +10969,8 @@ async def updateusersettings(
                         )
 
                     if default_melody:
-                        file_name = default_melody.filename
                         file_temp = default_melody.content_type
-                        file_read = await default_melody.read()
-                        file_size = len(file_read)
+                        
                         file_ext = os.path.splitext(default_melody.filename)[1]
 
                         media_type = 1
@@ -10998,17 +10991,14 @@ async def updateusersettings(
                         elif "video" in file_temp:
                             type = "video"
                             media_type = 2
-
-                        if (
-                            file_size > 1000000
-                            and type == "image"
+                        
+                        compress = 1
+                        uploaded_file_path = await file_upload(
+                            default_melody, file_ext, compress
+                        )
+                        if ( type == "image"
                             and file_ext != ".gif"
                         ):
-                            compress = 1
-                            uploaded_file_path = await read_file_upload(
-                                file_read, file_ext, compress
-                            )
-
                             s3_file_path = f"eventsmelody/eventsmelody_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
 
                             result = upload_to_s3(uploaded_file_path, s3_file_path)
@@ -11043,17 +11033,10 @@ async def updateusersettings(
                                 return result
 
                         else:
-                            compress = None
-                            uploaded_file_path = await read_file_upload(
-                                file_read, file_ext, compress
-                            )
 
                             s3_file_path = f"eventsmelody/eventsmelody_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                             if type == "video" and file_ext != ".mp4":
                                 s3_file_path = f"eventsmelody/eventsmelody_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
-                                uploaded_file_path = video_file_upload(
-                                    default_melody, compress=1, file_ext=file_ext
-                                )
 
                             result = upload_to_s3(uploaded_file_path, s3_file_path)
 
@@ -11095,8 +11078,7 @@ async def updateusersettings(
                     if meeting_header_image:
                         file_name = meeting_header_image.filename
                         file_temp = meeting_header_image.content_type
-                        file_read = await meeting_header_image.read()
-                        file_size = len(file_read)
+                        
                         file_ext = os.path.splitext(meeting_header_image.filename)[1]
                         local_file_upload = ""
                         extensions = [".jpeg", ".jpg", ".png"]
@@ -11104,25 +11086,14 @@ async def updateusersettings(
                         if not file_ext in extensions:
                             return {"status": 0, "msg": "Image format does not support"}
 
-                        elif file_size > 10240000:
-                            return {
-                                "status": 0,
-                                "msg": "Image size must be less than 10 MB",
-                            }
-
                         else:
-                            if file_size > 1024:
-                                local_file_upload = await read_file_upload(
-                                    file_read, file_ext, compress=1
-                                )
-                                header_image = local_file_upload
-                            else:
-                                local_file_upload = await read_file_upload(
-                                    file_read, file_ext, compress=None
-                                )
-                                header_image = local_file_upload
+                            local_file_upload = await file_upload(
+                                meeting_header_image, file_ext, compress=1
+                            )
+                            header_image = local_file_upload
+                           
 
-                        if header_image:
+                        if local_file_upload:
                             s3_file_pth = f"meetingheaderimage/MeetingHeaderImage_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
 
                             result = upload_to_s3(local_file_upload, s3_file_pth)
@@ -11137,10 +11108,8 @@ async def updateusersettings(
                         else None
                     )
                     if live_event_banner:
-                        file_name = live_event_banner.filename
                         file_temp = live_event_banner.content_type
-                        file_read = await live_event_banner.read()
-                        file_size = len(file_read)
+                        
                         file_ext = os.path.splitext(live_event_banner.filename)[1]
                         local_file_upload = ""
                         extensions = [".jpeg", ".jpg", ".png"]
@@ -11148,23 +11117,12 @@ async def updateusersettings(
                         if not file_ext in extensions:
                             return {"status": 0, "msg": "Image format does not support"}
 
-                        elif file_size > 10240000:
-                            return {
-                                "status": 0,
-                                "msg": "Image size must be less than 10 MB",
-                            }
-
                         else:
-                            if file_size > 1024:
-                                local_file_upload = await read_file_upload(
-                                    file_read, file_ext, compress=1
-                                )
-                                live_banner = local_file_upload
-                            else:
-                                local_file_upload = await read_file_upload(
-                                    file_read, file_ext, compress=None
-                                )
-                                live_banner = local_file_upload
+                            local_file_upload = await file_upload(
+                                live_event_banner, file_ext, compress=1
+                            )
+                            live_banner = local_file_upload
+                           
 
                         if live_banner:
                             s3_file_pth = f"meetingheaderimage/MeetingHeaderImage_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
@@ -11181,10 +11139,8 @@ async def updateusersettings(
                         else None
                     )
                     if talkshow_event_banner:
-                        file_name = talkshow_event_banner.filename
                         file_temp = talkshow_event_banner.content_type
-                        file_read = await talkshow_event_banner.read()
-                        file_size = len(file_read)
+                        
                         file_ext = os.path.splitext(talkshow_event_banner.filename)[1]
                         local_file_upload = ""
                         extensions = [".jpeg", ".jpg", ".png"]
@@ -11192,24 +11148,13 @@ async def updateusersettings(
                         if not file_ext in extensions:
                             return {"status": 0, "msg": "Image format does not support"}
 
-                        elif file_size > 10240000:
-                            return {
-                                "status": 0,
-                                "msg": "Image size must be less than 10 MB",
-                            }
-
                         else:
-                            if file_size > 1024:
-                                local_file_upload = await read_file_upload(
-                                    file_read, file_ext, compress=1
-                                )
-                                talkshow_banner = local_file_upload
-                            else:
-                                local_file_upload = await read_file_upload(
-                                    file_read, file_ext, compress=None
-                                )
-                                talkshow_banner = local_file_upload
-
+                        
+                            local_file_upload = await file_upload(
+                                talkshow_event_banner, file_ext, compress=1
+                            )
+                            talkshow_banner = local_file_upload
+                            
                         if talkshow_banner:
                             s3_file_pth = f"meetingheaderimage/MeetingHeaderImage_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
 
@@ -15113,6 +15058,7 @@ async def influencerlist(
                 User.profile_img,
                 User.user_status_id,
                 User.geo_location,
+                User.dob,
                 FollowUser.id.label("follow_id"),
             )
             criteria = criteria.join(
@@ -15199,6 +15145,7 @@ async def influencerlist(
                             "display_name": res.display_name
                             if res.display_name and res.display_name != ""
                             else "",
+                            "dob":res.dob if res.dob else None,
                             "gender": res.gender
                             if res.gender and res.gender != ""
                             else "",
@@ -15989,7 +15936,7 @@ async def groupabusereport(
 async def getUrlMetaData(
     db: Session = Depends(deps.get_db),
     token: str = Form(None),
-    url:str=Form(None)
+    url:str=Form(None,description="['http://google.com','http://gmail.com']")
     ):
     if token == None or token.strip() == "":
         return {
@@ -16008,13 +15955,14 @@ async def getUrlMetaData(
                 "msg": "Sorry! your login session expired. please login again.",
             }
         else:
-            import requests
-            from bs4 import BeautifulSoup
-
-            def get_url_metadata(url):
+            listOfMetaData=[]
+            
+            metaDataUrl=url.split(',')
+            
+            for site_url in metaDataUrl:
                 try:
                     # Send a GET request to the URL
-                    response = requests.get(url)
+                    response = requests.get(site_url)
 
                     # Parse the HTML content of the page using BeautifulSoup
                     soup = BeautifulSoup(response.text, 'html.parser')
@@ -16027,25 +15975,24 @@ async def getUrlMetaData(
                         'og_description': soup.find('meta', attrs={'property': 'og:description'})['content'] if soup.find('meta', attrs={'property': 'og:description'}) else None,
                         'og_image': soup.find('meta', attrs={'property': 'og:image'})['content'] if soup.find('meta', attrs={'property': 'og:image'}) else None,
                     }
-
-                    return metadata
+                    listOfMetaData.append({"url":site_url,"title":metadata['title'],
+                            "description":metadata['description'],
+                            "open_graph_title": metadata['og_title'],
+                            "open_graph_description": metadata['og_description'],
+                            "open_graph_image":metadata['og_image']})
+                    
+                    
                 except Exception as e:
                     print(f"Error: {e}")
                     return None
 
-            # Example usage:
-            metadata = get_url_metadata(url)
+            # Example usage
 
-            if metadata:
+            if listOfMetaData:
                 return {"status":1,
                         "msg":"Success",
-                        "data":{
-                            "title":metadata['title'],
-                            "description":metadata['description'],
-                            "open_graph_title": metadata['og_title'],
-                            "open_graph_description": metadata['og_description'],
-                            "open_graph_image":metadata['og_image']
-                        }}
+                        "data":listOfMetaData
+                            }
               
             else:
                 return {"status":0,"msg":"Failed to retrieve metadata."}
