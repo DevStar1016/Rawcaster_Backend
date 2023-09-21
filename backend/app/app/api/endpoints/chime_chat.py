@@ -632,5 +632,5 @@ async def list_channel_membership():
 #         ChimeBearer=chime_bearer,
 #     )
 
-#     return response
+#    return response
 
