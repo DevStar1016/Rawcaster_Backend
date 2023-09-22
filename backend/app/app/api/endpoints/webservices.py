@@ -2918,12 +2918,12 @@ async def listallfriendgroups(
                                 if res.group_icon
                                 else defaultimage("group_icon"),
                                 "group_member_count": (
-                                    get_frnd_group_count + 1
+                                    get_frnd_group_count
                                     if grouptype == 1
-                                    else get_frnd_group_count
+                                    else get_frnd_group_count + 1
                                 )
                                 if get_frnd_group_count
-                                else 0,
+                                else 1,
                                 "locked": 1,
                                 "my_group": my_group
                                 
@@ -2941,12 +2941,12 @@ async def listallfriendgroups(
                                 if res.group_icon
                                 else defaultimage("group_icon"),
                                 "group_member_count": (
-                                    get_frnd_group_count + 1
+                                    get_frnd_group_count
                                     if grouptype == 1
-                                    else get_frnd_group_count
+                                    else get_frnd_group_count + 1
                                 )
                                 if get_frnd_group_count
-                                else 0,
+                                else 1,
                                 "group_owner": res.created_by if res.created_by else 0,
                                 "typing": 0,
                                 "chat_enabled": res.chat_enabled,
