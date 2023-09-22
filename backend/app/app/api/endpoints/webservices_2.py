@@ -1153,7 +1153,7 @@ def nuggetcontentaudio(
         )
         accent=(get_user_readout_language.accent_code
             if get_user_readout_language.accent_code
-            else "com")
+            else get_user_readout_language.language_code)
         
         # Get nuggets
         get_nugget = (
@@ -1227,6 +1227,33 @@ def nuggetcontentaudio(
 
         else:
             return {"status": 0, "msg": "Invalid Nugget"}
+
+
+
+
+
+
+# @router.post("/gtts_translate")
+# def gtts_translate(
+#     db: Session = Depends(deps.get_db),
+#     text: str = Form(None),
+# ):
+#     from googletrans import Translator
+#     # Create a Translator object
+#     from playsound import playsound
+    
+#     text = "Hello, how are you?"
+#     translator = Translator()
+    
+#     # Translate to Assamese
+#     translated = translator.translate(text,lang='af')
+#     tts = gTTS(text=translated.text, lang='af',tld='com')
+    
+#     tts.save("afrikaans_tts.mp3")
+#     # Play the audio file
+#     playsound("afrikaans_tts.mp3")
+
+#     return translated.text
 
 
 
