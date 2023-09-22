@@ -9884,7 +9884,7 @@ async def readnotification(
                 )
 
             db.commit()
-            return {"status": 1, "msg": "Success"}
+            return {"status": 1, "msg": "Marked as read"}
 
 
 # 50. Unfriend a friend
