@@ -1153,7 +1153,7 @@ def nuggetcontentaudio(
         accent=target_language
         if get_user_readout_language and get_user_readout_language.read_out_accent_id:
             get_accent=db.query(ReadOutAccent).filter(ReadOutAccent.id == get_user_readout_language.read_out_accent_id,
-                                        ReadOutAccent.read_out_language_id == get_user_readout_language.read_out_id).first()
+                                                      ReadOutAccent.read_out_language_id == get_user_readout_language.read_out_id).first()
             accent=get_accent.accent_code if get_accent else target_language
         
         # Get nuggets
@@ -1184,7 +1184,7 @@ def nuggetcontentaudio(
                     
                     text=translated.text
                     try:
-                        tts = gTTS(text,tld=accent)
+                        tts = gTTS(text,lang=target_language,tld=accent)
                     except:
                         return {"status":0,"msg":"Unable to translate to audio"}  
             

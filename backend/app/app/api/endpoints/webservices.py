@@ -15063,8 +15063,10 @@ async def influencerlist(
                 User.user_status_id,
                 User.geo_location,
                 User.dob,
+                User.created_at,
                 FollowUser.id.label("follow_id"),
-            )
+                UserStatusMaster.name
+            ).join(UserStatusMaster,UserStatusMaster.id == User.user_status_id,isouter=True)
             criteria = criteria.join(
                 FollowUser,
                 and_(
@@ -15162,13 +15164,18 @@ async def influencerlist(
                             "location": res.geo_location
                             if hasattr(res, "geo_location") and res.geo_location != ""
                             else "",
+                            "geo_location":res.geo_location if res.geo_location else None,
                             "followers": follow_count,
                             "category": [
                                 influencer.name for influencer in influencer_category
                             ]
                             if influencer_category
                             else "",
+                            "date_of_join": res.created_at
+                                if res.created_at
+                                else "",
                             "user_status_id": res.user_status_id,
+                            "user_status":res.name,
                             "bio_data": ProfilePreference(
                                 db,
                                 login_user_id,
