@@ -1133,11 +1133,9 @@ def nuggetcontentaudio(
             db.query(
                 UserSettings.id.label("user_setting_id"),
                 ReadOutLanguage.id.label("read_out_id"),
-                ReadOutAccent.id.label("read_out_accent_id"),
-                ReadOutAccent.accent_code,
                 ReadOutLanguage.language_code,
                 ReadOutLanguage.language_with_country
-            ).outerjoin(ReadOutAccent,ReadOutAccent.id == UserSettings.read_out_accent_id)
+            )
             .join(ReadOutLanguage,ReadOutLanguage.id == UserSettings.read_out_language_id,isouter=True)
             .filter(
                 UserSettings.user_id == login_user_id
@@ -1151,9 +1149,8 @@ def nuggetcontentaudio(
             if get_user_readout_language
             else "en"
         )
-        accent=(get_user_readout_language.accent_code
-            if get_user_readout_language.accent_code
-            else get_user_readout_language.language_code)
+        get_accent=db.query(ReadOutAccent).filter(ReadOutAccent.read_out_language_id == get_user_readout_language.read_out_id).first()
+        accent=get_accent.accent_code if get_accent else 'com'
         
         # Get nuggets
         get_nugget = (
