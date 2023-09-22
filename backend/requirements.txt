@@ -12,7 +12,7 @@ python-dateutil
 Pillow
 moviepy
 langdetect
-gtts
+gTTS==2.3.2
 playsound
 chime
 openai
