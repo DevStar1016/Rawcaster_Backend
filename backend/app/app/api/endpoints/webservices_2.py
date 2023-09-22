@@ -1150,7 +1150,7 @@ def nuggetcontentaudio(
             else "en"
         )
         get_accent=db.query(ReadOutAccent).filter(ReadOutAccent.read_out_language_id == get_user_readout_language.read_out_id).first()
-        accent=get_accent.accent_code if get_accent else 'com'
+        accent=get_accent.accent_code if get_accent else target_language
         
         # Get nuggets
         get_nugget = (
@@ -1165,9 +1165,8 @@ def nuggetcontentaudio(
             if text_content:
                 translator = googletrans.Translator()
                 
-                text_content=f"{text_content}" if translation_type == 1 else text_content
                 try:
-                    translated = translator.translate(f"{text_content}", dest=target_language)   
+                    translated = translator.translate(text_content, dest=target_language)   
                 except:
                     return {"status":0,"msg":"Unable to translate"}  
                 
@@ -1181,10 +1180,9 @@ def nuggetcontentaudio(
                     
                     text=translated.text
                     try:
-                        print(accent)
                         tts = gTTS(text, lang=target_language,tld=accent)
                     except:
-                        return {"status":0,"msg":"Unable to translate"}  
+                        return {"status":0,"msg":"Unable to translate to audio"}  
             
                     base_dir = "rawcaster_uploads"
 
