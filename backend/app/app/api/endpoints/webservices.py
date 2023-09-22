@@ -11492,7 +11492,7 @@ async def updateusersettings(
                     
                     settings.read_out_accent_id=(read_out_accent_id
                                     if read_out_accent_id 
-                                    else settings.read_out_accent_id)
+                                    else None)
 
                     db.commit()
                     if groupid and profile_field_name:
