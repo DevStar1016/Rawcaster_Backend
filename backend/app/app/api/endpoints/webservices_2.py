@@ -1184,6 +1184,7 @@ def nuggetcontentaudio(
                     
                     text=translated.text
                     try:
+                        print(accent)
                         tts = gTTS(text, lang=target_language,tld=accent)
                     except:
                         return {"status":0,"msg":"Unable to translate"}  
