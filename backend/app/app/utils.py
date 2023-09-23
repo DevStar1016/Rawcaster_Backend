@@ -1996,6 +1996,9 @@ async def SendOtp(db, user_id, signup_type):
 
     get_user = db.query(User).filter(User.id == user_id).first()
     to_mail = get_user.email_id
+    base_url = inviteBaseurl()
+    code = EncryptandDecrypt(str(otp))
+    link = f"{base_url}rawadmin/site/accountverify?hash={code}"
 
     subject = "Rawcaster - Verify OTP"
 
@@ -2006,6 +2009,9 @@ async def SendOtp(db, user_id, signup_type):
         f"Your OTP for Rawcaster account verification is : <b> {otp } </b><br /><br />"
     )
     # content += 'Click this link to validate your account '
+    content += (
+            f"Click this link to validate your account {link} <br /><br />"
+                    )
     content += 'Regards,<br />Administration Team<br /><a href="https://rawcaster.com/">Rawcaster.com</a> LLC'
     content += "</td></tr></table>"
 

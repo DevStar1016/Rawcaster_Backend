@@ -1136,6 +1136,7 @@ def nuggetcontentaudio(
                 ReadOutLanguage.id.label("read_out_id"),
                 UserSettings.read_out_accent_id.label("read_out_accent_id"),
                 ReadOutLanguage.language_code,
+                ReadOutLanguage.audio_support,
                 ReadOutLanguage.language_with_country
             )
             .join(ReadOutLanguage,ReadOutLanguage.id == UserSettings.read_out_language_id,isouter=True)
@@ -1182,49 +1183,53 @@ def nuggetcontentaudio(
                         "translation": translated.text
                     }
                 else:
-                    
-                    text=translated.text
-                    try:
-                        tts = gTTS(text,lang=target_language,tld=accent)
-                    except:
-                        return {"status":0,"msg":"Unable to translate to audio"}  
-            
-                    base_dir = "rawcaster_uploads"
-
-                    try:
-                        os.makedirs(base_dir, mode=0o777, exist_ok=True)
-                    except OSError as e:
-                        sys.exit(
-                            "Can't create {dir}: {err}".format(dir=base_dir, err=e)
-                        )
-
-                    output_dir = base_dir + "/"
-
-                    filename = f"converted_{int(datetime.now().timestamp())}.mp3"
-
-                    save_full_path = f"{output_dir}{filename}"
-                    # Save the speech as an MP3 file
-                    # try:
-                    tts.save(save_full_path)
-                    # except:
-                    #     return {"status":0,"msg":"Unable to translate"}  
+                    if get_user_readout_language and get_user_readout_language.audio_support:
                         
-                    
-                    # with open(save_full_path, 'wb') as file:
-                    #     file.write(response['AudioStream'].read())
+                        text=translated.text
+                        try:
+                            tts = gTTS(text,lang=target_language,tld=accent)
+                        except:
+                            return {"status":0,"msg":"Unable to translate to audio"}  
+                
+                        base_dir = "rawcaster_uploads"
 
-                    s3_file_path = f"nuggets/converted_audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
+                        try:
+                            os.makedirs(base_dir, mode=0o777, exist_ok=True)
+                        except OSError as e:
+                            sys.exit(
+                                "Can't create {dir}: {err}".format(dir=base_dir, err=e)
+                            )
 
-                    result = upload_to_s3(save_full_path, s3_file_path)
+                        output_dir = base_dir + "/"
 
-                    if result["status"] == 1:
-                        return {
-                            "status": 1,
-                            "msg": "success",
-                            "file_path": result["url"]
-                        }
+                        filename = f"converted_{int(datetime.now().timestamp())}.mp3"
+
+                        save_full_path = f"{output_dir}{filename}"
+                        # Save the speech as an MP3 file
+                        # try:
+                        tts.save(save_full_path)
+                        # except:
+                        #     return {"status":0,"msg":"Unable to translate"}  
+                            
+                        
+                        # with open(save_full_path, 'wb') as file:
+                        #     file.write(response['AudioStream'].read())
+
+                        s3_file_path = f"nuggets/converted_audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
+
+                        result = upload_to_s3(save_full_path, s3_file_path)
+
+                        if result["status"] == 1:
+                            return {
+                                "status": 1,
+                                "msg": "success",
+                                "file_path": result["url"]
+                            }
+                        else:
+                            return {"status":0,"msg":"Unable to convert"}
                     else:
-                        return {"status":0,"msg":"Unable to convert"}
+                        return {"status":0,"msg":"Unable to convert text to audio in the "}
+                        
 
         else:
             return {"status": 0, "msg": "Invalid Nugget"}

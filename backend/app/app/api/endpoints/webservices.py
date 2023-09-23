@@ -14725,7 +14725,7 @@ async def socialmedialogin(
                     .filter(
                         and_(User.mobile_no == mobile_no, User.status.in_([0, 1, 2, 3]))
                     )
-                    .count()
+                    .first()
                 )
 
             if check_email_id:
@@ -14746,7 +14746,7 @@ async def socialmedialogin(
             
                 return reply
 
-            if check_phone > 0:
+            if check_phone:
                 reply = await logins(
                     db,
                     email_id,
