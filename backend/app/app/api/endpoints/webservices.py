@@ -8,7 +8,7 @@ from app.api import deps
 import datetime
 from sqlalchemy.orm import Session,aliased,joinedload
 from datetime import datetime, date
-from sqlalchemy import func, case, text, extract
+from sqlalchemy import func, case, text, extract,select,exists
 import re
 import base64
 import json
@@ -5265,6 +5265,7 @@ async def listnuggets(
                             NuggetsAttachment.media_type == "audio",
                         )
                     )
+                
                 if filter_type == 1: # Influencer
                     my_followers = []  # my_followers
                     follow_user = (
@@ -5328,6 +5329,7 @@ async def listnuggets(
                     )
 
                 elif user_public_nugget_display_setting == 3:  # Specific Connections
+                   
                     my_friends = []  # Selected Connections id's
 
                     online_group_list = (
@@ -5343,14 +5345,19 @@ async def listnuggets(
                     if online_group_list:
                         for group_list in online_group_list:
                             my_friends.append(group_list.groupid)
+                    # Without specfic connetions
+                    
+                    statement=select([NuggetsShareWith]).where(NuggetsShareWith.nuggets_id == Nuggets.id).correlate_except(Nuggets)
                     get_nuggets = get_nuggets.filter(
-                        or_(
-                            and_(Nuggets.user_id == login_user_id),
-                            and_(
-                                Nuggets.user_id.in_(my_friends), Nuggets.share_type != 2
-                            ),
+                            
+                            or_(Nuggets.user_id == login_user_id,
+                                and_(
+                                    Nuggets.user_id.in_(my_friends),
+                                    Nuggets.share_type != 2,
+                                    ~exists(statement)
+                                )
+                            )
                         )
-                    )
 
                 elif user_public_nugget_display_setting == 4:  # All Groups
                     get_nuggets = get_nuggets.join(
@@ -10911,7 +10918,7 @@ async def updateusersettings(
         access_token = checkToken(db, token.strip())
         if access_token == False:
             return {
-                "sttaus": -1,
+                "status": -1,
                 "msg": "Sorry! your login session expired. please login again.",
             }
         else:
@@ -14614,8 +14621,8 @@ async def socialmedialogin(
 ):
     if auth_code.strip() == "" or auth_code.strip() == None:
         return {"status": 0, "msg": "Auth Code is missing"}
-    # elif first_name.strip() == "" or first_name.strip() == None:
-    #     return {"status": 0, "msg": "Please provide your first name"}
+    elif email_id.strip() == "" or email_id.strip() == None:
+        return {"status": 0, "msg": "Please provide your email id"}
     elif signin_type and not signin_type.isnumeric():
         return {"status": 0, "msg": "Invalid Signin type"}
     elif signin_type and int(signin_type) <= 1:
@@ -14628,18 +14635,13 @@ async def socialmedialogin(
     #     return {"status":0,"msg":"Password is missing"}
     elif dob and is_date(dob) == False:
         return {"status": 0, "msg": "Invalid Date"}
-    else:
+    else: 
         signin_type = int(signin_type)
 
         mobile_no = mobile_no if mobile_no != "" or mobile_no != None else None
 
         password = password.strip() if password else None
-        last_name = last_name.strip() if last_name else None
-        display_name = (
-            f"{first_name.strip()} {last_name.strip()}"
-            if last_name
-            else first_name.strip()
-        )
+        
         profile_img = defaultimage("profile_img")
         cover_image = defaultimage("cover_img")
         geo_location = (
@@ -14669,7 +14671,7 @@ async def socialmedialogin(
 
         auth_text = email_id
         if checkAuthCode(auth_code, auth_text) == False:
-            return {"sttaus": 0, "msg": "Authentication failed!"}
+            return {"status": 0, "msg": "Authentication failed!"}
         else:
             check_email_or_mobile = EmailorMobileNoValidation(email_id)
             if check_email_or_mobile["status"] and check_email_or_mobile["status"] == 1:
@@ -14722,6 +14724,7 @@ async def socialmedialogin(
                     app_type,
                     1
                 )
+            
                 return reply
 
             if check_phone > 0:
@@ -14737,10 +14740,19 @@ async def socialmedialogin(
                     app_type,
                     1
                 )
+            
                 return reply
 
             else:
                 userIP = get_ip()
+                
+                display_name = (
+                    f"{first_name.strip()} {last_name.strip()}"
+                    if last_name
+                    else first_name.strip()
+                )
+                last_name = last_name.strip() if last_name else None
+                
 
                 if geo_location == None or geo_location == "" or len(geo_location) < 4:
                     Location_details = FindLocationbyIP(userIP)
@@ -14991,6 +15003,7 @@ async def socialmedialogin(
                         app_type,
                         0
                     )
+                    print(reply)
                     return reply
                 else:
                     return {

@@ -275,11 +275,10 @@ def EmailorMobileNoValidation(email_id):
     email_id = email_id
 
     if check_mail(email_id) == True:
-        print("1")
         return {"status": 1, "type": 1, "email": email_id, "mobile": None}
 
     elif email_id.isnumeric():
-        print("2")
+        
         return {"status": 1, "type": 2, "email": None, "mobile": email_id}
 
     else:

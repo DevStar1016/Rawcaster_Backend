@@ -10,6 +10,7 @@ class ReadOutLanguage(Base):
     language = Column(String(100))
     language_code = Column(String(10))
     language_with_country=Column(String(10))
+    audio_support=Column(TINYINT,comment="0-not support, 1-support")
     created_at = Column(DateTime)
     status = Column(TINYINT, default=1, comment="0->Inactive, 1->Active")
 
