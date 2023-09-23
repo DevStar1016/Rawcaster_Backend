@@ -14614,14 +14614,12 @@ async def socialmedialogin(
 ):
     if auth_code.strip() == "" or auth_code.strip() == None:
         return {"status": 0, "msg": "Auth Code is missing"}
-    elif first_name.strip() == "" or first_name.strip() == None:
-        return {"status": 0, "msg": "Please provide your first name"}
+    # elif first_name.strip() == "" or first_name.strip() == None:
+    #     return {"status": 0, "msg": "Please provide your first name"}
     elif signin_type and not signin_type.isnumeric():
         return {"status": 0, "msg": "Invalid Signin type"}
     elif signin_type and int(signin_type) <= 1:
         return {"status": 0, "msg": "signin type is missing"}
-    elif first_name == None or first_name.strip() == "":
-        return {"status": 0, "msg": "First Name is missing"}
     elif auth_code == None or auth_code.strip() == "":
         return {"status": 0, "msg": "Auth code is missing"}
     elif app_type and not app_type.isnumeric():
