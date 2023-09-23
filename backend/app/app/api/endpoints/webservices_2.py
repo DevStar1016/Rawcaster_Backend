@@ -1064,6 +1064,7 @@ async def temp_file_upload(
     file_ext = os.path.splitext(file.filename)[1]
 
     uploaded_file_path = await file_upload(file, file_ext, compress=1)
+    
     # Get Duration of the File
     try:
         audio = AudioSegment.from_file(uploaded_file_path)
@@ -1133,8 +1134,6 @@ def nuggetcontentaudio(
             db.query(
                 UserSettings.id.label("user_setting_id"),
                 ReadOutLanguage.id.label("read_out_id"),
-                ReadOutLanguage.audio_support,
-                ReadOutLanguage.language,
                 UserSettings.read_out_accent_id.label("read_out_accent_id"),
                 ReadOutLanguage.language_code,
                 ReadOutLanguage.language_with_country
@@ -1183,54 +1182,56 @@ def nuggetcontentaudio(
                         "translation": translated.text
                     }
                 else:
-                    if get_user_readout_language and get_user_readout_language.audio_support:
-                        text=translated.text
-                        try:
-                            tts = gTTS(text,lang=target_language,tld=accent)
-                        except:
-                            return {"status":0,"msg":"Unable to translate to audio"}  
-                
-                        base_dir = "rawcaster_uploads"
-
-                        try:
-                            os.makedirs(base_dir, mode=0o777, exist_ok=True)
-                        except OSError as e:
-                            sys.exit(
-                                "Can't create {dir}: {err}".format(dir=base_dir, err=e)
-                            )
-
-                        output_dir = base_dir + "/"
-
-                        filename = f"converted_{int(datetime.now().timestamp())}.mp3"
-
-                        save_full_path = f"{output_dir}{filename}"
-                        # Save the speech as an MP3 file
-                        try:
-                            tts.save(save_full_path)
-                        except:
-                            return {"status":0,"msg":"Unable to translate"}  
-                            
-
-                        s3_file_path = f"nuggets/converted_audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
-
-                        result = upload_to_s3(save_full_path, s3_file_path)
-
-                        if result["status"] == 1:
-                            return {
-                                "status": 1,
-                                "msg": "success",
-                                "file_path": result["url"]
-                            }
-                        else:
-                            return {"status":0,"msg":"Unable to convert"}
-                    else:
-                        langugae=get_user_readout_language.language if get_user_readout_language else ""
-                        return {"status":0,"msg":f"Unable to convert text to audio in the {langugae} language"}
                     
+                    text=translated.text
+                    try:
+                        tts = gTTS(text,lang=target_language,tld=accent)
+                    except:
+                        return {"status":0,"msg":"Unable to translate to audio"}  
+            
+                    base_dir = "rawcaster_uploads"
+
+                    try:
+                        os.makedirs(base_dir, mode=0o777, exist_ok=True)
+                    except OSError as e:
+                        sys.exit(
+                            "Can't create {dir}: {err}".format(dir=base_dir, err=e)
+                        )
+
+                    output_dir = base_dir + "/"
+
+                    filename = f"converted_{int(datetime.now().timestamp())}.mp3"
+
+                    save_full_path = f"{output_dir}{filename}"
+                    # Save the speech as an MP3 file
+                    # try:
+                    tts.save(save_full_path)
+                    # except:
+                    #     return {"status":0,"msg":"Unable to translate"}  
                         
+                    
+                    # with open(save_full_path, 'wb') as file:
+                    #     file.write(response['AudioStream'].read())
+
+                    s3_file_path = f"nuggets/converted_audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
+
+                    result = upload_to_s3(save_full_path, s3_file_path)
+
+                    if result["status"] == 1:
+                        return {
+                            "status": 1,
+                            "msg": "success",
+                            "file_path": result["url"]
+                        }
+                    else:
+                        return {"status":0,"msg":"Unable to convert"}
 
         else:
             return {"status": 0, "msg": "Invalid Nugget"}
+
+
+
+
 
 
 # @router.post("/gtts_translate")

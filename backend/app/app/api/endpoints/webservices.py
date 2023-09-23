@@ -14690,16 +14690,33 @@ async def socialmedialogin(
             else:
                 return {"status": 0, "msg": "Unable to signup"}
 
-            check_email_id = 0
-            check_phone = 0
+            check_email_id = None
+            check_phone = None
 
-            if email_id:
+            if signup_social_ref_id:
+                check_email_id = (
+                    db.query(User)
+                    .filter(
+                        and_(User.signup_social_ref_id == signup_social_ref_id, User.status.in_([0, 1, 2, 3]))
+                    )
+                    .first()
+                )
+                if check_email_id:
+                    check_email_id = (
+                    db.query(User)
+                    .filter(
+                        and_(User.email_id == email_id, User.status.in_([0, 1, 2, 3]))
+                    )
+                    .first()
+                    )
+            
+            elif email_id:
                 check_email_id = (
                     db.query(User)
                     .filter(
                         and_(User.email_id == email_id, User.status.in_([0, 1, 2, 3]))
                     )
-                    .count()
+                    .first()
                 )
 
             if mobile_no:
@@ -14711,7 +14728,9 @@ async def socialmedialogin(
                     .count()
                 )
 
-            if check_email_id > 0:
+            if check_email_id:
+                email_id=email_id if email_id else check_email_id.email_id
+                
                 reply = await logins(
                     db,
                     email_id,

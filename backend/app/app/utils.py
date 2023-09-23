@@ -1828,7 +1828,8 @@ def detect_and_remove_offensive(text):
 def defaultimage(flag):
     url = ""
     if flag == "profile_img":
-        url = "https://rawcaster.s3.us-west-2.amazonaws.com/profileimage/Image_94081682594499.png"
+        url="https://rawcaster.s3.us-west-2.amazonaws.com/profile_image/image_1695442761.png"
+        # url = "https://rawcaster.s3.us-west-2.amazonaws.com/profileimage/Image_94081682594499.png"
 
     elif flag == "cover_img":
         url = "https://rawcaster.s3.us-west-2.amazonaws.com/profileimage/image_1688517947.png"
