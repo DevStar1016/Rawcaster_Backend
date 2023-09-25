@@ -1176,7 +1176,7 @@ def nuggetcontentaudio(
             get_accent=db.query(ReadOutAccent).filter(ReadOutAccent.id == get_user_readout_language.read_out_accent_id,
                                                       ReadOutAccent.read_out_language_id == get_user_readout_language.read_out_id).first()
             accent=get_accent.accent_code if get_accent else "com"
-        print(accent)
+        
         # Get nuggets
         get_nugget = (
             db.query(Nuggets)
@@ -1188,29 +1188,33 @@ def nuggetcontentaudio(
             text_content = get_nugget.nuggets_master.content if get_nugget else None
             
             if text_content:
-                translator = googletrans.Translator()
-                
-                try:
-                    translated = translator.translate(text_content, dest=target_language)   
-                except:
-                    return {"status":0,"msg":"Unable to translate"}  
-                
-                if translation_type == 2:
-                    return {
-                        "status": 1,
-                        "msg": "success",
-                        "translation": translated.text
-                    }
+                # Check Content or URL
+                if is_valid_url(text_content):
+                    return {"status":0,"msg":"Unable to translate URL"}
                 else:
-                    if get_user_readout_language and get_user_readout_language.audio_support:
-                        text=translated.text
-                        target_language=target_language
-                        audioResponse=textTOAudio(text,target_language,accent)
-                        return audioResponse
+                    translator = googletrans.Translator()
+                    
+                    try:
+                        translated = translator.translate(text_content, dest=target_language)   
+                    except:
+                        return {"status":0,"msg":"Unable to translate"}  
+                    
+                    if translation_type == 2:
+                        return {
+                            "status": 1,
+                            "msg": "success",
+                            "translation": translated.text
+                        }
                     else:
-                        langugae=get_user_readout_language.language if get_user_readout_language else ""
-                        return {"status":0,"msg":f"Unable to convert text to audio in the {langugae} language"}
-                        
+                        if get_user_readout_language and get_user_readout_language.audio_support:
+                            text=translated.text
+                            target_language=target_language
+                            audioResponse=textTOAudio(text,target_language,accent)
+                            return audioResponse
+                        else:
+                            langugae=get_user_readout_language.language if get_user_readout_language else ""
+                            return {"status":0,"msg":f"Unable to convert text to audio in the {langugae} language"}
+                             
 
         else:
             return {"status": 0, "msg": "Invalid Nugget"}

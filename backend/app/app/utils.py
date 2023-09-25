@@ -27,6 +27,7 @@ from pyfcm import FCMNotification
 from api.endpoints import chime_chat
 from profanityfilter import ProfanityFilter
 from gtts import gTTS
+from urllib.parse import urlparse
 
 
 access_key = config.access_key
@@ -2600,6 +2601,13 @@ def generateOTP():
     return 123456
 
 
+
+def is_valid_url(input_str):
+    try:
+        result = urlparse(input_str)
+        return all([result.scheme, result.netloc])
+    except ValueError:
+        return False
 
 
 def textTOAudio(text,target_language,accent):
