@@ -12620,7 +12620,6 @@ async def gettimezone(db: Session = Depends(deps.get_db)):
         for key in list(options.keys()):
             if key in timezones_dont_want_to_display:
                 del options[key]
-
         optionArr = [
             {"id": i + 1, "name": val} for i, val in enumerate(options.values())
         ]
@@ -14701,7 +14700,7 @@ async def socialmedialogin(
                     )
                     .first()
                 )
-                if check_email_id:
+                if not check_email_id:
                     check_email_id = (
                     db.query(User)
                     .filter(

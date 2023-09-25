@@ -711,7 +711,7 @@ async def texttoaudio(
         target_language = (
             get_user_readout_language.language_code
             if get_user_readout_language
-            else "en"
+            else "com"
         )
         accent=target_language
             

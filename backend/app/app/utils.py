@@ -2605,7 +2605,7 @@ def generateOTP():
 def textTOAudio(text,target_language,accent):
    
     try:
-        tts = gTTS(text,lang=target_language,tld=accent)
+        tts = gTTS(text,lang=target_language,tld='com')
     except:
         return {"status":0,"msg":"Unable to translate to audio"}  
 
@@ -2626,7 +2626,8 @@ def textTOAudio(text,target_language,accent):
     # Save the speech as an MP3 file
     try:
         tts.save(save_full_path)
-    except:
+    except Exception as e:
+        print(e)
         return {"status":0,"msg":"Unable to translate"}  
 
     s3_file_path = f"nuggets/converted_audio_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp3"
