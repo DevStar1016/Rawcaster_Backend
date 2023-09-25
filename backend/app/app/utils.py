@@ -26,6 +26,7 @@ import shutil
 from pyfcm import FCMNotification
 from api.endpoints import chime_chat
 from profanityfilter import ProfanityFilter
+from gtts import gTTS
 
 
 access_key = config.access_key
@@ -1996,6 +1997,9 @@ async def SendOtp(db, user_id, signup_type):
 
     get_user = db.query(User).filter(User.id == user_id).first()
     to_mail = get_user.email_id
+    base_url = inviteBaseurl()
+    code = EncryptandDecrypt(str(otp))
+    link = f"{base_url}rawadmin/site/accountverify?hash={code}"
 
     subject = "Rawcaster - Verify OTP"
 
@@ -2006,6 +2010,9 @@ async def SendOtp(db, user_id, signup_type):
         f"Your OTP for Rawcaster account verification is : <b> {otp } </b><br /><br />"
     )
     # content += 'Click this link to validate your account '
+    content += (
+            f"Click this link to validate your account {link} <br /><br />"
+                    )
     content += 'Regards,<br />Administration Team<br /><a href="https://rawcaster.com/">Rawcaster.com</a> LLC'
     content += "</td></tr></table>"
 
@@ -2592,6 +2599,48 @@ def generateOTP():
     return random.randint( 100000,999999)
     # return 123456
 
+
+
+
+def textTOAudio(text,target_language,accent):
+   
+    try:
+        tts = gTTS(text,lang=target_language,tld=accent)
+    except:
+        return {"status":0,"msg":"Unable to translate to audio"}  
+
+    base_dir = "rawcaster_uploads"
+
+    try:
+        os.makedirs(base_dir, mode=0o777, exist_ok=True)
+    except OSError as e:
+        sys.exit(
+            "Can't create {dir}: {err}".format(dir=base_dir, err=e)
+        )
+
+    output_dir = base_dir + "/"
+
+    filename = f"converted_{int(datetime.now().timestamp())}.mp3"
+
+    save_full_path = f"{output_dir}{filename}"
+    # Save the speech as an MP3 file
+    try:
+        tts.save(save_full_path)
+    except:
+        return {"status":0,"msg":"Unable to translate"}  
+
+    s3_file_path = f"nuggets/converted_audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
+
+    result = upload_to_s3(save_full_path, s3_file_path)
+
+    if result["status"] == 1:
+        return {
+            "status": 1,
+            "msg": "success",
+            "file_path": result["url"]
+        }
+    else:
+        return {"status":0,"msg":"Unable to convert"}
 
 #   --------------------------------------------------
 # def file_storage(file):
