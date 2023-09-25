@@ -1171,12 +1171,12 @@ def nuggetcontentaudio(
             else "en"
         )
         
-        accent=None
+        accent="com"
         if get_user_readout_language and get_user_readout_language.read_out_accent_id:
             get_accent=db.query(ReadOutAccent).filter(ReadOutAccent.id == get_user_readout_language.read_out_accent_id,
                                                       ReadOutAccent.read_out_language_id == get_user_readout_language.read_out_id).first()
             accent=get_accent.accent_code if get_accent else "com"
-        
+        print(accent)
         # Get nuggets
         get_nugget = (
             db.query(Nuggets)
