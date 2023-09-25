@@ -694,75 +694,88 @@ async def texttoaudio(
             db.query(
                 UserSettings.id.label("user_setting_id"),
                 ReadOutLanguage.id.label("read_out_id"),
+                UserSettings.read_out_accent_id.label("read_out_accent_id"),
                 ReadOutLanguage.language_code,
+                ReadOutLanguage.language,
+                ReadOutLanguage.audio_support,
                 ReadOutLanguage.language_with_country
             )
+            .join(ReadOutLanguage,ReadOutLanguage.id == UserSettings.read_out_language_id,isouter=True)
             .filter(
-                UserSettings.user_id == login_user_id,
-                ReadOutLanguage.id == UserSettings.read_out_language_id,
+                UserSettings.user_id == login_user_id
+                
             )
             .first()
         )
-
+        
         target_language = (
             get_user_readout_language.language_code
             if get_user_readout_language
             else "en"
         )
-      
-        
-        text_content = message
+        accent=target_language
             
-        if text_content:
+        if message:
             translator = googletrans.Translator()
-            translated = translator.translate(text_content, dest=target_language)   
-
-            text=translated.text
-
-            # Initialize the Polly client
-            polly = boto3.client('polly',aws_access_key_id=config.access_key,
-                                aws_secret_access_key=config.access_secret,region_name='us-east-1')
-
-            voice_id = 'Joanna'
-
-            # Request speech synthesis
-            response = polly.synthesize_speech(
-                Text=text,
-                OutputFormat='mp3',
-                VoiceId=voice_id,
-                LanguageCode=(get_user_readout_language.language_with_country 
-                                if get_user_readout_language 
-                                else "en-US")
-            )
-            base_dir = "rawcaster_uploads"
-
             try:
-                os.makedirs(base_dir, mode=0o777, exist_ok=True)
-            except OSError as e:
-                sys.exit(
-                    "Can't create {dir}: {err}".format(dir=base_dir, err=e)
-                )
-
-            output_dir = base_dir + "/"
-
-            filename = f"converted_{int(datetime.now().timestamp())}.mp3"
-
-            save_full_path = f"{output_dir}{filename}"
-            # Save the speech as an MP3 file
-            with open(save_full_path, 'wb') as file:
-                file.write(response['AudioStream'].read())
-
-            s3_file_path = f"nuggets/converted_ai_audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
-
-            result = upload_to_s3(save_full_path, s3_file_path)
-
-            if result["status"] == 1:
-                return {
-                    "status": 1,
-                    "url": result["url"]
-                }
+                translated = translator.translate(message, dest=target_language)   
+            except:
+                return {"status":0,"msg":"Unable to translate"}  
+            
+            if get_user_readout_language and get_user_readout_language.audio_support:
+                text=translated.text
+                target_language=target_language
+                accent= accent
+                audioResponse=textTOAudio(text,target_language,accent)
+                return audioResponse
             else:
-                return {"status":0,"msg":"Unable to convert"}
+                langugae=get_user_readout_language.language if get_user_readout_language else ""
+                return {"status":0,"msg":f"Unable to convert text to audio in the {langugae} language"}
+
+            # # Initialize the Polly client
+            # polly = boto3.client('polly',aws_access_key_id=config.access_key,
+            #                     aws_secret_access_key=config.access_secret,region_name='us-east-1')
+
+            # voice_id = 'Joanna'
+
+            # # Request speech synthesis
+            # response = polly.synthesize_speech(
+            #     Text=text,
+            #     OutputFormat='mp3',
+            #     VoiceId=voice_id,
+            #     LanguageCode=(get_user_readout_language.language_with_country 
+            #                     if get_user_readout_language 
+            #                     else "en-US")
+            # )
+            # base_dir = "rawcaster_uploads"
+
+            # try:
+            #     os.makedirs(base_dir, mode=0o777, exist_ok=True)
+            # except OSError as e:
+            #     sys.exit(
+            #         "Can't create {dir}: {err}".format(dir=base_dir, err=e)
+            #     )
+
+            # output_dir = base_dir + "/"
+
+            # filename = f"converted_{int(datetime.now().timestamp())}.mp3"
+
+            # save_full_path = f"{output_dir}{filename}"
+            # # Save the speech as an MP3 file
+            # with open(save_full_path, 'wb') as file:
+            #     file.write(response['AudioStream'].read())
+
+            # s3_file_path = f"nuggets/converted_ai_audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
+
+            # result = upload_to_s3(save_full_path, s3_file_path)
+
+            # if result["status"] == 1:
+            #     return {
+            #         "status": 1,
+            #         "url": result["url"]
+            #     }
+            # else:
+            #     return {"status":0,"msg":"Unable to convert"}
             
 
 
@@ -1136,6 +1149,7 @@ def nuggetcontentaudio(
                 ReadOutLanguage.id.label("read_out_id"),
                 UserSettings.read_out_accent_id.label("read_out_accent_id"),
                 ReadOutLanguage.language_code,
+                ReadOutLanguage.language,
                 ReadOutLanguage.audio_support,
                 ReadOutLanguage.language_with_country
             )
@@ -1184,51 +1198,14 @@ def nuggetcontentaudio(
                     }
                 else:
                     if get_user_readout_language and get_user_readout_language.audio_support:
-                        
                         text=translated.text
-                        try:
-                            tts = gTTS(text,lang=target_language,tld=accent)
-                        except:
-                            return {"status":0,"msg":"Unable to translate to audio"}  
-                
-                        base_dir = "rawcaster_uploads"
-
-                        try:
-                            os.makedirs(base_dir, mode=0o777, exist_ok=True)
-                        except OSError as e:
-                            sys.exit(
-                                "Can't create {dir}: {err}".format(dir=base_dir, err=e)
-                            )
-
-                        output_dir = base_dir + "/"
-
-                        filename = f"converted_{int(datetime.now().timestamp())}.mp3"
-
-                        save_full_path = f"{output_dir}{filename}"
-                        # Save the speech as an MP3 file
-                        # try:
-                        tts.save(save_full_path)
-                        # except:
-                        #     return {"status":0,"msg":"Unable to translate"}  
-                            
-                        
-                        # with open(save_full_path, 'wb') as file:
-                        #     file.write(response['AudioStream'].read())
-
-                        s3_file_path = f"nuggets/converted_audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
-
-                        result = upload_to_s3(save_full_path, s3_file_path)
-
-                        if result["status"] == 1:
-                            return {
-                                "status": 1,
-                                "msg": "success",
-                                "file_path": result["url"]
-                            }
-                        else:
-                            return {"status":0,"msg":"Unable to convert"}
+                        target_language=target_language
+                        accent= accent
+                        audioResponse=textTOAudio(text,target_language,accent)
+                        return audioResponse
                     else:
-                        return {"status":0,"msg":"Unable to convert text to audio in the "}
+                        langugae=get_user_readout_language.language if get_user_readout_language else ""
+                        return {"status":0,"msg":f"Unable to convert text to audio in the {langugae} language"}
                         
 
         else:
