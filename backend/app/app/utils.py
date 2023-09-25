@@ -2629,7 +2629,7 @@ def textTOAudio(text,target_language,accent):
     except:
         return {"status":0,"msg":"Unable to translate"}  
 
-    s3_file_path = f"nuggets/converted_audio_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp3"
+    s3_file_path = f"nuggets/converted_audio_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp3"
 
     result = upload_to_s3(save_full_path, s3_file_path)
 
