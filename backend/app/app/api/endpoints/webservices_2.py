@@ -713,7 +713,7 @@ async def texttoaudio(
             if get_user_readout_language
             else "en"
         )
-        accent=target_language
+       
             
         if message:
             translator = googletrans.Translator()
@@ -723,6 +723,10 @@ async def texttoaudio(
                 return {"status":0,"msg":"Unable to translate"}  
             
             if get_user_readout_language and get_user_readout_language.audio_support:
+                get_accent=db.query(ReadOutAccent).filter(ReadOutAccent.id == get_user_readout_language.read_out_accent_id,
+                                                      ReadOutAccent.read_out_language_id == get_user_readout_language.read_out_id).first()
+                accent=get_accent.accent_code if get_accent else "com"
+                
                 text=translated.text
                 target_language=target_language
                 accent= accent
@@ -1166,11 +1170,12 @@ def nuggetcontentaudio(
             if get_user_readout_language
             else "en"
         )
-        accent=target_language
+        
+        accent=None
         if get_user_readout_language and get_user_readout_language.read_out_accent_id:
             get_accent=db.query(ReadOutAccent).filter(ReadOutAccent.id == get_user_readout_language.read_out_accent_id,
                                                       ReadOutAccent.read_out_language_id == get_user_readout_language.read_out_id).first()
-            accent=get_accent.accent_code if get_accent else target_language
+            accent=get_accent.accent_code if get_accent else "com"
         
         # Get nuggets
         get_nugget = (
@@ -1200,7 +1205,6 @@ def nuggetcontentaudio(
                     if get_user_readout_language and get_user_readout_language.audio_support:
                         text=translated.text
                         target_language=target_language
-                        accent= accent
                         audioResponse=textTOAudio(text,target_language,accent)
                         return audioResponse
                     else:

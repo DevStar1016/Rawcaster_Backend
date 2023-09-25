@@ -14701,7 +14701,7 @@ async def socialmedialogin(
                     )
                     .first()
                 )
-                if check_email_id:
+                if not check_email_id:
                     check_email_id = (
                     db.query(User)
                     .filter(
