@@ -755,9 +755,11 @@ async def resendotp(
                 content += f"{mail_msg} <b> {otp} </b><br />"
 
                 if get_otp_log.otp_type == 1:
-                    content += (
-                        f"Click this link to validate your account {link} <br /><br />"
-                    )
+                    content += "<br />"
+                    
+                    # content += (
+                    #     f"Click this link to validate your account {link} <br /><br />"
+                    # )
                 else:
                     content += "<br />"
 
