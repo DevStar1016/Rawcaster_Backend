@@ -1780,6 +1780,7 @@ def get_event_detail(db, event_id, login_user_id):
                         "is_default": default_melody.event_id
                         if default_melody.event_id
                         else None,
+                        "event_melody_type":1 if "Rawcaster Melody" in default_melody.type else 2 if "Your default" in default_melody.type else 3
                     }})
 
         get_event_default_avs = (

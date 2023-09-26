@@ -1209,6 +1209,7 @@ def nuggetcontentaudio(
                         if get_user_readout_language and get_user_readout_language.audio_support:
                             text=translated.text
                             target_language=target_language
+                            print(accent)
                             audioResponse=textTOAudio(text,target_language,accent)
                             return audioResponse
                         else:
