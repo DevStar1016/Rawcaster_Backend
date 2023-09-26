@@ -1773,7 +1773,7 @@ def get_event_detail(db, event_id, login_user_id):
         default_melody = (
             db.query(EventMelody).filter_by(id=event_details.event_melody_id).first()
         )
-        event.update({"event_melody_type":(1 if "Rawcaster Melody" in default_melody.title else 2 if "Your default" in default_melody.title else 3) if default_melody and default_melody.title else 1})
+        event.update({"event_melody_type":(1 if "Rawcaster Melody" in default_melody.title else 2 if "Your default" in default_melody.title else 3) if default_melody and default_melody.title else 3})
         
         if default_melody:
             
