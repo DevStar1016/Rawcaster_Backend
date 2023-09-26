@@ -7819,6 +7819,7 @@ async def addevent(
                             if result and result["status"] == 1:
                                 new_melody = EventMelody(
                                     event_id=new_event.id,
+                                    is_default=2, # Customize
                                     path=result["url"],
                                     type=media_type,
                                     created_at=datetime.datetime.utcnow(),
@@ -11622,7 +11623,7 @@ async def geteventmelody(db: Session = Depends(deps.get_db), token: str = Form(N
                 result_list = []
                 for melody in getEventMelody:
                     result_list.append(
-                        {"id": melody.id, "title": melody.title, "path": melody.path}
+                        {"id": melody.id, "title": melody.title, "path": melody.path,"type":1 if "Rawcaster Melody" in melody.title else 2 if 'Your default' in melody.title else 3}
                     )
                 return {"status": 1, "msg": "Success", "melody": result_list}
             else:
