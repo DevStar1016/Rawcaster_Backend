@@ -7814,7 +7814,7 @@ async def addevent(
                         ):
                             s3_file_path = f"eventsmelody/eventsmelody_{random.randint(11111,99999)}{new_event.id}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                            
-                            result = upload_to_s3(upload_file_path, s3_file_path)
+                            result = upload_to_s3(uploaded_file_path, s3_file_path)
 
                             if result and result["status"] == 1:
                                 new_melody = EventMelody(
