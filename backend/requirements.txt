@@ -25,3 +25,4 @@ pyttsx3
 redis
 profanityfilter==2.0.6 
 BeautifulSoup4
+opencv-python

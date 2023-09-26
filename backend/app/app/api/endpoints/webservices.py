@@ -18,11 +18,11 @@ from urllib.parse import urlparse
 from .webservices_2 import croninfluencemember
 import ast
 from mail_templates.mail_template import *
-from moviepy.video.io.VideoFileClip import VideoFileClip
 import subprocess
 from .chime_chat import *
 import requests
 from bs4 import BeautifulSoup
+import cv2
 
 router = APIRouter()
 
@@ -4618,6 +4618,7 @@ async def addnuggets(
                         # Nuggets Media
 
                         if nuggets_media:
+                           
                             master_id = add_nuggets_master.id
                             file_temp = nuggets_media[i - 1].content_type
                             
@@ -4635,7 +4636,7 @@ async def addnuggets(
                             uploaded_file_path = await file_upload(
                                 nuggets_media[i - 1], file_ext, compress=1
                             )
-                                                     
+                                        
                             file_stat = os.stat(uploaded_file_path)
                             file_size = file_stat.st_size
 
@@ -4668,11 +4669,14 @@ async def addnuggets(
                                 s3_file_path = f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
 
                                 if type == "video":
-                                    video = VideoFileClip(
-                                                uploaded_file_path
-                                            )
-                                    total_duration = video.duration
+                                    # create video capture object
+                                    data = cv2.VideoCapture(uploaded_file_path)
                                     
+                                    # count the number of frames
+                                    frames = data.get(cv2.CAP_PROP_FRAME_COUNT)
+                                    fps = data.get(cv2.CAP_PROP_FPS)
+                                    total_duration = round(frames / fps)
+                                   
                                     if total_duration < 330:
                                         s3_file_path = f"nuggets/audio_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
 
@@ -6889,10 +6893,13 @@ async def editnugget(
                                         s3_file_path = f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
 
                                         if type == "video":
-                                            video = VideoFileClip(
-                                                uploaded_file_path
-                                            )  # Video Split ( 5 Minutes)
-                                            total_duration = video.duration
+                                             # create video capture object
+                                            data = cv2.VideoCapture(uploaded_file_path)
+                                            
+                                            # count the number of frames
+                                            frames = data.get(cv2.CAP_PROP_FRAME_COUNT)
+                                            fps = data.get(cv2.CAP_PROP_FPS)
+                                            total_duration = round(frames / fps)
 
                                             if total_duration < 300:
                                                 result = upload_to_s3(
