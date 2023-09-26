@@ -8517,7 +8517,7 @@ async def listevents(
                                     if event.user_screenshare == 1
                                     or event.user_screenshare == 0
                                     else user_screenshare,
-                                    "event_melody_type":(1 if "Rawcaster Melody" in default_melody.title else 2 if "Your default" in default_melody.title else 3) if default_melody else 1,
+                                    "event_melody_type":(1 if "Rawcaster Melody" in default_melody.title else 2 if "Your default" in default_melody.title else 3) if default_melody and default_melody.title else 1,
                                     "melodies": {
                                         "path": default_melody.path,
                                         "type": default_melody.type,
