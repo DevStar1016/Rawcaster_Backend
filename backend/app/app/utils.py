@@ -2013,7 +2013,7 @@ async def SendOtp(db, user_id, signup_type):
     content += (
         f"Your OTP for Rawcaster account verification is : <b> {otp } </b><br /><br />"
     )
-    content += 'Click this link to validate your account '
+    # content += 'Click this link to validate your account '
     # content += (
     #         f"Click this link to validate your account {link} <br /><br />"
     #                 )
@@ -2591,7 +2591,7 @@ def EventAccessCheck(db, userid, eventid):
                     .first()
                 )
                 if follow:
-                    sattus = 1
+                    status = 1
 
     if status == 1:
         return True
