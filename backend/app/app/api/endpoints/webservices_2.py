@@ -1167,7 +1167,7 @@ def nuggetcontentaudio(
         
         target_language = (
             get_user_readout_language.language_code
-            if get_user_readout_language
+            if get_user_readout_language and get_user_readout_language.language_code
             else "en"
         )
         
