@@ -11567,7 +11567,7 @@ async def updateusersettings(
 
                     return {
                         "status": 1,
-                        "msg": "Success",
+                        "msg": "Updated Successfully",
                         "url": meeting_header_image,
                         "default_melody": default_melody if default_melody else None,
                     }
