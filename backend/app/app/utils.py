@@ -2649,7 +2649,8 @@ def textTOAudio(text,target_language,accent):
         return {
             "status": 1,
             "msg": "success",
-            "file_path": result["url"]
+            "file_path": result["url"],
+            "url": result["url"]
         }
     else:
         return {"status":0,"msg":"Unable to convert"}
