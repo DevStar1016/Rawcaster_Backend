@@ -293,6 +293,8 @@ async def signup(
                         nuggets="000",
                         events="000",
                         status=1,
+                        read_out_language_id=27,
+                        read_out_accent_id=1
                     )
                     db.add(user_settings_model)
                     db.commit()
@@ -10575,7 +10577,9 @@ async def getusersettings(db: Session = Depends(deps.get_db), token: str = Form(
                     friend_request="100",
                     nuggets="100",
                     events="100",
-                    status=1,
+                    status=1,   
+                    read_out_language_id=27,
+                    read_out_accent_id=1
                 )
                 db.add(add_settings)
                 db.commit()
@@ -10957,6 +10961,8 @@ async def updateusersettings(
                     nuggets="100",
                     events="100",
                     status=1,
+                    read_out_language_id=27,
+                    read_out_accent_id=1
                 )
                 db.add(model)
                 db.commit()
@@ -14860,6 +14866,8 @@ async def socialmedialogin(
                         nuggets="000",
                         events="000",
                         status=1,
+                        read_out_language_id=27,
+                        read_out_accent_id=1
                     )
                     db.add(user_settings_model)
                     db.commit()
