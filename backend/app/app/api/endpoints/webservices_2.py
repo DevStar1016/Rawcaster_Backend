@@ -1190,7 +1190,7 @@ def nuggetcontentaudio(
             if text_content:
                 # Check Content or URL
                 if is_valid_url(text_content):
-                    return {"status":0,"msg":"Unable to translate URL"}
+                    return {"status":0,"msg":"URL cannot be translated"}
                 else:
                     translator = googletrans.Translator()
                     
