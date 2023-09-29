@@ -348,7 +348,7 @@ async def signup(
                     # Add Friend Automatically From Referral
 
                     if ref_id:
-                        friend_ref_code = base64.b64decode(ref_id).decode()
+                        friend_ref_code = (base64.b64decode(ref_id.encode("ascii"))).decode("ascii")
 
                         referrer_ref_id = friend_ref_code.split("//")
                         if len(referrer_ref_id) == 2:
@@ -1456,11 +1456,13 @@ def user_profile(db, id):
                 "ai_content_length": 100
             }
         )
-        token_text = (
-            str(get_user.user_ref_id) + str(datetime.datetime.utcnow().timestamp())
-        ).encode("ascii")
+        token_text=f"{get_user.user_ref_id}//{datetime.datetime.utcnow().replace(tzinfo=None)}"
+        user_ref_id = token_text.encode("ascii")
+        
+        hashed_user_ref_id = (base64.b64encode(user_ref_id)).decode("ascii")
+        
         invite_url = inviteBaseurl()
-        join_link = f"{invite_url}signup?ref={token_text}"
+        join_link = f"{invite_url}signup?ref={hashed_user_ref_id}"
 
         user_details.update({"referral_link": join_link})
 
