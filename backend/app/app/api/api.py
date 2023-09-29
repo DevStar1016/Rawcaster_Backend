@@ -5,13 +5,12 @@ from .endpoints import (
     webservices_2,
     chime_meeting,
     chime_chat,
-    elastic,
     aws_secrets
 )
 
 api_router = APIRouter()
 
-api_router.include_router(elastic.router, tags=["Latency"])
+# api_router.include_router(elastic.router, tags=["Latency"])
 
 api_router.include_router(aws_secrets.router, tags=["Secrets"])
 

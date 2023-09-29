@@ -1,24 +1,15 @@
 from fastapi import APIRouter, Depends, Form, File
 from app.models import *
 from app.core.security import *
-from typing import List
 from app.utils import *
 from app.api import deps
-import datetime
 from sqlalchemy.orm import Session,aliased,joinedload
 from datetime import datetime, date
 from sqlalchemy import func, case, text, Date, extract,distinct,true,select,Column,Integer,String,Text
-import re
-import base64
-import json
-import pytz
-import boto3
 from urllib.parse import urlparse
 from .webservices_2 import croninfluencemember
-import ast
 from mail_templates.mail_template import *
 from moviepy.video.io.VideoFileClip import VideoFileClip
-import subprocess
 from .chime_chat import *
 from better_profanity import profanity
 from sqlalchemy.ext.declarative import declarative_base
