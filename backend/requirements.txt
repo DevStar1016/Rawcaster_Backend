@@ -27,6 +27,4 @@ BeautifulSoup4==4.12.2
 opencv-python==4.8.0.76
 httpcore==0.15.0
 httpx
-https://github.com/gaetan1903/py-googletrans/archive/refs/heads/master.zip # Google trans moded version to resolve incompatibility issue
-# httpx[http2] 
-# httpx 0.25.0 
+https://github.com/gaetan1903/py-googletrans/archive/refs/heads/master.zip # Google trans moded version to resolve incompatibility
