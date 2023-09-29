@@ -16,7 +16,7 @@ playsound==1.3.0
 chime
 openai==0.27.7
 translate==3.6.1
-# googletrans==4.0.0rc1
+googletrans==4.0.0rc1
 SpeechRecognition==3.10.0
 pydub==0.25.1
 better-profanity==0.7.0
@@ -26,6 +26,5 @@ profanityfilter==2.0.6
 BeautifulSoup4==4.12.2
 opencv-python==4.8.0.76
 httpcore==0.15.0
-https://github.com/gaetan1903/py-googletrans/archive/refs/heads/master.zip # Google trans moded version to resolve incompatibility issue
+# https://github.com/gaetan1903/py-googletrans/archive/refs/heads/master.zip # Google trans moded version to resolve incompatibility
 httpx[http2]==0.25.0
-# httpx 0.25.0 
