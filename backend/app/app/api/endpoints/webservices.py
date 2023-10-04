@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Form, File, UploadFile, BackgroundTasks
+from fastapi import APIRouter, Depends, Form, File, UploadFile
 from app.models import *
 from app.core import config
 from app.core.security import *
@@ -30,17 +30,6 @@ router = APIRouter()
 access_key = config.access_key
 access_secret = config.access_secret
 bucket_name = config.bucket_name
-
-
-@router.post("/test")
-async def test():
-    return 'Done,Without db connection'
-
-@router.post("/fetch_data")
-async def fetch_data(db: Session = Depends(deps.get_db)):
-    user=db.query(User).filter(User.status == 1)
-    
-    return user.first()
 
 
 # 1 Signup User
@@ -1330,9 +1319,10 @@ async def contactus(
             try:
                 send_mail = await send_email(db, to_mail, subject, body)
             except Exception as e:
+                print(e)
                 return {
                     "status": 0,
-                    "msg": f"Something went wrong.Please Try Again later:{e}",
+                    "msg": f"Something went wrong.Please Try Again later",
                 }
             return {
                 "status": 1,
@@ -14922,8 +14912,7 @@ async def socialmedialogin(
 
                     referred_id = 0
                     if friend_ref_code:
-                        friend_ref_code = base64.b64decode(friend_ref_code)
-
+                        friend_ref_code = (base64.b64decode(friend_ref_code.encode("ascii"))).decode("ascii")
                         referrer_ref_id = friend_ref_code.split("//")
                         if len(referrer_ref_id) == 2:
                             referred_user = (
