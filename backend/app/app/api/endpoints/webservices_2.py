@@ -617,7 +617,8 @@ async def aichat(
                         if status == "FAILED":
                             return {"status": 0, "msg": "Unable to convert"}
                 except Exception as e:
-                    return {"status": 0, "msg": f"Something went wrong...Error:{e}"}
+                    print(e)
+                    return {"status": 0, "msg": f"Something went wrong..."}
 
         else:
             query = user_query
@@ -649,7 +650,8 @@ async def aichat(
                 else:
                     return {"status": 0, "msg": "Failed to search"}
             except Exception as e:
-                return {"status": 0, "msg": f"Try again later..{e}"}
+                print(e)
+                return {"status": 0, "msg": f"Try again later..."}
 
         else:
             return {
@@ -667,13 +669,15 @@ async def texttoaudio(
     db: Session = Depends(deps.get_db),
     token: str = Form(None),
     message: str = Form(None),
+    translation_type: str = Form(None, description="1-audio,2-text"),
+
 ):
     if not token:
         return {
             "status": -1,
             "msg": "Sorry! your login session expired. please login again.",
         }
-
+    
     if not message:
         return {"status": 0, "msg": "Meaage can't be Empty"}
 
@@ -689,6 +693,8 @@ async def texttoaudio(
             db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
         )
         login_user_id = get_token_details.user_id if get_token_details else None
+        
+        translation_type = int(translation_type) if translation_type else 1
 
         get_user_readout_language = (
             db.query(
@@ -721,20 +727,27 @@ async def texttoaudio(
                 translated = translator.translate(message, dest=target_language)   
             except:
                 return {"status":0,"msg":"Unable to translate"}  
-            
-            if get_user_readout_language and get_user_readout_language.audio_support:
-                get_accent=db.query(ReadOutAccent).filter(ReadOutAccent.id == get_user_readout_language.read_out_accent_id,
-                                                      ReadOutAccent.read_out_language_id == get_user_readout_language.read_out_id).first()
-                accent=get_accent.accent_code if get_accent else "com"
-                
-                text=translated.text
-                target_language=target_language
-                accent= accent
-                audioResponse=textTOAudio(text,target_language,accent)
-                return audioResponse
+            if translation_type == 2:
+                return {
+                            "status": 1,
+                            "msg": "success",
+                            "translation": translated.text
+                        }
             else:
-                langugae=get_user_readout_language.language if get_user_readout_language else ""
-                return {"status":0,"msg":f"Unable to convert text to audio in the {langugae} language"}
+            
+                if get_user_readout_language and get_user_readout_language.audio_support:
+                    get_accent=db.query(ReadOutAccent).filter(ReadOutAccent.id == get_user_readout_language.read_out_accent_id,
+                                                        ReadOutAccent.read_out_language_id == get_user_readout_language.read_out_id).first()
+                    accent=get_accent.accent_code if get_accent else "com"
+                    
+                    text=translated.text
+                    target_language=target_language
+                    accent= accent
+                    audioResponse=textTOAudio(text,target_language,accent)
+                    return audioResponse
+                else:
+                    langugae=get_user_readout_language.language if get_user_readout_language else ""
+                    return {"status":0,"msg":f"Unable to convert text to audio in the {langugae} language"}
 
             # # Initialize the Polly client
             # polly = boto3.client('polly',aws_access_key_id=config.access_key,
@@ -1119,6 +1132,7 @@ def nuggetcontentaudio(
     db: Session = Depends(deps.get_db),
     token: str = Form(None),
     nugget_id: str = Form(None),
+    nugget_type:str=Form(None,description="0-nuggets,1-nugget comments"),
     translation_type: str = Form(None, description="1-audio,2-text"),
 ):
     if token == None or token.strip() == "":
@@ -1128,7 +1142,9 @@ def nuggetcontentaudio(
         }
     if not nugget_id or not nugget_id.isnumeric():
         return {"status": 0, "msg": "Check your nugget id"}
-
+    if nugget_type and not nugget_type.isnumeric():
+        return {"status": 0, "msg": "Check nugget type"}
+    
     if translation_type and not translation_type.isnumeric():
         return {"status": 0, "msg": "Check transalation type"}
     # Check token
@@ -1141,6 +1157,7 @@ def nuggetcontentaudio(
         }
     else:
         translation_type = int(translation_type) if translation_type else 1
+        nugget_type=int(nugget_type) if nugget_type else 0
         # check Read Out Language
         get_token_details = (
             db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
@@ -1178,14 +1195,23 @@ def nuggetcontentaudio(
             accent=get_accent.accent_code if get_accent else "com"
         
         # Get nuggets
-        get_nugget = (
-            db.query(Nuggets)
-            .filter(Nuggets.id == nugget_id, Nuggets.status == 1)
-            .first()
-        )
+        if nugget_type:
+            get_nugget=(
+                db.query(NuggetsComments)
+                .filter(NuggetsComments.id == nugget_id, NuggetsComments.status == 1)
+                .first()
+            )
+        else:
+
+            get_nugget = (
+                db.query(Nuggets)
+                .filter(Nuggets.id == nugget_id, Nuggets.status == 1)
+                .first()
+            )
         
         if get_nugget:
-            text_content = get_nugget.nuggets_master.content if get_nugget else None
+            content=get_nugget.content if nugget_type else get_nugget.nuggets_master.content
+            text_content = content if content else None
             
             if text_content:
                 # Check Content or URL
