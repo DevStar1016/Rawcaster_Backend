@@ -16101,3 +16101,10 @@ async def chatEnableDisable(
 
             
 
+# GEt Country
+@router.post("/getCountry")
+async def getcountry(
+    db: Session = Depends(deps.get_db),
+):
+    s=CheckMobileNumber(db,"8903257051","Coimbatore, Tamil Nadu, India.")
+    return s

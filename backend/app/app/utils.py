@@ -1198,10 +1198,11 @@ def CheckMobileNumber(db, mobile_no, geo_location):
         country = geo_location.split(",")
         if (country != "") and mobile_no != "":
             found = 0
-
+            print("geo_location",geo_location)
             for place in country:
                 cty = str(place.replace(".", "")).strip()
-                print(cty)
+                print("city",cty)
+                print("mobile_no",mobile_no)
                 user_country = db.query(Country).filter(Country.name.ilike(cty)).first()
 
                 if user_country and user_country.mobile_no_length != "":
@@ -1218,6 +1219,7 @@ def CheckMobileNumber(db, mobile_no, geo_location):
                             "country_id": user_country.id,
                             "mobile_no": mobileno,
                         }
+                        break
                     else:
                         formated_mobileno = mobileno[
                             len(user_country.country_code) - 1 :
@@ -1233,6 +1235,7 @@ def CheckMobileNumber(db, mobile_no, geo_location):
                                 "country_id": user_country.id,
                                 "mobile_no": formated_mobileno,
                             }
+                        break
                 else:
                     found = 0
 
