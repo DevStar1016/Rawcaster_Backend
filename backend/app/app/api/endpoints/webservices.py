@@ -5254,7 +5254,7 @@ async def listnuggets(
                         NuggetsAttachment.media_type == "video",
                     )
                 
-                if nugget_type == 2:  # Audio and Image
+                elif nugget_type == 2:  # Audio and Image
                     get_nuggets = get_nuggets.outerjoin(
                         NuggetsAttachment,
                         Nuggets.nuggets_id == NuggetsAttachment.nugget_id,
@@ -5279,7 +5279,7 @@ async def listnuggets(
                     
                     get_nuggets = get_nuggets.filter(
                         or_(
-                            Nuggets.user_id != login_user_id,
+                            Nuggets.user_id == login_user_id,
                             and_(Nuggets.user_id.in_(my_followers),Nuggets.share_type != 2)
                         )
                     )

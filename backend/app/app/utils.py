@@ -1198,14 +1198,14 @@ def CheckMobileNumber(db, mobile_no, geo_location):
         country = geo_location.split(",")
         if (country != "") and mobile_no != "":
             found = 0
-            print("geo_location",geo_location)
+            
             for place in country:
                 cty = str(place.replace(".", "")).strip()
-                print("city",cty)
-                print("mobile_no",mobile_no)
                 user_country = db.query(Country).filter(Country.name.ilike(cty)).first()
 
                 if user_country and user_country.mobile_no_length != "":
+
+
                     mobileno = str(mobile_no).replace("+", "")
                     mobileno = str(mobile_no).replace("-", "")
                     if user_country.id == 156 and geo_location[0:1] == 0:
@@ -1242,7 +1242,7 @@ def CheckMobileNumber(db, mobile_no, geo_location):
             if found == 0:
                 result = {
                     "status": 0,
-                    "msg": f"Unable to get Country",
+                    "msg": f"Unable to get Country for this Mobile number",
                 }
 
         else:
