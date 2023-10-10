@@ -13010,10 +13010,11 @@ async def followandunfollow(
             get_user = db.query(User).filter(User.user_ref_id == follow_userid).first()
             if get_user:
                 follow_userid = get_user.id
+                allowed_type=[0,1]
 
                 get_user_detail = (
                     db.query(User)
-                    .filter(User.id == follow_userid, User.status == 1)
+                    .filter(User.id == follow_userid, User.status.in_(allowed_type))
                     .first()
                 )
 
