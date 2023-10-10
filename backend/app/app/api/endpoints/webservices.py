@@ -725,7 +725,7 @@ async def resendotp(
                 mail_msg = "Your OTP for Rawcaster account password reset is "
 
             if otp_flag == "sms":
-                to = f"{get_otp_log.user.country_code}{get_otp_log.user.mobile_no}"
+                to = f"{get_otp_log.user.country_code if get_otp_log.user.country_code else ''}{get_otp_log.user.mobile_no}"
                 sms = f"{otp} is your OTP for Rawcaster. PLEASE DO NOT SHARE THE OTP WITH ANYONE."
                 if to:
                     try:
@@ -5279,7 +5279,7 @@ async def listnuggets(
                     
                     get_nuggets = get_nuggets.filter(
                         or_(
-                            Nuggets.user_id == login_user_id,
+                            Nuggets.user_id != login_user_id,
                             and_(Nuggets.user_id.in_(my_followers),Nuggets.share_type != 2)
                         )
                     )
@@ -5453,7 +5453,8 @@ async def listnuggets(
             get_nuggets_count = get_nuggets.count()
             
             if get_nuggets_count < 1:
-                return {"status": 0, "msg": "No Result found"}
+                msg="You have not followed any influencer to display their nuggets" if filter_type == 1 else "No Result found"
+                return {"status": 0, "msg": msg}
             else:
                 default_page_size = 20
                 limit, offset, total_pages = get_pagination(
@@ -14682,23 +14683,6 @@ async def socialmedialogin(
         if checkAuthCode(auth_code, auth_text) == False:
             return {"status": 0, "msg": "Authentication failed!"}
         else:
-            check_email_or_mobile = EmailorMobileNoValidation(email_id)
-            if check_email_or_mobile["status"] and check_email_or_mobile["status"] == 1:
-                if check_email_or_mobile["type"] and (
-                    check_email_or_mobile["type"] == 1
-                    or check_email_or_mobile["type"] == 2
-                ):
-                    if check_email_or_mobile["type"] == 1:
-                        email_id = check_email_or_mobile["email"]
-                        mobile_no = None
-                    elif check_email_or_mobile["type"] == 2:
-                        mobile_no = check_email_or_mobile["mobile"]
-                        email_id = None
-                else:
-                    return {"status": 0, "msg": "Unable to signup"}
-            else:
-                return {"status": 0, "msg": "Unable to signup"}
-
             check_email_id = None
             check_phone = None
 
@@ -14736,6 +14720,25 @@ async def socialmedialogin(
                     )
                     .first()
                 )
+
+
+            check_email_or_mobile = EmailorMobileNoValidation(email_id)
+            if check_email_or_mobile["status"] and check_email_or_mobile["status"] == 1:
+                if check_email_or_mobile["type"] and (
+                    check_email_or_mobile["type"] == 1
+                    or check_email_or_mobile["type"] == 2
+                ):
+                    if check_email_or_mobile["type"] == 1:
+                        email_id = check_email_or_mobile["email"]
+                        mobile_no = None
+                    elif check_email_or_mobile["type"] == 2:
+                        mobile_no = check_email_or_mobile["mobile"]
+                        email_id = None
+                else:
+                    return {"status": 0, "msg": "Unable to signup"}
+            else:
+                return {"status": 0, "msg": "Unable to signup"}
+
 
             if check_email_id:
                 email_id=email_id if email_id else check_email_id.email_id
