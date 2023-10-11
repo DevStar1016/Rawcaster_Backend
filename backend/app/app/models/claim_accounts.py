@@ -16,7 +16,7 @@ class ClaimAccounts(Base):
     dob = Column(Date)
     location = Column(String(100))
     claim_date = Column(DateTime)
-    admin_status = Column(TINYINT, default=0, comment="0-pending,1- claimed")
+    admin_status = Column(TINYINT, default=0, comment="0-pending,1- claimed,2- rejected")
     created_at = Column(DateTime)
     status = Column(TINYINT, comment="1-Active,0-Inactive")
 

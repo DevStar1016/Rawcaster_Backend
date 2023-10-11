@@ -203,6 +203,7 @@ async def add_claim_account(
                 .filter(
                     ClaimAccounts.user_id == login_user_id,
                     ClaimAccounts.influencer_id == influencer_id,
+                    ClaimAccounts.admin_status != 2
                 )
                 .first()
             )
