@@ -1294,3 +1294,27 @@ def nuggetcontentaudio(
 #                   if get_user_readout_language 
 #                   else "en-US")
 # )
+
+
+
+@router.post("/update_poll_count")
+def update_poll_count(
+    db: Session = Depends(deps.get_db)
+):
+    getNuggets=db.query(Nuggets).join(NuggetsMaster,NuggetsMaster.id == Nuggets.nuggets_id).join(NuggetPollOption,NuggetPollOption.nuggets_master_id == Nuggets.nuggets_id,isouter=True).filter(NuggetsMaster.poll_duration != None).all()
+    
+    for nugget in getNuggets:
+
+        if nugget.nuggets_master.poll_duration:
+            
+            getPollCount=db.query(NuggetPollOption).filter(NuggetPollOption.nuggets_master_id == nugget.nuggets_id).all()
+            poll_vote=0
+            
+            for poll in getPollCount:
+                poll_vote += poll.votes if poll.votes else 0
+            
+            nugget.total_poll_count = poll_vote
+            db.commit()
+
+
+    return "Success"
