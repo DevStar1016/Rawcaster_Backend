@@ -10104,7 +10104,8 @@ async def getothersprofile(
                             .filter(
                                 ClaimAccounts.user_id == login_user_id,
                                 ClaimAccounts.influencer_id == user_id,
-                            )
+                                ClaimAccounts.admin_status != 2
+                            ).order_by(ClaimAccounts.id.desc())
                             .first()
                         )
                         # check Account Verified
