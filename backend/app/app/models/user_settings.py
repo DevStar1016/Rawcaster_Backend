@@ -54,6 +54,7 @@ class UserSettings(Base):
     talkshow_event_banner = Column(String(500))
     read_out_language_id = Column(Integer, ForeignKey("read_out_language.id"))
     read_out_accent_id=Column(Integer,ForeignKey("read_out_accent.id"))
+    opt_in=Column(TINYINT,default=0,comment="0-email,1-mobile number")
 
     status = Column(TINYINT, default=1)
 
@@ -62,3 +63,4 @@ class UserSettings(Base):
     read_out_language = relationship("ReadOutLanguage", back_populates="user_settings")
     read_out_accent = relationship("ReadOutAccent", back_populates="user_settings")
     
+# ALTER TABLE `user_settings` ADD `opt_in` TINYINT NULL DEFAULT '0' COMMENT '0-email, 1- mobile number' AFTER `read_out_accent_id`; 

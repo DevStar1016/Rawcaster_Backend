@@ -240,7 +240,11 @@ async def listunclaimaccount(
     location: str = Form(None),
     gender: str = Form(None),
     age: str = Form(None),
+    page_number: str = Form(default=1),
+    default_page_size:str=Form(default=50)
+
 ):
+    print(token)
     if token == None or token.strip() == "":
         return {
             "status": -1,
@@ -248,6 +252,12 @@ async def listunclaimaccount(
         }
     if gender and not gender.isnumeric():
         return {"status": 0, "msg": "Invalid Gender type"}
+    
+    elif not str(page_number).isnumeric():
+        return {"status": 0, "msg": "Invalid page Number"}
+    
+    elif not str(default_page_size).isnumeric():
+        return {"status": 0, "msg": "Invalid Size Number"}
 
     else:
         access_token = checkToken(db, token)
@@ -262,6 +272,9 @@ async def listunclaimaccount(
                 db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
             )
             login_user_id = get_token_details.user_id if get_token_details else None
+            
+            current_page_no = int(page_number)
+            default_page_size=int(default_page_size)
 
             get_unclaimed_account = (
                 db.query(User)
@@ -290,45 +303,61 @@ async def listunclaimaccount(
                     )
 
             unclaimed_accounts = []
-            get_unclaimed_account = get_unclaimed_account.all()
+            unclaimAccountsCount=get_unclaimed_account.count()
+            
+            if unclaimAccountsCount < 1:
+                return {"status": 0, "msg": "No data found"}
+            
+            else:
+                
+                limit, offset, total_pages = get_pagination(
+                    unclaimAccountsCount, current_page_no, default_page_size
+                )
 
-            for unclaim in get_unclaimed_account:
-                check_claim_account = (
-                    db.query(ClaimAccounts)
-                    .filter(
-                        ClaimAccounts.user_id == login_user_id,
-                        ClaimAccounts.influencer_id == unclaim.id,
+                get_unclaimed_account = get_unclaimed_account.limit(limit).offset(offset).all()
+                for unclaim in get_unclaimed_account:
+                    check_claim_account = (
+                        db.query(ClaimAccounts)
+                        .filter(
+                            ClaimAccounts.user_id == login_user_id,
+                            ClaimAccounts.influencer_id == unclaim.id,
+                        ).order_by(ClaimAccounts.id.desc())
+                        .first()
                     )
-                    .first()
-                )
 
-                unclaimed_accounts.append(
-                    {
-                        "user_id": unclaim.id,
-                        "email_id": unclaim.email_id if unclaim.email_id else "",
-                        "display_name": unclaim.display_name
-                        if unclaim.display_name
-                        else "",
-                        "first_name": unclaim.first_name if unclaim.first_name else "",
-                        "last_name": unclaim.last_name if unclaim.last_name else "",
-                        "dob": unclaim.dob if unclaim.dob else "",
-                        "mobile_no": unclaim.mobile_no if unclaim.mobile_no else "",
-                        "location": unclaim.geo_location
-                        if unclaim.geo_location
-                        else "",
-                        "profile_img": unclaim.profile_img
-                        if unclaim.profile_img
-                        else "",
-                        "unclaimed_status": 1 if check_claim_account else 0,
+                    unclaimed_accounts.append(
+                        {
+                            "user_id": unclaim.id,
+                            "email_id": unclaim.email_id if unclaim.email_id else "",
+                            "display_name": unclaim.display_name
+                            if unclaim.display_name
+                            else "",
+                            "first_name": unclaim.first_name if unclaim.first_name else "",
+                            "last_name": unclaim.last_name if unclaim.last_name else "",
+                            "dob": unclaim.dob if unclaim.dob else "",
+                            "mobile_no": unclaim.mobile_no if unclaim.mobile_no else "",
+                            "location": unclaim.geo_location
+                            if unclaim.geo_location
+                            else "",
+                            "profile_img": unclaim.profile_img
+                            if unclaim.profile_img
+                            else "",
+                            "unclaimed_status": ((2 if check_claim_account.admin_status == 0 
+                                                  else 0 if check_claim_account.admin_status == 1 
+                                                  else 1) if check_claim_account else 1),
+
+                            # "claim_pending":(1 if check_claim_account.admin_status == 0 else 0) if check_claim_account != None else 0
+                        }
+                    )
+                return {
+                        "status": 1,
+                        "msg": "Success",
+                        "total_count":unclaimAccountsCount,
+                        "total_pages": total_pages,
+                        "current_page_no": current_page_no,
+                        "unclaim_accounts": unclaimed_accounts,
                     }
-                )
-
-            return {
-                "status": 1,
-                "msg": "Success",
-                "unclaim_accounts": unclaimed_accounts,
-            }
-
+               
 
 # 87  Influencer Chat
 @router.post("/influencerchat")
@@ -1297,24 +1326,24 @@ def nuggetcontentaudio(
 
 
 
-@router.post("/update_poll_count")
-def update_poll_count(
-    db: Session = Depends(deps.get_db)
-):
-    getNuggets=db.query(Nuggets).join(NuggetsMaster,NuggetsMaster.id == Nuggets.nuggets_id).join(NuggetPollOption,NuggetPollOption.nuggets_master_id == Nuggets.nuggets_id,isouter=True).filter(NuggetsMaster.poll_duration != None).all()
+# @router.post("/update_poll_count")
+# def update_poll_count(
+#     db: Session = Depends(deps.get_db)
+# ):
+#     getNuggets=db.query(Nuggets).join(NuggetsMaster,NuggetsMaster.id == Nuggets.nuggets_id).join(NuggetPollOption,NuggetPollOption.nuggets_master_id == Nuggets.nuggets_id,isouter=True).filter(NuggetsMaster.poll_duration != None).all()
     
-    for nugget in getNuggets:
+#     for nugget in getNuggets:
 
-        if nugget.nuggets_master.poll_duration:
+#         if nugget.nuggets_master.poll_duration:
             
-            getPollCount=db.query(NuggetPollOption).filter(NuggetPollOption.nuggets_master_id == nugget.nuggets_id).all()
-            poll_vote=0
+#             getPollCount=db.query(NuggetPollOption).filter(NuggetPollOption.nuggets_master_id == nugget.nuggets_id).all()
+#             poll_vote=0
             
-            for poll in getPollCount:
-                poll_vote += poll.votes if poll.votes else 0
+#             for poll in getPollCount:
+#                 poll_vote += poll.votes if poll.votes else 0
             
-            nugget.total_poll_count = poll_vote
-            db.commit()
+#             nugget.total_poll_count = poll_vote
+#             db.commit()
 
 
-    return "Success"
+#     return "Success"
