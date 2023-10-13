@@ -1169,14 +1169,13 @@ def nuggetNotifcationEmail(db, nugget_id):
             return sms_message, body
 
 
-def get_ip(request:Request):
+def get_ip():
     # response=request.client.host
     response = requests.get("https://api64.ipify.org?format=json").json()
     return response
 
 
-def FindLocationbyIP(userIP,request:Request):
-    userIP = get_ip()
+def FindLocationbyIP(userIP):
     response = requests.get(f"https://ipwhois.app/json/{userIP}/").json()
 
     if response["success"] == True:
@@ -2254,7 +2253,7 @@ async def logins(
         if get_user.status == 2:                            #  2- Suspended
             return {"status": 0, "msg": "Your account is currently blocked!"}
         else:
-            userIP = get_ip()
+            userIP = ip
             add_failure_login = LoginFailureLog(
                 user_id=get_user.id,
                 ip=userIP,
@@ -2349,7 +2348,8 @@ async def logins(
             db.commit()
 
         salt_token = token_text
-        userIP = get_ip()
+        
+        userIP = ip
 
         add_token = ApiTokens(
             user_id=user_id,

@@ -35,6 +35,8 @@ bucket_name = config.bucket_name
 # 1 Signup User
 @router.post("/signup")
 async def signup(
+    *,
+    request:Request,
     db: Session = Depends(deps.get_db),
     signup_type: str = Form(1, description="1-Email,2-Phone Number"),
     first_name: str = Form(None, max_length=100),
@@ -157,7 +159,7 @@ async def signup(
                     }
 
                     # token = jwt.encode(paylod, st.SECRET_KEY)
-                    userIP = get_ip()
+                    userIP = request.client.host
 
                     add_token = ApiTokens(
                         user_id=user_id,
@@ -202,7 +204,7 @@ async def signup(
 
             else:
                 # New User Register
-                userIP = get_ip()
+                userIP = request.client.host
                 location = geo_location
                 if geo_location == None or geo_location == "" or len(geo_location) < 4:
                     location_details = FindLocationbyIP(userIP)
@@ -478,7 +480,7 @@ async def signup(
                     salt = st.SALT_KEY
                     exptime = int(dt) + int(dt)
 
-                    userIP = get_ip()
+                    userIP = request.client.host
 
                     add_token = ApiTokens(
                         user_id=user_id,
@@ -518,6 +520,8 @@ async def signup(
 # 2 - Signup Verification by OTP
 @router.post("/signupverify")
 async def signupverify(
+    *,
+    request:Request,
     db: Session = Depends(deps.get_db),
     auth_code: str = Form(None, description="SALT + otp_ref_id"),
     otp_ref_id: str = Form(None, description="From service no. 1"),
@@ -628,7 +632,9 @@ async def signupverify(
                                     get_token.device_type,
                                     get_token.voip_token,
                                     get_token.app_type,
-                                    0
+                                    0,
+                                    user_ip=request.client.host
+
                                 )
                                 return generate_access_token
 
@@ -868,6 +874,8 @@ async def resendotp(
 # 4 - Login
 @router.post("/login")
 async def login(
+    *,
+    request:Request,
     db: Session = Depends(deps.get_db),
     auth_code: str = Form(None, description="SALT + username"),
     username: str = Form(None, description="Email ID"),
@@ -904,7 +912,8 @@ async def login(
 
         if username.strip() != "" and password.strip() != "":
             password = hashlib.sha1(password.encode("utf-8")).hexdigest()
-
+            user_ip=request.client.host
+           
             generate_access_token = await logins(
                 db,
                 username,
@@ -915,7 +924,8 @@ async def login(
                 login_from,
                 voip_token,
                 app_type,
-                0
+                0,
+                user_ip
             )
             return generate_access_token
 
@@ -14616,6 +14626,8 @@ async def getinfluencercategory(
 # 79 actionSocialmedialogin
 @router.post("/socialmedialogin")
 async def socialmedialogin(
+    *,
+    request:Request,
     db: Session = Depends(deps.get_db),
     signin_type: str = Form(
         None, description="2->Apple,3->Twitter,4->Instagram,5->Google"
@@ -14753,10 +14765,10 @@ async def socialmedialogin(
             else:
                 return {"status": 0, "msg": "Unable to signup"}
 
+            user_ip=request.client.host
 
             if check_email_id:
                 email_id=email_id if email_id else check_email_id.email_id
-                
                 reply = await logins(
                     db,
                     email_id,
@@ -14767,7 +14779,9 @@ async def socialmedialogin(
                     login_from,
                     voip_token,
                     app_type,
-                    1
+                    1,
+                    user_ip
+
                 )
             
                 return reply
@@ -14783,13 +14797,14 @@ async def socialmedialogin(
                     login_from,
                     voip_token,
                     app_type,
-                    1
+                    1,
+                    user_ip
                 )
             
                 return reply
 
             else:
-                userIP = get_ip()
+                userIP = request.client.host
                 
                 display_name = (
                     f"{first_name.strip()} {last_name.strip()}"
@@ -14850,6 +14865,9 @@ async def socialmedialogin(
                 db.add(model)
                 db.commit()
                 db.refresh(model)
+
+                user_ip=request.client.host
+
                 if model:
                     user_ref_id = GenerateUserRegID(model.id)
                     password = user_ref_id
@@ -15047,7 +15065,8 @@ async def socialmedialogin(
                         login_from,
                         voip_token,
                         app_type,
-                        0
+                        0,
+                        user_ip
                     )
                     print(reply)
                     return reply
