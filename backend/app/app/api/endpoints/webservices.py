@@ -561,7 +561,9 @@ async def signupverify(
                         .filter(User.id == get_otp_log.user_id)
                         .update({"is_mobile_no_verified": 1, "status": 1})
                     )
+
                     user_update = get_otp_log.user_id
+                    get_otp_log.opt_in=1
                     db.commit()
                 else:
                     update_user = (
