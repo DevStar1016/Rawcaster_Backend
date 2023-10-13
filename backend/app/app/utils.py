@@ -1170,8 +1170,8 @@ def nuggetNotifcationEmail(db, nugget_id):
 
 
 def get_ip(request:Request):
-    response=request.client.host
-    # response = requests.get("https://api64.ipify.org?format=json").json()
+    # response=request.client.host
+    response = requests.get("https://api64.ipify.org?format=json").json()
     return response
 
 
