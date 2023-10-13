@@ -28,7 +28,7 @@ from api.endpoints import chime_chat
 from profanityfilter import ProfanityFilter
 from gtts import gTTS
 from urllib.parse import urlparse
-
+from fastapi import Request
 
 access_key = config.access_key
 access_secret = config.access_secret
@@ -1169,12 +1169,13 @@ def nuggetNotifcationEmail(db, nugget_id):
             return sms_message, body
 
 
-def get_ip():
-    response = requests.get("https://api64.ipify.org?format=json").json()
-    return response["ip"]
+def get_ip(request:Request):
+    response=request.client.host
+    # response = requests.get("https://api64.ipify.org?format=json").json()
+    return response
 
 
-def FindLocationbyIP(userIP):
+def FindLocationbyIP(userIP,request:Request):
     userIP = get_ip()
     response = requests.get(f"https://ipwhois.app/json/{userIP}/").json()
 
@@ -2177,7 +2178,8 @@ async def logins(
     login_from,
     voip_token,
     app_type,
-    social
+    social,
+    ip=None
 ):
     username = username.strip() if username else None
 
@@ -2216,7 +2218,7 @@ async def logins(
 
         salt_token = token_text + str(user_id) + str(characters) + str(dt)
 
-        userIP = get_ip()
+        userIP = ip
 
         add_token = ApiTokens(
             user_id=user_id,

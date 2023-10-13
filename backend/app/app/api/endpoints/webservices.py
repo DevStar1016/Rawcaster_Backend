@@ -277,6 +277,7 @@ async def signup(
                     # Set Default user settings
                     user_settings_model = UserSettings(
                         user_id=add_user.id,
+                        opt_in=0 if signup_type == 1 else 1,
                         online_status=1,
                         friend_request="000",
                         nuggets="000",
@@ -1461,10 +1462,12 @@ def user_profile(db, id):
         )
         if settings:
             user_details.update(
-                {"language": settings.language.name if settings.language_id else ""}
+                {"language": settings.language.name if settings.language_id else "",
+                 "opt_in":settings.opt_in if settings.opt_in else 0}
             )
         else:
-            user_details.update({"language": "English"})
+            user_details.update({"language": "English",
+                                 "opt_in":0})
 
         two_type_verification = OTPverificationtype(db, get_user)
 
@@ -1978,7 +1981,7 @@ async def searchrawcasterusers(
                     )
                     # Apply Pagination
                     get_user = (
-                        get_user.order_by(User.first_name.asc())
+                        get_user.order_by(User.display_name.asc())
                         .limit(limit)
                         .offset(offset)
                         .all()
@@ -7487,7 +7490,7 @@ async def addevent(
     db: Session = Depends(deps.get_db),
     token: str = Form(None),
     event_title: str = Form(None),
-    event_type: str = Form(None, description="1-Event,2-Talkshow,3-Live"),
+    event_type: str = Form(None, description="1-Publie,2-private"),
     event_start_date: Any = Form(None),
     event_start_time: Any = Form(None),
     event_message: str = Form(None),
@@ -7622,15 +7625,7 @@ async def addevent(
                     db.query(UserSettings).filter_by(user_id=login_user_id).first()
                 )
 
-                flag = (
-                    "event_banner"
-                    if event_type == 1
-                    else "talkshow"
-                    if event_type == 2
-                    else "live"
-                    if event_type == 3
-                    else None
-                )
+                flag = "event_banner"
 
                 cover_img = defaultimage(flag)
                 if setting:
@@ -10104,10 +10099,10 @@ async def getothersprofile(
                             .filter(
                                 ClaimAccounts.user_id == login_user_id,
                                 ClaimAccounts.influencer_id == user_id,
-                                ClaimAccounts.admin_status != 2
                             ).order_by(ClaimAccounts.id.desc())
                             .first()
                         )
+                        
                         # check Account Verified
                         account_verify_status = (
                             db.query(VerifyAccounts)
@@ -10204,9 +10199,9 @@ async def getothersprofile(
                             "friend_request_id": get_friend_request.id
                             if get_friend_request
                             else None,
-                            "friend_status": get_friend_request.request_status
+                            "friend_status": ((get_friend_request.request_status
                             if get_friend_request
-                            else None,
+                            else None) if not get_unclaimed_account else 4),
                             "is_friend_request_sender": 1
                             if get_friend_request
                             and get_friend_request.sender_id == get_user.id
@@ -10235,9 +10230,10 @@ async def getothersprofile(
                             )
                             if get_user.user_settings
                             else "",
-                            "unclaimed_status": (1 if check_claim_account else 0)
-                            if get_unclaimed_account
-                            else 1,
+                            "unclaimed_status": ((2 if check_claim_account.admin_status == 0 
+                                        else 0 if check_claim_account.admin_status == 1 
+                                        else 1) if check_claim_account else 1) 
+                                        if get_unclaimed_account else 0,
                             "account_verify_type": (
                                 2 if account_verify_status.verify_status == 1 else 1
                             )
@@ -10831,7 +10827,8 @@ async def getusersettings(db: Session = Depends(deps.get_db), token: str = Form(
                     else None,
                     "read_out_accent_name":get_user_settings.read_out_accent.accent 
                     if get_user_settings.read_out_accent_id 
-                    else ""
+                    else "",
+                    "opt_in":1 if get_user_settings.opt_in else 0
                     
                 }
             )
@@ -10906,7 +10903,8 @@ async def updateusersettings(
     groupid: str = Form(None, description="example [1,2,3]"),
     group_update_type: str = Form(None),
     read_out_language_id: str = Form(None),
-    read_out_accent_id:str=Form(None)
+    read_out_accent_id:str=Form(None),
+    opt_in:str=Form(None)
 ):
     if token == None or token.strip() == "":
         return {
@@ -10922,6 +10920,9 @@ async def updateusersettings(
         return {"status": 0, "msg": "Invalid read out language"}
     elif read_out_accent_id and not read_out_accent_id.isnumeric():
         return {"status": 0, "msg": "Invalid read out accent"}
+    elif opt_in and not opt_in.isnumeric():
+        return {"status": 0, "msg": "Invalid opt_in"}
+
 
     else:
         access_token = checkToken(db, token.strip())
@@ -11511,6 +11512,7 @@ async def updateusersettings(
                     settings.read_out_accent_id=(read_out_accent_id
                                     if read_out_accent_id 
                                     else None)
+                    settings.opt_in=opt_in if opt_in else settings.opt_in
 
                     db.commit()
                     if groupid and profile_field_name:
@@ -13198,6 +13200,7 @@ async def getfollowlist(
     gender: str = Form(None),
     age: str = Form(None),
     page_number: str = Form(default=1),
+    default_page_size:str=Form(default=50)
 ):
     if token == None or token.strip() == "":
         return {
@@ -13227,6 +13230,7 @@ async def getfollowlist(
             login_user_id = get_token_details.user_id if get_token_details else None
 
             current_page_no = int(page_number)
+            default_page_size=int(default_page_size)
 
             get_follow_user = db.query(FollowUser)
 
@@ -13322,7 +13326,7 @@ async def getfollowlist(
             if get_row_count < 1:
                 return {"status": 0, "msg": "Unable to get Profile"}
             else:
-                default_page_size = 50
+                
                 limit, offset, total_pages = get_pagination(
                     get_row_count, current_page_no, default_page_size
                 )
