@@ -48,8 +48,7 @@ def mail_content(content):
                     <table width="100%" align="center" style="background:#007bff; color:#fff; margin-top:21px;">
                         <tbody>
                             <tr align="center">
-                                <td style="padding:8px 0px 8px;">Copyright © {year} All Right Reserved by
-                                    Rawcaster.com</td>
+                                <td style="padding:8px 0px 8px;">Copyright © {year} All Right Reserved by Rawcaster.com</td>
                             </tr>
                         </tbody>
                     </table>
@@ -270,8 +269,8 @@ def event_shared(eventCreatorName, coverImg, eventTitle, eventStartTime, meeting
 
                 <div>
                     <p
-                            style="width: 100%; float: left; padding: 13px 0; text-align: center; background: #007bff; color: #fff; font-family:Verdana, Geneva, Tahoma, sans-serif; margin: 0; font-size: 14px;">
-                        Copyright © 2021 All Right Reserved by Rawcaster.com</p>
+                        style="width: 100%; float: left; padding: 13px 0; text-align: center; background: #007bff; color: #fff; font-family:Verdana, Geneva, Tahoma, sans-serif; margin: 0; font-size: 14px;">
+                        Copyright © 2021 All Right Reserved by <a href="Rawcaster.com"</a></p>
                 </div>
             </div>
 
