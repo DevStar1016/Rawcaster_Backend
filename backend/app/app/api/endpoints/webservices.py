@@ -528,6 +528,7 @@ async def signupverify(
     otp: str = Form(None),
     otp_flag: str = Form(None),
     alt_token_id: str = Form(None),
+    opt_in:str=Form(None)
 ):
     if auth_code == None or auth_code.strip() == "":
         return {"status": 0, "msg": "Auth Code is missing"}
@@ -535,12 +536,16 @@ async def signupverify(
         return {"status": 0, "msg": "Reference id is missing"}
     elif otp == None:
         return {"status": 0, "msg": "OTP is missing"}
+    
+    elif opt_in and not opt_in.isnumeric():
+        return {"status":0,"msg":"Invalid opt type"}
 
     else:
         otp_ref_id = otp_ref_id.strip()
         otp_flag = "email" if not otp_flag else otp_flag
         otp = otp
         auth_code = auth_code.strip()
+        opt_in=opt_in if opt_in else None
 
         auth_text = otp_ref_id
 
@@ -559,19 +564,22 @@ async def signupverify(
                 db.commit()
 
                 user_update = 0
+                # Update optin when mobile number verify in user setting
+                update_user_setting = (
+                    db.query(UserSettings)
+                    .filter(UserSettings.user_id == get_otp_log.user_id)
+                )
+                if update_user_setting and opt_in:
+                    update_user_setting.opt_in=opt_in
+                    db.commit()
+
+
                 if otp_flag == "sms":
                     update_user = (
                         db.query(User)
                         .filter(User.id == get_otp_log.user_id)
                         .update({"is_mobile_no_verified": 1, "status": 1})
                     )
-                    # Update optin when mobile number verify in user setting
-                    update_user_setting = (
-                        db.query(UserSettings)
-                        .filter(UserSettings.user_id == get_otp_log.user_id)
-                        .update({"opt_in": 1})
-                    )
-
 
                     user_update = get_otp_log.user_id
                     db.commit()
@@ -1124,8 +1132,9 @@ async def verifyotpandresetpassword(
     device_id: str = Form(None),
     push_id: str = Form(None, description="FCM  or APNS"),
     device_type: str = Form(None),
-    auth_code: str = Form(None, description="SALT + otp_ref_id"),
+    auth_code: str = Form(None, description="SALT + otp_ref_id")
 ):
+    
     if auth_code == None or auth_code.strip() == "":
         return {"status": 0, "msg": "Auth Code is missing"}
     elif otp_ref_id == None:
@@ -10579,7 +10588,7 @@ async def getusersettings(db: Session = Depends(deps.get_db), token: str = Form(
                 .first()
             )
             if not get_user_settings:
-                add_settings = UserSettings(
+                get_user_settings = UserSettings(
                     user_id=login_user_id,
                     online_status=1,
                     friend_request="100",
@@ -10589,14 +10598,18 @@ async def getusersettings(db: Session = Depends(deps.get_db), token: str = Form(
                     read_out_language_id=27,
                     read_out_accent_id=1
                 )
-                db.add(add_settings)
+                db.add(get_user_settings)
                 db.commit()
-            result_list = {}
+                db.refresh(get_user_settings)
 
+            result_list = {}
+            
             user_status_list = (
-                db.query(UserStatusMaster).filter_by(id=get_user_settings.id).first()
+                db.query(UserStatusMaster).filter_by(id=get_user_settings.user.user_status_id).first()
             )
+            
             if user_status_list:
+            
                 result_list.update(
                     {
                         "referral_needed": user_status_list.referral_needed,
