@@ -246,7 +246,7 @@ def event_shared(eventCreatorName, coverImg, eventTitle, eventStartTime, meeting
                                         <div
                                                 style="font-size:16px; color:#000; font-family:Verdana, Geneva, Tahoma, sans-serif; text-align:left; line-height:20px; width: 100%; text-align: center;">
                                             <img src={coverImg} alt="profile image"
-                                                style="max-width: 4000px; border-radius:12px; margin: auto;" align="center">
+                                                style="max-width: 100%;width:100%; border-radius:12px; margin: auto;" align="center">
                                                 <p> <b> Rawcaster Event </b></p>
                                                 <p><b>{eventStartTime} (UTC)</b></p>
                                             <div style="float: left; width: 100%;text-align: center; ">
