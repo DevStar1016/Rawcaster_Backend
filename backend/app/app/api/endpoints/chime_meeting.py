@@ -95,7 +95,7 @@ def join_meeting(db: Session = Depends(deps.get_db),
                 return {"status":0,"msg":"Something went wrong"}
         else:
             # Request failed
-            print("Error:", (response.text))
+           
             return {"status": 0, "msg": f"Failed:{response.text}"}
 
 
@@ -179,7 +179,6 @@ def end_meeting(db: Session = Depends(deps.get_db),
                 return {"status":0,"msg":"Something went wrong"}
         else:
             # Request failed
-            print("Error:", (response.text))
             return {"status": 0, "msg": f"Failed:{response.text}"}
 
 

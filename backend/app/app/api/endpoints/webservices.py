@@ -641,7 +641,7 @@ async def signupverify(
                                     get_token.voip_token,
                                     get_token.app_type,
                                     0,
-                                    user_ip=request.client.host
+                                    request.client.host
 
                                 )
                                 return generate_access_token
@@ -1772,6 +1772,7 @@ async def updatemyprofile(
                     .filter(
                         User.email_id == email_id,
                         User.email_id != None,
+                        User.email_id != "",
                         User.id != login_user_id,
                     )
                     .count()
@@ -5295,7 +5296,7 @@ async def listnuggets(
                             NuggetsAttachment.media_type == "audio",
                         )
                     )
-                
+                print(user_public_nugget_display_setting)
                 if filter_type == 1: # Influencer
                     my_followers = []  # my_followers
                     follow_user = (
@@ -5306,20 +5307,21 @@ async def listnuggets(
                     if follow_user:
                         for group_list in follow_user:
                             my_followers.append(group_list.following_userid)
-                    
+                 
                     get_nuggets = get_nuggets.filter(
                         or_(
                             Nuggets.user_id != login_user_id,
                             and_(Nuggets.user_id.in_(my_followers),Nuggets.share_type != 2)
                         )
                     )
-                    
+             
                 elif user_public_nugget_display_setting == 0:  # Rawcaster
                     get_nuggets = get_nuggets.filter(
                         or_(Nuggets.user_id == login_user_id, Nuggets.user_id == raw_id)
                     )
                     
                 elif user_public_nugget_display_setting == 1:  # Public
+                    print("sdfsdf")
                     get_nuggets = get_nuggets.filter(
                         or_(
                             Nuggets.user_id == login_user_id,
@@ -5450,11 +5452,11 @@ async def listnuggets(
                     if follow_user:
                         for group_list in follow_user:
                             my_followers.append(group_list.following_userid)
-
+                    
                     get_nuggets = get_nuggets.filter(
                         or_(
                             Nuggets.user_id == login_user_id,
-                            and_(Nuggets.user_id.in_(my_followers)),
+                            Nuggets.user_id.in_(my_followers),
                             Nuggets.share_type != 2,
                         )
                     )  
@@ -15081,7 +15083,7 @@ async def socialmedialogin(
                         0,
                         user_ip
                     )
-                    print(reply)
+                
                     return reply
                 else:
                     return {
