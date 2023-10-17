@@ -5296,7 +5296,7 @@ async def listnuggets(
                             NuggetsAttachment.media_type == "audio",
                         )
                     )
-                print(user_public_nugget_display_setting)
+                
                 if filter_type == 1: # Influencer
                     my_followers = []  # my_followers
                     follow_user = (
@@ -5310,7 +5310,7 @@ async def listnuggets(
                  
                     get_nuggets = get_nuggets.filter(
                         or_(
-                            Nuggets.user_id != login_user_id,
+                            Nuggets.user_id == login_user_id,
                             and_(Nuggets.user_id.in_(my_followers),Nuggets.share_type != 2)
                         )
                     )
@@ -5321,7 +5321,7 @@ async def listnuggets(
                     )
                     
                 elif user_public_nugget_display_setting == 1:  # Public
-                    print("sdfsdf")
+                    
                     get_nuggets = get_nuggets.filter(
                         or_(
                             Nuggets.user_id == login_user_id,
