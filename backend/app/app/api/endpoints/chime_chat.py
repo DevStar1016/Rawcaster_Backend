@@ -129,7 +129,7 @@ async def send_channel_message(
                 db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
             )
             chime_user_id=get_token_details.user.chime_user_id if get_token_details.user_id else None
-            print(chime_user_id)
+          
             # Send a channel message
             response = chime.send_channel_message(
                 ChannelArn=channel_id,
@@ -322,7 +322,7 @@ async def auto_group_channel_create(db: Session = Depends(deps.get_db),token:str
                         addMemberResponse=addmembers(channel_arn=channel_arn,
                                     chime_bearer=getFriendGroup.user.chime_user_id,
                                     member_id=[usr_arn])
-                        print(1)
+
                 db.commit()
                 return {"status":1,"msg":"Success","channel_arn":channel_arn}
                     
@@ -470,8 +470,6 @@ async def auto_individual_channel_create(db: Session = Depends(deps.get_db),toke
                         db.commit() 
                         receiver_arn=user_arn
                 
-                print(sender_arn)
-                print(receiver_arn)
                 # Create Channel  
                 set_unique_channel=f"RAWCAST{int(datetime.datetime.utcnow().timestamp())}"
                 createchannel=create_channel(chime_bearer=sender_arn,
@@ -481,7 +479,7 @@ async def auto_individual_channel_create(db: Session = Depends(deps.get_db),toke
                                 if createchannel
                                 else None
                             )
-                print(channel_arn)
+                
                 if channel_arn:               
                     getMyFriend.channel_arn = channel_arn
 
