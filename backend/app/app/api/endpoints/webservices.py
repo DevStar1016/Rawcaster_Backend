@@ -5309,10 +5309,7 @@ async def listnuggets(
                             my_followers.append(group_list.following_userid)
                  
                     get_nuggets = get_nuggets.filter(
-                        or_(
-                            Nuggets.user_id != login_user_id,
-                            and_(Nuggets.user_id.in_(my_followers),Nuggets.share_type != 2)
-                        )
+                            Nuggets.user_id.in_(my_followers),Nuggets.share_type != 2
                     )
              
                 elif user_public_nugget_display_setting == 0:  # Rawcaster
