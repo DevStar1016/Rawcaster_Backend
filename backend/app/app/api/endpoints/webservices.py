@@ -5310,7 +5310,7 @@ async def listnuggets(
                  
                     get_nuggets = get_nuggets.filter(
                         or_(
-                            Nuggets.user_id == login_user_id,
+                            Nuggets.user_id != login_user_id,
                             and_(Nuggets.user_id.in_(my_followers),Nuggets.share_type != 2)
                         )
                     )
@@ -10315,7 +10315,8 @@ async def listallblockedusers(
             get_friends =db.query(MyFriends)
             
             get_friends = get_friends.join(sender, MyFriends.sender_id == sender.id)\
-                        .join(receiver, MyFriends.receiver_id == receiver.id)
+                        .join(receiver, MyFriends.receiver_id == receiver.id,
+                              sender.status == 1,receiver.status == 1)
 
             # Apply the WHERE conditions
             get_friends = get_friends.filter(MyFriends.status == 1, MyFriends.request_status == 3)
