@@ -10315,11 +10315,11 @@ async def listallblockedusers(
             get_friends =db.query(MyFriends)
             
             get_friends = get_friends.join(sender, MyFriends.sender_id == sender.id)\
-                        .join(receiver, MyFriends.receiver_id == receiver.id,
-                              sender.status == 1,receiver.status == 1)
+                        .join(receiver, MyFriends.receiver_id == receiver.id)
 
             # Apply the WHERE conditions
-            get_friends = get_friends.filter(MyFriends.status == 1, MyFriends.request_status == 3)
+            get_friends = get_friends.filter(MyFriends.status == 1, MyFriends.request_status == 3,
+                                             sender.status == 1,receiver.status == 1)
             get_friends = get_friends.filter(MyFriends.sender_id == login_user_id)
 
             # Check if search key is provided in the POST request
