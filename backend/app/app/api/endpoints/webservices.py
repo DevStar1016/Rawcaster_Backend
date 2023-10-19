@@ -10318,7 +10318,6 @@ async def listallblockedusers(
             get_friends = get_friends.filter(MyFriends.status == 1, MyFriends.request_status == 3,
                                              sender.status == 1,receiver.status == 1)
             get_friends = get_friends.filter(MyFriends.sender_id == login_user_id)
-
             # Check if search key is provided in the POST request
             if search_key:
                 search_key= '%' + search_key + '%'
@@ -13363,8 +13362,8 @@ async def getfollowlist(
             )
             
             blocked_users = get_all_blocked_users["blocked"]
-
-            get_follow_user = get_follow_user.filter(FollowUser.following_userid.not_in(blocked_users))
+            
+            get_follow_user = get_follow_user.filter(FollowUser.following_userid.not_in(blocked_users),FollowUser.follower_userid.not_in(blocked_users))
             
             get_row_count = get_follow_user.count()
 
