@@ -244,7 +244,7 @@ async def listunclaimaccount(
     default_page_size:str=Form(default=50)
 
 ):
-    print(token)
+
     if token == None or token.strip() == "":
         return {
             "status": -1,
@@ -303,6 +303,19 @@ async def listunclaimaccount(
                     )
 
             unclaimed_accounts = []
+
+            # Omit blocked users nuggets
+            requested_by = None
+            request_status = 3  # Rejected
+            response_type = 1
+
+            get_all_blocked_users = get_friend_requests(
+                db, login_user_id, requested_by, request_status, response_type
+            )
+            
+            blocked_users = get_all_blocked_users["blocked"]
+
+            get_unclaimed_account = get_unclaimed_account.filter(User.id.not_in(blocked_users))
             unclaimAccountsCount=get_unclaimed_account.count()
             
             if unclaimAccountsCount < 1:

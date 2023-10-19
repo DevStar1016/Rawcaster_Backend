@@ -13266,6 +13266,7 @@ async def getfollowlist(
             get_follow_user = db.query(FollowUser)
 
             if type == 1:  # Followers
+
                 if not user_id:
                     get_follow_user = get_follow_user.filter(
                         FollowUser.follower_userid == login_user_id
@@ -13352,6 +13353,19 @@ async def getfollowlist(
 
                     # get_follow_user=get_follow_user.filter(or_(or_(FollowUser.following_userid.in_(user_ages),FollowUser.follower_userid.in_(user_ages)),FollowUser.following_userid.in_(user_ages),FollowUser.follower_userid.in_(user_ages)))
 
+            # Omit blocked users nuggets
+            requested_by = None
+            request_status = 3  # Rejected
+            response_type = 1
+
+            get_all_blocked_users = get_friend_requests(
+                db, login_user_id, requested_by, request_status, response_type
+            )
+            
+            blocked_users = get_all_blocked_users["blocked"]
+
+            get_follow_user = get_follow_user.filter(FollowUser.following_userid.not_in(blocked_users))
+            
             get_row_count = get_follow_user.count()
 
             if get_row_count < 1:
