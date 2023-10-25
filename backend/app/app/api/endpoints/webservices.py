@@ -8065,7 +8065,6 @@ async def listevents(
                 )
 
             current_page_no = int(page_number)
-            event_type = event_type if event_type else 0
             requested_by = None
             request_status = 1
             response_type = 1
@@ -11818,6 +11817,7 @@ async def globalsearchevents(
                         .filter( Events.status == 1,
                         Events.event_status == 1,
                         Events.event_type_id == 1)
+        
 
             if search_key:
                 criteria = (criteria.filter(
@@ -11827,10 +11827,16 @@ async def globalsearchevents(
                             User.first_name.like( "%" +search_key + "%" ),
                             User.last_name.like( "%" +search_key + "%" ),
                             User.first_name.like( "%" +search_key + "%" )
-                        ),
-                        Events.start_date_time > datetime.datetime.utcnow()
+                        )
                     )
                 )
+            if not search_key:
+                criteria=criteria.filter(
+                        text(
+                    "DATE_ADD(events.start_date_time, "
+                    "INTERVAL SUBSTRING(events.duration, 1, CHAR_LENGTH(events.duration) - 3) HOUR_MINUTE) > NOW()"
+                    ))
+                
             
             # Execute the query
             get_row_count = criteria.count()
@@ -11850,7 +11856,7 @@ async def globalsearchevents(
                     get_row_count, current_page_no, default_page_size
                 )
                 
-                event_list=criteria.order_by(Events.start_date_time.asc()).limit(limit).offset(offset).all()
+                event_list=criteria.order_by(Events.start_date_time.desc()).limit(limit).offset(offset).all()
                 result_list = []
                 if event_list:
                     waiting_room = 0
