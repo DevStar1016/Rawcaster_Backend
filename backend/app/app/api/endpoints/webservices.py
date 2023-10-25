@@ -11792,8 +11792,8 @@ async def globalsearchevents(
             "status": -1,
             "msg": "Sorry! your login session expired. please login again.",
         }
-    elif not search_key or search_key.strip() == "":
-        return {"status": 0, "msg": "Search Key missing"}
+    # elif  search_key or search_key.strip() == "":
+    #     return {"status": 0, "msg": "Search Key missing"}
     elif not str(page_number).isnumeric():
         return {"status": 0, "msg": "Invalid page Number"}
     else:
@@ -11811,25 +11811,26 @@ async def globalsearchevents(
             )
             login_user_id = get_token_details.user_id
 
-            search_key = search_key.strip()
+            search_key = search_key.strip() if search_key else None
 
             current_page_no = int(page_number)
-            criteria = (
-                db.query(Events).join(User,User.id == Events.created_by,isouter=True)\
-                .filter(
-                    Events.status == 1,
-                    Events.event_status == 1,
-                    Events.event_type_id == 1,
-                    or_(
-                        Events.title.like( "%" +search_key + "%" ),
-                        User.display_name.like( "%" +search_key + "%" ),
-                        User.first_name.like( "%" +search_key + "%" ),
-                        User.last_name.like( "%" +search_key + "%" ),
-                        User.first_name.like( "%" +search_key + "%" )
-                    ),
-                    Events.start_date_time > datetime.datetime.utcnow()
+            criteria= db.query(Events).join(User,User.id == Events.created_by,isouter=True)\
+                        .filter( Events.status == 1,
+                        Events.event_status == 1,
+                        Events.event_type_id == 1)
+
+            if search_key:
+                criteria = (criteria.filter(
+                        or_(
+                            Events.title.like( "%" +search_key + "%" ),
+                            User.display_name.like( "%" +search_key + "%" ),
+                            User.first_name.like( "%" +search_key + "%" ),
+                            User.last_name.like( "%" +search_key + "%" ),
+                            User.first_name.like( "%" +search_key + "%" )
+                        ),
+                        Events.start_date_time > datetime.datetime.utcnow()
+                    )
                 )
-            )
             
             # Execute the query
             get_row_count = criteria.count()
@@ -12255,7 +12256,7 @@ async def nuggetabusereport(
 
                 return {
                     "status": 1,
-                    "msg": "Thanks for the reporting, we will take the action",
+                    "msg": "Thanks for letting us know your concern about this Nugget. We will take the necessary actions according to our policies",
                 }
             else:
                 return {"status": 0, "msg": "Nugget ID not correct"}
@@ -16001,7 +16002,7 @@ async def groupabusereport(
                     if group.created_by == login_user_id:
                         return {
                             "status": 1,
-                            "msg": "Thanks for the reporting, we will take the action",
+                            "msg": "Thanks for letting us know your concern about this Group. We will take the necessary actions according to our policies",
                         }
                     else:
                         # Delete Friend Group
@@ -16027,7 +16028,7 @@ async def groupabusereport(
 
                             return {
                                 "status": 1,
-                                "msg": "Thanks for the reporting, we will take the action",
+                                "msg": "Thanks for letting us know your concern about this Group. We will take the necessary actions according to our policies",
                             }
                         except:
                             return {
