@@ -752,7 +752,6 @@ async def resendotp(
                 sms = f"{otp} is your OTP for Rawcaster. PLEASE DO NOT SHARE THE OTP WITH ANYONE."
                 if to:
                     try:
-                        print(to)
                         send_sms = sendSMS(to, sms)
                     except:
                         pass
@@ -7580,8 +7579,8 @@ async def addevent(
     elif event_start_time and isTimeFormat(event_start_time) == False:
         return {"status": 0, "msg": "Invalid Time format"}
 
-    # elif event_duration and isTimeFormat(event_duration) == False:
-    #     return {"status": 0, "msg": "Invalid Time format"}
+    elif event_duration and isTimeFormat(event_duration) == False:
+        return {"status": 0, "msg": "Invalid Time format"}
 
     if token == None or token.strip() == "":
         return {
@@ -7590,10 +7589,10 @@ async def addevent(
         }
 
     else:
-        # event_duration = datetime.datetime.strptime(event_duration, "%H:%M").time()
-        # min_duration = datetime.datetime.strptime("10:00", "%H:%M").time()
-        # if event_duration > 10:
-        #     return {"status": 0, "msg": "Event duration invalid"}
+        event_duration = datetime.datetime.strptime(event_duration, "%H:%M").time()
+        min_duration = datetime.datetime.strptime("10:00", "%H:%M").time()
+        if event_duration > min_duration:
+            return {"status": 0, "msg": "Event duration Max Allowed hours is 10"}
 
         event_participants = int(event_participants)
         if event_participants < 2:
@@ -8746,9 +8745,10 @@ async def editevent(
     elif event_duration and isTimeFormat(event_duration) == False:
         return {"status": 0, "msg": "Invalid Time format"}
     else:
-        minimum_duration_time = time.strptime("00:10", "%H:%M")
-        if minimum_duration_time > time.strptime(event_duration, "%H:%M"):
-            return {"status": 0, "msg": "Event duration invalid"}
+        event_duration = datetime.datetime.strptime(event_duration, "%H:%M").time()
+        min_duration = datetime.datetime.strptime("10:00", "%H:%M").time()
+        if event_duration > min_duration:
+            return {"status": 0, "msg": "Event duration Max Allowed hours is 10"}
 
         event_type = int(event_type) if event_type else None
         access_token = checkToken(db, token)
@@ -11826,7 +11826,8 @@ async def globalsearchevents(
                             Events.title.like( "%" +search_key + "%" ),
                             User.display_name.like( "%" +search_key + "%" ),
                             User.first_name.like( "%" +search_key + "%" ),
-                            User.last_name.like( "%" +search_key + "%" )
+                            User.last_name.like( "%" +search_key + "%" ),
+                            User.first_name.like( "%" +search_key + "%" )
                         )
                     )
                 )
@@ -11856,7 +11857,7 @@ async def globalsearchevents(
                     get_row_count, current_page_no, default_page_size
                 )
                 
-                event_list=criteria.order_by(Events.start_date_time.asc()).limit(limit).offset(offset).all()
+                event_list=criteria.order_by(Events.start_date_time.desc()).limit(limit).offset(offset).all()
                 result_list = []
                 if event_list:
                     waiting_room = 0
@@ -13571,7 +13572,6 @@ async def addnuggetview(
 async def getreferrallist(
     db: Session = Depends(deps.get_db),
     token: str = Form(None),
-    search_key:str=Form(None),
     page_number: str = Form(default=1),
 ):
     if token == None or token.strip() == "":
@@ -13618,11 +13618,6 @@ async def getreferrallist(
             current_page_no = int(page_number)
 
             get_user = db.query(User).filter(User.referrer_id == login_user_id)
-            if search_key:
-                get_user=get_user.filter(or_(User.email_id.like("%" + search_key + "%"),
-                                            User.first_name.like("%"+ search_key + "%"),
-                                            User.display_name.like( "%" + search_key + "%")))
-
             get_user_count = get_user.count()
             if get_user_count < 1:
                 return {
