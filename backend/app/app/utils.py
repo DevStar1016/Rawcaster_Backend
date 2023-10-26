@@ -2033,9 +2033,8 @@ async def SendOtp(db, user_id, signup_type):
             
     elif int(signup_type) == 2:
         mobile_no = f"{get_user.country_code}{get_user.mobile_no}"
-        message = f"{otp} is your One Time Password. Do not share this OTP with anyone"
+        message = f"{otp} is your OTP for Rawcaster. PLEASE DO NOT SHARE THE OTP WITH ANYONE. 0FfsYZmYTkk"
         try:
-            print(mobile_no)
             send_sms = sendSMS(mobile_no, message)
         except Exception as e:
             print(e)
