@@ -7580,8 +7580,8 @@ async def addevent(
     elif event_start_time and isTimeFormat(event_start_time) == False:
         return {"status": 0, "msg": "Invalid Time format"}
 
-    elif event_duration and isTimeFormat(event_duration) == False:
-        return {"status": 0, "msg": "Invalid Time format"}
+    # elif event_duration and isTimeFormat(event_duration) == False:
+    #     return {"status": 0, "msg": "Invalid Time format"}
 
     if token == None or token.strip() == "":
         return {
@@ -7590,10 +7590,10 @@ async def addevent(
         }
 
     else:
-        event_duration = datetime.datetime.strptime(event_duration, "%H:%M").time()
-        min_duration = datetime.datetime.strptime("10:00", "%H:%M").time()
-        if event_duration > min_duration:
-            return {"status": 0, "msg": "Event duration invalid"}
+        # event_duration = datetime.datetime.strptime(event_duration, "%H:%M").time()
+        # min_duration = datetime.datetime.strptime("10:00", "%H:%M").time()
+        # if event_duration > 10:
+        #     return {"status": 0, "msg": "Event duration invalid"}
 
         event_participants = int(event_participants)
         if event_participants < 2:
