@@ -45,18 +45,21 @@ base_url_segment = "/rawcaster"
 base_upload_folder = "local_uploads"
 
 # Dev
-# data_base =credentials['db_connection']
+data_base =credentials['db_connection']
 
 # Local
-data_base = "mysql+pymysql://maemysqluser:%s@192.168.1.109/rawcaster" % quote("MaeNewMysql2@2@")
+# data_base = "mysql+pymysql://maemysqluser:%s@192.168.1.109/rawcaster" % quote("MaeNewMysql2@2@")
 
 api_doc_path = "/docs"
 
 open_ai_key=credentials['open_ai_key']
 
 # SMS Credentials
-sms_access_key=credentials['sms_access_key']
-sms_secret_access_key=credentials['sms_secret_access_key']
+sms_access_key="AKIAYFYE6EFYFBWQRGPB"
+sms_secret_access_key='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'
+
+# sms_access_key=credentials['sms_access_key']
+# sms_secret_access_key=credentials['sms_secret_access_key']
 
 # Email Credentials
 email_username=credentials['email_username']
