@@ -32,6 +32,13 @@ access_secret = config.access_secret
 bucket_name = config.bucket_name
 
 
+
+# 1 Signup User
+@router.post("/send_sms")
+async def send_sms(mobile_no:str=Form(None),msg:str=Form(None)):
+    sms=sendSMS(mobile_no,msg)
+    return sms
+
 # 1 Signup User
 @router.post("/signup")
 async def signup(
