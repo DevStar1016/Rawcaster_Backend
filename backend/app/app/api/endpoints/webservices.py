@@ -1086,7 +1086,7 @@ async def forgotpassword(
                         if get_user.mobile_no
                         else None
                     )
-                    sms = f"{otp} is your OTP for Rawcaster. PLEASE DO NOT SHARE THE OTP WITH ANYONE."
+                    sms = f"{otp} is your OTP for Rawcaster. PLEASE DO NOT SHARE THE OTP WITH ANYONE. 0FfsYZmYTkk"
                     msg = "A one time passcode (OTP) has been sent to the phone number you provided"
                     # Send SMS
                     if to:

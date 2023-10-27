@@ -235,6 +235,7 @@ def sendSMS(mobile_no, message):
     )  # Replace 'us-west-2' with your desired AWS region
 
     # Send the SMS
+    print(mobile_no)
     response = sns.publish(PhoneNumber=mobile_no, Message=message)
     # Check if the SMS was sent successfully
     if response["ResponseMetadata"]["HTTPStatusCode"] == 200:
