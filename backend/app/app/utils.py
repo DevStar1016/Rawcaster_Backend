@@ -231,11 +231,10 @@ def sendSMS(mobile_no, message):
         "sns",
         aws_access_key_id=sms_access_key,
         aws_secret_access_key=sms_access_secret,
-        region_name="us-east-1",
+        region_name="us-west-2",
     )  # Replace 'us-west-2' with your desired AWS region
 
     # Send the SMS
-    print(mobile_no)
     response = sns.publish(PhoneNumber=mobile_no, Message=message)
     # Check if the SMS was sent successfully
     if response["ResponseMetadata"]["HTTPStatusCode"] == 200:
