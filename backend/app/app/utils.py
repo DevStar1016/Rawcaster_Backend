@@ -231,7 +231,7 @@ def sendSMS(mobile_no, message):
         "sns",
         aws_access_key_id=sms_access_key,
         aws_secret_access_key=sms_access_secret,
-        region_name="us-west-2",
+        region_name="us-east-1",
     )  # Replace 'us-west-2' with your desired AWS region
 
     # Send the SMS
