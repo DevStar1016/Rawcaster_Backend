@@ -756,7 +756,7 @@ async def resendotp(
 
             if otp_flag == "sms":
                 to = f"{get_otp_log.user.country_code if get_otp_log.user.country_code else ''}{get_otp_log.user.mobile_no}"
-                sms = f"{otp} is your OTP for Rawcaster. PLEASE DO NOT SHARE THE OTP WITH ANYONE."
+                sms = f"{otp} is your OTP from Rawcaster. PLEASE DO NOT SHARE THE OTP WITH ANYONE. 0FfsYZmYTkk"
                 if to:
                     try:
                         send_sms = sendSMS(to, sms)
@@ -1093,7 +1093,7 @@ async def forgotpassword(
                         if get_user.mobile_no
                         else None
                     )
-                    sms = f"{otp} is your OTP for Rawcaster. PLEASE DO NOT SHARE THE OTP WITH ANYONE. 0FfsYZmYTkk"
+                    sms = f"{otp} is your OTP from Rawcaster. PLEASE DO NOT SHARE THE OTP WITH ANYONE. 0FfsYZmYTkk"
                     msg = "A one time passcode (OTP) has been sent to the phone number you provided"
                     # Send SMS
                     if to:
