@@ -48,7 +48,8 @@ python-dateutil==2.8.2
 Pillow==9.5.0
 moviepy==1.0.3
 langdetect==1.0.9
-gTTS==2.3.2
+# gTTS==2.3.2
+gTTS
 playsound==1.3.0
 chime
 openai==0.27.7
