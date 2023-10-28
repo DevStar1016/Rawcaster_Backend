@@ -48,14 +48,11 @@ python-dateutil==2.8.2
 Pillow==9.5.0
 moviepy==1.0.3
 langdetect==1.0.9
-# gTTS==2.3.2
-# gTTS
-pip3 uninstall gTTS
+gTTS==2.4.0
 playsound==1.3.0
 chime
 openai==0.27.7
 translate==3.6.1
-# googletrans==3.1.0a0
 googletrans==4.0.0rc1
 SpeechRecognition==3.10.0
 pydub==0.25.1
