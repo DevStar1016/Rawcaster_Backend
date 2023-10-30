@@ -1208,7 +1208,7 @@ async def verifyotpandresetpassword(
                 else:
                     return {
                         "status": 0,
-                        "msg": "Password update failed. Please try again",
+                        "msg": "Password update failed. Please try again.",
                     }
 
 
