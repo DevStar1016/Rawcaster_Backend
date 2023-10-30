@@ -1203,7 +1203,7 @@ async def verifyotpandresetpassword(
                     db.commit()
                     return {
                         "status": 1,
-                        "msg": "Your password has been updated successfully",
+                        "msg": "Your password has been updated successfully.",
                     }
                 else:
                     return {
