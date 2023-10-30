@@ -1041,7 +1041,7 @@ async def forgotpassword(
                 }
 
             elif get_user.status == 4:  # Account deleted
-                return {"status": 0, "msg": "Your account has been removed"}
+                return {"status": 0, "msg": "Your account has been removed"} 
 
             elif get_user.status == 3:  # Admin Blocked user!
                 return {"status": 0, "msg": "Your account is currently blocked!"}
