@@ -11,9 +11,8 @@ from app.core import config
 import openai
 import json
 from pydub import AudioSegment
-from gtts import gTTS
-import pyttsx3
 import googletrans
+from requests.auth import HTTPBasicAuth
 
 router = APIRouter()
 
@@ -498,7 +497,7 @@ async def add_verify_account(
 
     else:
         access_token = checkToken(db, token)
-
+        
         if access_token == False:
             return {
                 "status": -1,
@@ -530,13 +529,65 @@ async def add_verify_account(
                     verify_status=0,
                 )
                 db.add(add_clain)
-                db.commit()
-                return {
+                # db.commit()
+                # Idenfy Verify
+                username=config.idenfy_api_key
+                password=config.idenfy_secret_key
+
+                url = 'https://ivs.idenfy.com/api/v2/token'
+
+                data={'clientId':get_token_details.user.user_ref_id}
+
+                response = requests.post(url, json=data, auth=HTTPBasicAuth(username, password))
+                
+                # Check the response
+                if response.status_code in [200, 201]:
+                    verifyResponse=json.loads(response.content)
+                    id_verify_token=verifyResponse['authToken']
+                    # Update Idenfy Token
+                    getUser=db.query(User).filter(User.id == login_user_id,User.status == 1).first()
+                    if getUser :
+                        getUser.verification_token=id_verify_token
+                        # db.commit()
+                    
+                    return {
                     "status": 1,
                     "msg": "We will contact you to validate your account verify. Please contact us at info@rawcaster.com if you have any questions.",
-                }
+                    # Idenfy Verification
+                    "verification_token":id_verify_token,
+                    "redirect_url":f"https://ivs.idenfy.com/api/v2/redirect?authToken={id_verify_token}"
+                }                   
+
             else:
                 return {"status": 0, "msg": "you are already requested to verification"}
+
+
+@router.post("/verifyyy")
+async def verifyyy(
+    db: Session = Depends(deps.get_db),
+    token: str = Form(None)):
+
+    # Replace these variables with your actual username and password
+    username = 'bpCwxSYDCuo'
+    password = 's7eXCWA0dOEqLuiaeqvu'
+
+    # URL you want to make a request to
+    url = 'https://ivs.idenfy.com/api/v2/token'
+    data={'clientId':"8903257051"}
+
+    # Making a GET request with Basic Auth
+    response = requests.post(url, json={'clientId':"1212"}, auth=HTTPBasicAuth(username, password))
+    print(response.content)
+    # Check the response
+    if response.status_code == 201:
+        verifyResponse=json.loads(response.content)
+        id_verify_token=verifyResponse['authToken']
+    
+       
+    else:
+        # If the request was not successful
+        print("Request failed")
+        print(f"Status code: {response.status_code}")
 
 
 # 91 AI Chat
