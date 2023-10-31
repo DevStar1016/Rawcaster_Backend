@@ -77,6 +77,7 @@ class User(Base):
     influencer_category = Column(String(20))
     existing_user = Column(TINYINT, default=1)
     chime_user_id = Column(String(100))
+    verification_token=Column(String(255),comment="id verify token")
     # Newly Added
     work_at = Column(String(100))
     studied_at = Column(String(100))
@@ -122,3 +123,7 @@ class User(Base):
     event_abuse_report = relationship("EventAbuseReport", back_populates="user")
     verify_accounts = relationship("VerifyAccounts", back_populates="user")
     qr_tokens = relationship("QrTokens", back_populates="user")
+
+
+
+# ALTER TABLE `user` ADD `verification_token` VARCHAR(255) NULL COMMENT 'id verify token' AFTER `chime_user_id`; 

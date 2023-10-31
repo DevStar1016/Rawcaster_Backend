@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Form, File, UploadFile
+from fastapi import APIRouter, Depends, Form, File, UploadFile,Request
 from app.models import *
 from app.core.security import *
 from app.utils import *
@@ -11,9 +11,8 @@ from app.core import config
 import openai
 import json
 from pydub import AudioSegment
-from gtts import gTTS
-import pyttsx3
 import googletrans
+from requests.auth import HTTPBasicAuth
 
 router = APIRouter()
 
@@ -498,7 +497,7 @@ async def add_verify_account(
 
     else:
         access_token = checkToken(db, token)
-
+        
         if access_token == False:
             return {
                 "status": -1,
@@ -530,13 +529,69 @@ async def add_verify_account(
                     verify_status=0,
                 )
                 db.add(add_clain)
-                db.commit()
-                return {
+                # db.commit()
+                # Idenfy Verify
+                username=config.idenfy_api_key
+                password=config.idenfy_secret_key
+
+                url = 'https://ivs.idenfy.com/api/v2/token'
+
+                data={'clientId':get_token_details.user.user_ref_id,
+                      "callbackUrl":"https://devapi.rawcaster.com/rawcaster/webhook_account_verify"}
+
+                response = requests.post(url, json=data, auth=HTTPBasicAuth(username, password))
+                
+                # Check the response
+                if response.status_code in [200, 201]:
+                    verifyResponse=json.loads(response.content)
+                    id_verify_token=verifyResponse['authToken']
+                    # Update Idenfy Token
+                    getUser=db.query(User).filter(User.id == login_user_id,User.status == 1).first()
+                    if getUser :
+                        getUser.verification_token=id_verify_token
+                        # db.commit()
+                    
+                    return {
                     "status": 1,
                     "msg": "We will contact you to validate your account verify. Please contact us at info@rawcaster.com if you have any questions.",
-                }
+                    # Idenfy Verification
+                    "verification_token":id_verify_token,
+                    "redirect_url":f"https://ivs.idenfy.com/api/v2/redirect?authToken={id_verify_token}"
+                    }
+                
+                return {"status":0,"msg":"Failed"}                   
+
             else:
                 return {"status": 0, "msg": "you are already requested to verification"}
+
+
+
+
+# import requests
+@router.post("/webhook_account_verify")
+async def webhookAccountVerify(*,db:Session=Depends(deps.get_db),request: Request):
+    api= str(request.url)
+    call_method=request.method
+    if call_method=="GET":
+        data=request.query_params
+    else:
+        data=await request.form()
+    
+    print(data)
+
+    # return params
+    # if verify_token:
+    #     getVerifyAccount=db.query(VerifyAccounts)\
+    #         .join(User,User.id == VerifyAccounts.user_id,isouter=True)\
+    #         .filter(User.verification_token == verify_token).first()
+    #     if getVerifyAccount:
+    #         getVerifyAccount.verify_status = 1
+    #         getVerifyAccount.verify_date = datetime.utcnow()
+    #         db.commit()
+    #         return {"status":1,"msg":"Success"}
+    # else:
+    #     return {"status":0,"msg":"Failed"}
+    
 
 
 # 91 AI Chat
