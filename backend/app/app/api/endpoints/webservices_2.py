@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Form, File, UploadFile
+from fastapi import APIRouter, Depends, Form, File, UploadFile,Request
 from app.models import *
 from app.core.security import *
 from app.utils import *
@@ -536,7 +536,8 @@ async def add_verify_account(
 
                 url = 'https://ivs.idenfy.com/api/v2/token'
 
-                data={'clientId':get_token_details.user.user_ref_id}
+                data={'clientId':get_token_details.user.user_ref_id,
+                      "callbackUrl":"https://devapi.rawcaster.com/rawcaster/webhook_account_verify"}
 
                 response = requests.post(url, json=data, auth=HTTPBasicAuth(username, password))
                 
@@ -556,38 +557,41 @@ async def add_verify_account(
                     # Idenfy Verification
                     "verification_token":id_verify_token,
                     "redirect_url":f"https://ivs.idenfy.com/api/v2/redirect?authToken={id_verify_token}"
-                }                   
+                    }
+                
+                return {"status":0,"msg":"Failed"}                   
 
             else:
                 return {"status": 0, "msg": "you are already requested to verification"}
 
 
-@router.post("/verifyyy")
-async def verifyyy(
-    db: Session = Depends(deps.get_db),
-    token: str = Form(None)):
 
-    # Replace these variables with your actual username and password
-    username = 'bpCwxSYDCuo'
-    password = 's7eXCWA0dOEqLuiaeqvu'
 
-    # URL you want to make a request to
-    url = 'https://ivs.idenfy.com/api/v2/token'
-    data={'clientId':"8903257051"}
-
-    # Making a GET request with Basic Auth
-    response = requests.post(url, json={'clientId':"1212"}, auth=HTTPBasicAuth(username, password))
-    print(response.content)
-    # Check the response
-    if response.status_code == 201:
-        verifyResponse=json.loads(response.content)
-        id_verify_token=verifyResponse['authToken']
-    
-       
+# import requests
+@router.post("/webhook_account_verify")
+async def webhookAccountVerify(*,db:Session=Depends(deps.get_db),request: Request):
+    api= str(request.url)
+    call_method=request.method
+    if call_method=="GET":
+        data=request.query_params
     else:
-        # If the request was not successful
-        print("Request failed")
-        print(f"Status code: {response.status_code}")
+        data=await request.form()
+    
+    print(data)
+
+    # return params
+    # if verify_token:
+    #     getVerifyAccount=db.query(VerifyAccounts)\
+    #         .join(User,User.id == VerifyAccounts.user_id,isouter=True)\
+    #         .filter(User.verification_token == verify_token).first()
+    #     if getVerifyAccount:
+    #         getVerifyAccount.verify_status = 1
+    #         getVerifyAccount.verify_date = datetime.utcnow()
+    #         db.commit()
+    #         return {"status":1,"msg":"Success"}
+    # else:
+    #     return {"status":0,"msg":"Failed"}
+    
 
 
 # 91 AI Chat
