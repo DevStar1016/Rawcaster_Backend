@@ -47,7 +47,7 @@ base_upload_folder = "local_uploads"
 # Dev DB Connection Details
 data_base =credentials['db_connection']
 
-# Local
+# Local DB Connection Details
 #data_base = "mysql+pymysql://maemysqluser:%s@cbe.themaestro.in/rawcaster" % quote("MaeNewMysql2@2@")
 
 api_doc_path = "/docs"
