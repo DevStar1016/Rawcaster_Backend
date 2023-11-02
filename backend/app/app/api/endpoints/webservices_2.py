@@ -536,8 +536,8 @@ async def add_verify_account(
 
                 url = 'https://ivs.idenfy.com/api/v2/token'
 
-                data={'clientId':get_token_details.user.user_ref_id,
-                      "callbackUrl":"https://devapi.rawcaster.com/rawcaster/webhook_account_verify"}
+                data={'clientId':get_token_details.user.user_ref_id}
+                # "callbackUrl":"https://devapi.rawcaster.com/rawcaster/webhook_account_verify"
 
                 response = requests.post(url, json=data, auth=HTTPBasicAuth(username, password))
                 print(response.status_code)

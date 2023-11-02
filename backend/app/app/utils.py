@@ -1840,7 +1840,8 @@ def defaultimage(flag):
         # url = "https://rawcaster.s3.us-west-2.amazonaws.com/profileimage/Image_94081682594499.png"
 
     elif flag == "cover_img":
-        url = "https://rawcaster.s3.us-west-2.amazonaws.com/profileimage/image_1688517947.png"
+        url = "https://rawcaster.s3.us-west-2.amazonaws.com/nuggets/video_31531698906317.png"
+        # url = "https://rawcaster.s3.us-west-2.amazonaws.com/profileimage/image_1688517947.png"
 
     elif flag == "group_icon":
         url = "https://rawcaster.s3.us-west-2.amazonaws.com/chat/attachment_91971683678695.jpg"
