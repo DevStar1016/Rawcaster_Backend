@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Form, File, UploadFile
+from fastapi import APIRouter, Depends, Form, File, UploadFile,Request
 from app.models import *
 from app.core.security import *
 from app.utils import *
@@ -11,9 +11,8 @@ from app.core import config
 import openai
 import json
 from pydub import AudioSegment
-from gtts import gTTS
-import pyttsx3
 import googletrans
+from requests.auth import HTTPBasicAuth
 
 router = APIRouter()
 
@@ -240,7 +239,11 @@ async def listunclaimaccount(
     location: str = Form(None),
     gender: str = Form(None),
     age: str = Form(None),
+    page_number: str = Form(default=1),
+    default_page_size:str=Form(default=50)
+
 ):
+
     if token == None or token.strip() == "":
         return {
             "status": -1,
@@ -248,6 +251,12 @@ async def listunclaimaccount(
         }
     if gender and not gender.isnumeric():
         return {"status": 0, "msg": "Invalid Gender type"}
+    
+    elif not str(page_number).isnumeric():
+        return {"status": 0, "msg": "Invalid page Number"}
+    
+    elif not str(default_page_size).isnumeric():
+        return {"status": 0, "msg": "Invalid Size Number"}
 
     else:
         access_token = checkToken(db, token)
@@ -262,6 +271,9 @@ async def listunclaimaccount(
                 db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
             )
             login_user_id = get_token_details.user_id if get_token_details else None
+            
+            current_page_no = int(page_number)
+            default_page_size=int(default_page_size)
 
             get_unclaimed_account = (
                 db.query(User)
@@ -290,45 +302,74 @@ async def listunclaimaccount(
                     )
 
             unclaimed_accounts = []
-            get_unclaimed_account = get_unclaimed_account.all()
 
-            for unclaim in get_unclaimed_account:
-                check_claim_account = (
-                    db.query(ClaimAccounts)
-                    .filter(
-                        ClaimAccounts.user_id == login_user_id,
-                        ClaimAccounts.influencer_id == unclaim.id,
+            # Omit blocked users nuggets
+            requested_by = None
+            request_status = 3  # Rejected
+            response_type = 1
+
+            get_all_blocked_users = get_friend_requests(
+                db, login_user_id, requested_by, request_status, response_type
+            )
+            
+            blocked_users = get_all_blocked_users["blocked"]
+
+            get_unclaimed_account = get_unclaimed_account.filter(User.id.not_in(blocked_users))
+            unclaimAccountsCount=get_unclaimed_account.count()
+            
+            if unclaimAccountsCount < 1:
+                return {"status": 0, "msg": "No data found"}
+            
+            else:
+                
+                limit, offset, total_pages = get_pagination(
+                    unclaimAccountsCount, current_page_no, default_page_size
+                )
+
+                get_unclaimed_account = get_unclaimed_account.limit(limit).offset(offset).all()
+                for unclaim in get_unclaimed_account:
+                    check_claim_account = (
+                        db.query(ClaimAccounts)
+                        .filter(
+                            ClaimAccounts.user_id == login_user_id,
+                            ClaimAccounts.influencer_id == unclaim.id,
+                        ).order_by(ClaimAccounts.id.desc())
+                        .first()
                     )
-                    .first()
-                )
 
-                unclaimed_accounts.append(
-                    {
-                        "user_id": unclaim.id,
-                        "email_id": unclaim.email_id if unclaim.email_id else "",
-                        "display_name": unclaim.display_name
-                        if unclaim.display_name
-                        else "",
-                        "first_name": unclaim.first_name if unclaim.first_name else "",
-                        "last_name": unclaim.last_name if unclaim.last_name else "",
-                        "dob": unclaim.dob if unclaim.dob else "",
-                        "mobile_no": unclaim.mobile_no if unclaim.mobile_no else "",
-                        "location": unclaim.geo_location
-                        if unclaim.geo_location
-                        else "",
-                        "profile_img": unclaim.profile_img
-                        if unclaim.profile_img
-                        else "",
-                        "unclaimed_status": 1 if check_claim_account else 0,
+                    unclaimed_accounts.append(
+                        {
+                            "user_id": unclaim.id,
+                            "email_id": unclaim.email_id if unclaim.email_id else "",
+                            "display_name": unclaim.display_name
+                            if unclaim.display_name
+                            else "",
+                            "first_name": unclaim.first_name if unclaim.first_name else "",
+                            "last_name": unclaim.last_name if unclaim.last_name else "",
+                            "dob": unclaim.dob if unclaim.dob else "",
+                            "mobile_no": unclaim.mobile_no if unclaim.mobile_no else "",
+                            "location": unclaim.geo_location
+                            if unclaim.geo_location
+                            else "",
+                            "profile_img": unclaim.profile_img
+                            if unclaim.profile_img
+                            else "",
+                            "unclaimed_status": ((2 if check_claim_account.admin_status == 0 
+                                                  else 0 if check_claim_account.admin_status == 1 
+                                                  else 1) if check_claim_account else 1),
+
+                            # "claim_pending":(1 if check_claim_account.admin_status == 0 else 0) if check_claim_account != None else 0
+                        }
+                    )
+                return {
+                        "status": 1,
+                        "msg": "Success",
+                        "total_count":unclaimAccountsCount,
+                        "total_pages": total_pages,
+                        "current_page_no": current_page_no,
+                        "unclaim_accounts": unclaimed_accounts,
                     }
-                )
-
-            return {
-                "status": 1,
-                "msg": "Success",
-                "unclaim_accounts": unclaimed_accounts,
-            }
-
+               
 
 # 87  Influencer Chat
 @router.post("/influencerchat")
@@ -456,7 +497,7 @@ async def add_verify_account(
 
     else:
         access_token = checkToken(db, token)
-
+        
         if access_token == False:
             return {
                 "status": -1,
@@ -474,6 +515,7 @@ async def add_verify_account(
                 .first()
             )
             if not get_accounts:
+
                 add_clain = VerifyAccounts(
                     user_id=login_user_id,
                     first_name=first_name.strip(),
@@ -485,16 +527,86 @@ async def add_verify_account(
                     verify_date=datetime.utcnow(),
                     created_at=datetime.utcnow(),
                     status=1,
-                    verify_status=0,
+                    verify_status=0, 
                 )
                 db.add(add_clain)
                 db.commit()
-                return {
+                db.refresh(add_clain)
+                
+                # Idenfy Verify
+                username=config.idenfy_api_key
+                password=config.idenfy_secret_key
+
+                url = 'https://ivs.idenfy.com/api/v2/token'
+
+                data={'clientId':get_token_details.user.user_ref_id}
+                # "callbackUrl":"https://devapi.rawcaster.com/rawcaster/webhook_account_verify"
+
+                response = requests.post(url, json=data, auth=HTTPBasicAuth(username, password))
+               
+                # Check the response
+                verifyResponse=json.loads(response.content)
+
+                if response.status_code in [200, 201]:
+                    id_verify_token=verifyResponse['authToken']
+                    
+                    # Update Idenfy Token
+                    add_clain.verification_token= id_verify_token
+                    add_clain.verification_response = verifyResponse
+                    db.commit()
+                    
+                    return {
                     "status": 1,
                     "msg": "We will contact you to validate your account verify. Please contact us at info@rawcaster.com if you have any questions.",
-                }
+                    # Idenfy Verification
+                    "verification_token":id_verify_token,
+                    "redirect_url":f"https://ivs.idenfy.com/api/v2/redirect?authToken={id_verify_token}"
+                    }
+                else:
+                    return {"status":0,"msg":verifyResponse['message']}                   
+
             else:
                 return {"status": 0, "msg": "you are already requested to verification"}
+
+
+
+
+#Add Webhook call history for Account Verifcation
+@router.post("/webhook_account_verify")
+async def webhookAccountVerify(*,db:Session=Depends(deps.get_db),request: Request):
+    api= str(request.url)
+    call_method=request.method
+    if call_method=="GET":
+        data=request.query_params
+    else:
+        data=await request.form()
+    
+    # Add Webhook Call History
+    addWebHookHistory=AccountVerifyWebhook(request=data,
+                                           created_at=datetime.utcnow(),
+                                           status =1)
+    db.add(addWebHookHistory)
+    db.commit()
+    db.refresh(addWebHookHistory) 
+
+    return {'status':1,'msg':"Success"}
+    
+    
+    
+
+    # return params
+    # if verify_token:
+    #     getVerifyAccount=db.query(VerifyAccounts)\
+    #         .join(User,User.id == VerifyAccounts.user_id,isouter=True)\
+    #         .filter(User.verification_token == verify_token).first()
+    #     if getVerifyAccount:
+    #         getVerifyAccount.verify_status = 1
+    #         getVerifyAccount.verify_date = datetime.utcnow()
+    #         db.commit()
+    #         return {"status":1,"msg":"Success"}
+    # else:
+    #     return {"status":0,"msg":"Failed"}
+    
 
 
 # 91 AI Chat
@@ -1236,7 +1348,7 @@ def nuggetcontentaudio(
                         if get_user_readout_language and get_user_readout_language.audio_support:
                             text=translated.text
                             target_language=target_language
-                            
+                            print(target_language,accent)
                             audioResponse=textTOAudio(text,target_language,accent)
                             return audioResponse
                         else:
@@ -1297,24 +1409,24 @@ def nuggetcontentaudio(
 
 
 
-@router.post("/update_poll_count")
-def update_poll_count(
-    db: Session = Depends(deps.get_db)
-):
-    getNuggets=db.query(Nuggets).join(NuggetsMaster,NuggetsMaster.id == Nuggets.nuggets_id).join(NuggetPollOption,NuggetPollOption.nuggets_master_id == Nuggets.nuggets_id,isouter=True).filter(NuggetsMaster.poll_duration != None).all()
+# @router.post("/update_poll_count")
+# def update_poll_count(
+#     db: Session = Depends(deps.get_db)
+# ):
+#     getNuggets=db.query(Nuggets).join(NuggetsMaster,NuggetsMaster.id == Nuggets.nuggets_id).join(NuggetPollOption,NuggetPollOption.nuggets_master_id == Nuggets.nuggets_id,isouter=True).filter(NuggetsMaster.poll_duration != None).all()
     
-    for nugget in getNuggets:
+#     for nugget in getNuggets:
 
-        if nugget.nuggets_master.poll_duration:
+#         if nugget.nuggets_master.poll_duration:
             
-            getPollCount=db.query(NuggetPollOption).filter(NuggetPollOption.nuggets_master_id == nugget.nuggets_id).all()
-            poll_vote=0
+#             getPollCount=db.query(NuggetPollOption).filter(NuggetPollOption.nuggets_master_id == nugget.nuggets_id).all()
+#             poll_vote=0
             
-            for poll in getPollCount:
-                poll_vote += poll.votes if poll.votes else 0
+#             for poll in getPollCount:
+#                 poll_vote += poll.votes if poll.votes else 0
             
-            nugget.total_poll_count = poll_vote
-            db.commit()
+#             nugget.total_poll_count = poll_vote
+#             db.commit()
 
 
-    return "Success"
+#     return "Success"

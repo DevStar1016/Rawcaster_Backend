@@ -44,11 +44,8 @@ base_domain_url = ""
 base_url_segment = "/rawcaster"
 base_upload_folder = "local_uploads"
 
-# Dev
+# Dev DB Connection Details
 data_base =credentials['db_connection']
-
-# Local
-# data_base = "mysql+pymysql://maemysqluser:%s@192.168.1.109/rawcaster" % quote("MaeNewMysql2@2@")
 
 api_doc_path = "/docs"
 
@@ -61,6 +58,11 @@ sms_secret_access_key=credentials['sms_secret_access_key']
 # Email Credentials
 email_username=credentials['email_username']
 email_password=credentials['email_password']
+
+# ID Verification 
+idenfy_api_key="bpCwxSYDCuo"
+idenfy_secret_key='s7eXCWA0dOEqLuiaeqvu'
+
 
 class Settings(BaseSettings):
     API_V1_STR: str = base_url_segment

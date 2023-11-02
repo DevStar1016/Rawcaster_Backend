@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Date
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Date,TEXT
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.mysql import TINYINT, LONGTEXT
 from app.db.base_class import Base
@@ -15,8 +15,14 @@ class VerifyAccounts(Base):
     dob = Column(Date)
     location = Column(String(100))
     verify_date = Column(DateTime)
+    verification_token=Column(String(255),comment="authtoken for Account verify")
+    verification_response=Column(TEXT)
     verify_status = Column(TINYINT, default=0, comment="0-pending,1- verified")
     created_at = Column(DateTime)
     status = Column(TINYINT, comment="1-Active,0-Inactive")
 
     user = relationship("User", back_populates="verify_accounts")
+
+
+    # ALTER TABLE `verify_accounts` ADD `verification_token` VARCHAR(255) NULL COMMENT 'authtoken for Account verify' AFTER `verify_status`, ADD `verification_response` TEXT NULL AFTER `verification_token`; 
+    # ALTER TABLE `user` DROP `verification_token`;

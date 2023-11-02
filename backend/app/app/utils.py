@@ -28,7 +28,7 @@ from api.endpoints import chime_chat
 from profanityfilter import ProfanityFilter
 from gtts import gTTS
 from urllib.parse import urlparse
-
+from fastapi import Request
 
 access_key = config.access_key
 access_secret = config.access_secret
@@ -1170,12 +1170,12 @@ def nuggetNotifcationEmail(db, nugget_id):
 
 
 def get_ip():
+    # response=request.client.host
     response = requests.get("https://api64.ipify.org?format=json").json()
-    return response["ip"]
+    return response
 
 
 def FindLocationbyIP(userIP):
-    userIP = get_ip()
     response = requests.get(f"https://ipwhois.app/json/{userIP}/").json()
 
     if response["success"] == True:
@@ -1840,7 +1840,8 @@ def defaultimage(flag):
         # url = "https://rawcaster.s3.us-west-2.amazonaws.com/profileimage/Image_94081682594499.png"
 
     elif flag == "cover_img":
-        url = "https://rawcaster.s3.us-west-2.amazonaws.com/profileimage/image_1688517947.png"
+        url = "https://rawcaster.s3.us-west-2.amazonaws.com/nuggets/video_31531698906317.png"
+        # url = "https://rawcaster.s3.us-west-2.amazonaws.com/profileimage/image_1688517947.png"
 
     elif flag == "group_icon":
         url = "https://rawcaster.s3.us-west-2.amazonaws.com/chat/attachment_91971683678695.jpg"
@@ -2033,7 +2034,7 @@ async def SendOtp(db, user_id, signup_type):
             
     elif int(signup_type) == 2:
         mobile_no = f"{get_user.country_code}{get_user.mobile_no}"
-        message = f"{otp} is your One Time Password. Do not share this OTP with anyone"
+        message = f"{otp} is your OTP for Rawcaster. PLEASE DO NOT SHARE THE OTP WITH ANYONE. 0FfsYZmYTkk"
         try:
             send_sms = sendSMS(mobile_no, message)
         except Exception as e:
@@ -2177,7 +2178,8 @@ async def logins(
     login_from,
     voip_token,
     app_type,
-    social
+    social,
+    ip=None
 ):
     username = username.strip() if username else None
 
@@ -2216,7 +2218,7 @@ async def logins(
 
         salt_token = token_text + str(user_id) + str(characters) + str(dt)
 
-        userIP = get_ip()
+        userIP = ip
 
         add_token = ApiTokens(
             user_id=user_id,
@@ -2252,7 +2254,7 @@ async def logins(
         if get_user.status == 2:                            #  2- Suspended
             return {"status": 0, "msg": "Your account is currently blocked!"}
         else:
-            userIP = get_ip()
+            userIP = ip
             add_failure_login = LoginFailureLog(
                 user_id=get_user.id,
                 ip=userIP,
@@ -2347,7 +2349,8 @@ async def logins(
             db.commit()
 
         salt_token = token_text
-        userIP = get_ip()
+        
+        userIP = ip
 
         add_token = ApiTokens(
             user_id=user_id,

@@ -32,9 +32,12 @@ access_secret = config.access_secret
 bucket_name = config.bucket_name
 
 
+
 # 1 Signup User
 @router.post("/signup")
 async def signup(
+    *,
+    request:Request,
     db: Session = Depends(deps.get_db),
     signup_type: str = Form(1, description="1-Email,2-Phone Number"),
     first_name: str = Form(None, max_length=100),
@@ -157,7 +160,7 @@ async def signup(
                     }
 
                     # token = jwt.encode(paylod, st.SECRET_KEY)
-                    userIP = get_ip()
+                    userIP = request.client.host
 
                     add_token = ApiTokens(
                         user_id=user_id,
@@ -202,7 +205,7 @@ async def signup(
 
             else:
                 # New User Register
-                userIP = get_ip()
+                userIP = request.client.host
                 location = geo_location
                 if geo_location == None or geo_location == "" or len(geo_location) < 4:
                     location_details = FindLocationbyIP(userIP)
@@ -277,6 +280,7 @@ async def signup(
                     # Set Default user settings
                     user_settings_model = UserSettings(
                         user_id=add_user.id,
+                        opt_in=0 if signup_type == 1 else 1,
                         online_status=1,
                         friend_request="000",
                         nuggets="000",
@@ -477,7 +481,7 @@ async def signup(
                     salt = st.SALT_KEY
                     exptime = int(dt) + int(dt)
 
-                    userIP = get_ip()
+                    userIP = request.client.host
 
                     add_token = ApiTokens(
                         user_id=user_id,
@@ -517,12 +521,15 @@ async def signup(
 # 2 - Signup Verification by OTP
 @router.post("/signupverify")
 async def signupverify(
+    *,
+    request:Request,
     db: Session = Depends(deps.get_db),
     auth_code: str = Form(None, description="SALT + otp_ref_id"),
     otp_ref_id: str = Form(None, description="From service no. 1"),
     otp: str = Form(None),
     otp_flag: str = Form(None),
     alt_token_id: str = Form(None),
+    opt_in:str=Form(None)
 ):
     if auth_code == None or auth_code.strip() == "":
         return {"status": 0, "msg": "Auth Code is missing"}
@@ -530,12 +537,16 @@ async def signupverify(
         return {"status": 0, "msg": "Reference id is missing"}
     elif otp == None:
         return {"status": 0, "msg": "OTP is missing"}
+    
+    elif opt_in and not opt_in.isnumeric():
+        return {"status":0,"msg":"Invalid opt type"}
 
     else:
         otp_ref_id = otp_ref_id.strip()
         otp_flag = "email" if not otp_flag else otp_flag
         otp = otp
         auth_code = auth_code.strip()
+        opt_in=opt_in if opt_in else None
 
         auth_text = otp_ref_id
 
@@ -554,12 +565,23 @@ async def signupverify(
                 db.commit()
 
                 user_update = 0
+                # Update optin when mobile number verify in user setting
+                update_user_setting = (
+                    db.query(UserSettings)
+                    .filter(UserSettings.user_id == get_otp_log.user_id)
+                )
+                if update_user_setting and opt_in:
+                    update_user_setting.opt_in=opt_in
+                    db.commit()
+
+
                 if otp_flag == "sms":
                     update_user = (
                         db.query(User)
                         .filter(User.id == get_otp_log.user_id)
                         .update({"is_mobile_no_verified": 1, "status": 1})
                     )
+
                     user_update = get_otp_log.user_id
                     db.commit()
                 else:
@@ -619,7 +641,9 @@ async def signupverify(
                                     get_token.device_type,
                                     get_token.voip_token,
                                     get_token.app_type,
-                                    0
+                                    0,
+                                    request.client.host
+
                                 )
                                 return generate_access_token
 
@@ -726,7 +750,7 @@ async def resendotp(
 
             if otp_flag == "sms":
                 to = f"{get_otp_log.user.country_code if get_otp_log.user.country_code else ''}{get_otp_log.user.mobile_no}"
-                sms = f"{otp} is your OTP for Rawcaster. PLEASE DO NOT SHARE THE OTP WITH ANYONE."
+                sms = f"{otp} is your OTP from Rawcaster. PLEASE DO NOT SHARE THE OTP WITH ANYONE. 0FfsYZmYTkk"
                 if to:
                     try:
                         send_sms = sendSMS(to, sms)
@@ -859,6 +883,8 @@ async def resendotp(
 # 4 - Login
 @router.post("/login")
 async def login(
+    *,
+    request:Request,
     db: Session = Depends(deps.get_db),
     auth_code: str = Form(None, description="SALT + username"),
     username: str = Form(None, description="Email ID"),
@@ -895,7 +921,8 @@ async def login(
 
         if username.strip() != "" and password.strip() != "":
             password = hashlib.sha1(password.encode("utf-8")).hexdigest()
-
+            user_ip=request.client.host
+           
             generate_access_token = await logins(
                 db,
                 username,
@@ -906,7 +933,8 @@ async def login(
                 login_from,
                 voip_token,
                 app_type,
-                0
+                0,
+                user_ip
             )
             return generate_access_token
 
@@ -1007,7 +1035,7 @@ async def forgotpassword(
                 }
 
             elif get_user.status == 4:  # Account deleted
-                return {"status": 0, "msg": "Your account has been removed"}
+                return {"status": 0, "msg": "Your account has been removed"} 
 
             elif get_user.status == 3:  # Admin Blocked user!
                 return {"status": 0, "msg": "Your account is currently blocked!"}
@@ -1059,7 +1087,7 @@ async def forgotpassword(
                         if get_user.mobile_no
                         else None
                     )
-                    sms = f"{otp} is your OTP for Rawcaster. PLEASE DO NOT SHARE THE OTP WITH ANYONE."
+                    sms = f"{otp} is your OTP from Rawcaster. PLEASE DO NOT SHARE THE OTP WITH ANYONE. 0FfsYZmYTkk"
                     msg = "A one time passcode (OTP) has been sent to the phone number you provided"
                     # Send SMS
                     if to:
@@ -1105,8 +1133,9 @@ async def verifyotpandresetpassword(
     device_id: str = Form(None),
     push_id: str = Form(None, description="FCM  or APNS"),
     device_type: str = Form(None),
-    auth_code: str = Form(None, description="SALT + otp_ref_id"),
+    auth_code: str = Form(None, description="SALT + otp_ref_id")
 ):
+    
     if auth_code == None or auth_code.strip() == "":
         return {"status": 0, "msg": "Auth Code is missing"}
     elif otp_ref_id == None:
@@ -1168,12 +1197,12 @@ async def verifyotpandresetpassword(
                     db.commit()
                     return {
                         "status": 1,
-                        "msg": "Your password has been updated successfully",
+                        "msg": "Your password has been updated successfully.",
                     }
                 else:
                     return {
                         "status": 0,
-                        "msg": "Password update failed. Please try again",
+                        "msg": "Password update failed. Please try again.",
                     }
 
 
@@ -1461,10 +1490,12 @@ def user_profile(db, id):
         )
         if settings:
             user_details.update(
-                {"language": settings.language.name if settings.language_id else ""}
+                {"language": settings.language.name if settings.language_id else "",
+                 "opt_in":settings.opt_in if settings.opt_in else 0}
             )
         else:
-            user_details.update({"language": "English"})
+            user_details.update({"language": "English",
+                                 "opt_in":0})
 
         two_type_verification = OTPverificationtype(db, get_user)
 
@@ -1742,6 +1773,7 @@ async def updatemyprofile(
                     .filter(
                         User.email_id == email_id,
                         User.email_id != None,
+                        User.email_id != "",
                         User.id != login_user_id,
                     )
                     .count()
@@ -1978,7 +2010,7 @@ async def searchrawcasterusers(
                     )
                     # Apply Pagination
                     get_user = (
-                        get_user.order_by(User.first_name.asc())
+                        get_user.order_by(User.display_name.asc())
                         .limit(limit)
                         .offset(offset)
                         .all()
@@ -5276,20 +5308,18 @@ async def listnuggets(
                     if follow_user:
                         for group_list in follow_user:
                             my_followers.append(group_list.following_userid)
-                    
+                 
                     get_nuggets = get_nuggets.filter(
-                        or_(
-                            Nuggets.user_id != login_user_id,
-                            and_(Nuggets.user_id.in_(my_followers),Nuggets.share_type != 2)
-                        )
+                            Nuggets.user_id.in_(my_followers),Nuggets.share_type != 2
                     )
-                    
+             
                 elif user_public_nugget_display_setting == 0:  # Rawcaster
                     get_nuggets = get_nuggets.filter(
                         or_(Nuggets.user_id == login_user_id, Nuggets.user_id == raw_id)
                     )
                     
                 elif user_public_nugget_display_setting == 1:  # Public
+                    
                     get_nuggets = get_nuggets.filter(
                         or_(
                             Nuggets.user_id == login_user_id,
@@ -5420,11 +5450,11 @@ async def listnuggets(
                     if follow_user:
                         for group_list in follow_user:
                             my_followers.append(group_list.following_userid)
-
+                    
                     get_nuggets = get_nuggets.filter(
                         or_(
                             Nuggets.user_id == login_user_id,
-                            and_(Nuggets.user_id.in_(my_followers)),
+                            Nuggets.user_id.in_(my_followers),
                             Nuggets.share_type != 2,
                         )
                     )  
@@ -5448,7 +5478,7 @@ async def listnuggets(
             if blocked_users:
                 get_nuggets = get_nuggets.filter(Nuggets.user_id.not_in(blocked_users))
 
-            get_nuggets = get_nuggets.order_by(Nuggets.created_date.desc())
+            get_nuggets = get_nuggets.order_by(Nuggets.id.desc())
 
             get_nuggets_count = get_nuggets.count()
             
@@ -7487,7 +7517,7 @@ async def addevent(
     db: Session = Depends(deps.get_db),
     token: str = Form(None),
     event_title: str = Form(None),
-    event_type: str = Form(None, description="1-Event,2-Talkshow,3-Live"),
+    event_type: str = Form(None, description="1-Publie,2-private"),
     event_start_date: Any = Form(None),
     event_start_time: Any = Form(None),
     event_message: str = Form(None),
@@ -7563,7 +7593,7 @@ async def addevent(
         event_duration = datetime.datetime.strptime(event_duration, "%H:%M").time()
         min_duration = datetime.datetime.strptime("10:00", "%H:%M").time()
         if event_duration > min_duration:
-            return {"status": 0, "msg": "Event duration invalid"}
+            return {"status": 0, "msg": "Event duration Max Allowed hours is 10"}
 
         event_participants = int(event_participants)
         if event_participants < 2:
@@ -7622,15 +7652,7 @@ async def addevent(
                     db.query(UserSettings).filter_by(user_id=login_user_id).first()
                 )
 
-                flag = (
-                    "event_banner"
-                    if event_type == 1
-                    else "talkshow"
-                    if event_type == 2
-                    else "live"
-                    if event_type == 3
-                    else None
-                )
+                flag = "event_banner"
 
                 cover_img = defaultimage(flag)
                 if setting:
@@ -8044,7 +8066,6 @@ async def listevents(
                 )
 
             current_page_no = int(page_number)
-            event_type = event_type if event_type else 0
             requested_by = None
             request_status = 1
             response_type = 1
@@ -8725,9 +8746,10 @@ async def editevent(
     elif event_duration and isTimeFormat(event_duration) == False:
         return {"status": 0, "msg": "Invalid Time format"}
     else:
-        minimum_duration_time = time.strptime("00:10", "%H:%M")
-        if minimum_duration_time > time.strptime(event_duration, "%H:%M"):
-            return {"status": 0, "msg": "Event duration invalid"}
+        event_duration = datetime.datetime.strptime(event_duration, "%H:%M").time()
+        min_duration = datetime.datetime.strptime("10:00", "%H:%M").time()
+        if event_duration > min_duration:
+            return {"status": 0, "msg": "Event duration Max Allowed hours is 10"}
 
         event_type = int(event_type) if event_type else None
         access_token = checkToken(db, token)
@@ -10104,10 +10126,10 @@ async def getothersprofile(
                             .filter(
                                 ClaimAccounts.user_id == login_user_id,
                                 ClaimAccounts.influencer_id == user_id,
-                                ClaimAccounts.admin_status != 2
                             ).order_by(ClaimAccounts.id.desc())
                             .first()
                         )
+                        
                         # check Account Verified
                         account_verify_status = (
                             db.query(VerifyAccounts)
@@ -10204,9 +10226,9 @@ async def getothersprofile(
                             "friend_request_id": get_friend_request.id
                             if get_friend_request
                             else None,
-                            "friend_status": get_friend_request.request_status
+                            "friend_status": ((get_friend_request.request_status
                             if get_friend_request
-                            else None,
+                            else None) if not get_unclaimed_account else 4),
                             "is_friend_request_sender": 1
                             if get_friend_request
                             and get_friend_request.sender_id == get_user.id
@@ -10235,9 +10257,10 @@ async def getothersprofile(
                             )
                             if get_user.user_settings
                             else "",
-                            "unclaimed_status": (1 if check_claim_account else 0)
-                            if get_unclaimed_account
-                            else 1,
+                            "unclaimed_status": ((2 if check_claim_account.admin_status == 0 
+                                        else 0 if check_claim_account.admin_status == 1 
+                                        else 1) if check_claim_account else 1) 
+                                        if get_unclaimed_account else 0,
                             "account_verify_type": (
                                 2 if account_verify_status.verify_status == 1 else 1
                             )
@@ -10293,9 +10316,9 @@ async def listallblockedusers(
                         .join(receiver, MyFriends.receiver_id == receiver.id)
 
             # Apply the WHERE conditions
-            get_friends = get_friends.filter(MyFriends.status == 1, MyFriends.request_status == 3)
+            get_friends = get_friends.filter(MyFriends.status == 1, MyFriends.request_status == 3,
+                                             sender.status == 1,receiver.status == 1)
             get_friends = get_friends.filter(MyFriends.sender_id == login_user_id)
-
             # Check if search key is provided in the POST request
             if search_key:
                 search_key= '%' + search_key + '%'
@@ -10565,7 +10588,7 @@ async def getusersettings(db: Session = Depends(deps.get_db), token: str = Form(
                 .first()
             )
             if not get_user_settings:
-                add_settings = UserSettings(
+                get_user_settings = UserSettings(
                     user_id=login_user_id,
                     online_status=1,
                     friend_request="100",
@@ -10575,14 +10598,18 @@ async def getusersettings(db: Session = Depends(deps.get_db), token: str = Form(
                     read_out_language_id=27,
                     read_out_accent_id=1
                 )
-                db.add(add_settings)
+                db.add(get_user_settings)
                 db.commit()
-            result_list = {}
+                db.refresh(get_user_settings)
 
+            result_list = {}
+            
             user_status_list = (
-                db.query(UserStatusMaster).filter_by(id=get_user_settings.id).first()
+                db.query(UserStatusMaster).filter_by(id=get_user_settings.user.user_status_id).first()
             )
+            
             if user_status_list:
+            
                 result_list.update(
                     {
                         "referral_needed": user_status_list.referral_needed,
@@ -10831,7 +10858,8 @@ async def getusersettings(db: Session = Depends(deps.get_db), token: str = Form(
                     else None,
                     "read_out_accent_name":get_user_settings.read_out_accent.accent 
                     if get_user_settings.read_out_accent_id 
-                    else ""
+                    else "",
+                    "opt_in":1 if get_user_settings.opt_in else 0
                     
                 }
             )
@@ -10906,7 +10934,8 @@ async def updateusersettings(
     groupid: str = Form(None, description="example [1,2,3]"),
     group_update_type: str = Form(None),
     read_out_language_id: str = Form(None),
-    read_out_accent_id:str=Form(None)
+    read_out_accent_id:str=Form(None),
+    opt_in:str=Form(None)
 ):
     if token == None or token.strip() == "":
         return {
@@ -10922,6 +10951,9 @@ async def updateusersettings(
         return {"status": 0, "msg": "Invalid read out language"}
     elif read_out_accent_id and not read_out_accent_id.isnumeric():
         return {"status": 0, "msg": "Invalid read out accent"}
+    elif opt_in and not opt_in.isnumeric():
+        return {"status": 0, "msg": "Invalid opt_in"}
+
 
     else:
         access_token = checkToken(db, token.strip())
@@ -11511,6 +11543,7 @@ async def updateusersettings(
                     settings.read_out_accent_id=(read_out_accent_id
                                     if read_out_accent_id 
                                     else None)
+                    settings.opt_in=opt_in if opt_in else settings.opt_in
 
                     db.commit()
                     if groupid and profile_field_name:
@@ -11760,8 +11793,8 @@ async def globalsearchevents(
             "status": -1,
             "msg": "Sorry! your login session expired. please login again.",
         }
-    elif not search_key or search_key.strip() == "":
-        return {"status": 0, "msg": "Search Key missing"}
+    # elif  search_key or search_key.strip() == "":
+    #     return {"status": 0, "msg": "Search Key missing"}
     elif not str(page_number).isnumeric():
         return {"status": 0, "msg": "Invalid page Number"}
     else:
@@ -11779,25 +11812,33 @@ async def globalsearchevents(
             )
             login_user_id = get_token_details.user_id
 
-            search_key = search_key.strip()
+            search_key = search_key.strip() if search_key else None
 
             current_page_no = int(page_number)
-            criteria = (
-                db.query(Events).join(User,User.id == Events.created_by,isouter=True)\
-                .filter(
-                    Events.status == 1,
-                    Events.event_status == 1,
-                    Events.event_type_id == 1,
-                    or_(
-                        Events.title.like( "%" +search_key + "%" ),
-                        User.display_name.like( "%" +search_key + "%" ),
-                        User.first_name.like( "%" +search_key + "%" ),
-                        User.last_name.like( "%" +search_key + "%" ),
-                        User.first_name.like( "%" +search_key + "%" )
-                    ),
-                    Events.start_date_time > datetime.datetime.utcnow()
+            criteria= db.query(Events).join(User,User.id == Events.created_by,isouter=True)\
+                        .filter( Events.status == 1,
+                        Events.event_status == 1,
+                        Events.event_type_id == 1)
+        
+
+            if search_key:
+                criteria = (criteria.filter(
+                        or_(
+                            Events.title.like( "%" +search_key + "%" ),
+                            User.display_name.like( "%" +search_key + "%" ),
+                            User.first_name.like( "%" +search_key + "%" ),
+                            User.last_name.like( "%" +search_key + "%" ),
+                            User.first_name.like( "%" +search_key + "%" )
+                        )
+                    )
                 )
-            )
+            if not search_key:
+                criteria=criteria.filter(
+                        text(
+                    "DATE_ADD(events.start_date_time, "
+                    "INTERVAL SUBSTRING(events.duration, 1, CHAR_LENGTH(events.duration) - 3) HOUR_MINUTE) > NOW()"
+                    ))
+                
             
             # Execute the query
             get_row_count = criteria.count()
@@ -11817,7 +11858,7 @@ async def globalsearchevents(
                     get_row_count, current_page_no, default_page_size
                 )
                 
-                event_list=criteria.order_by(Events.start_date_time.asc()).limit(limit).offset(offset).all()
+                event_list=criteria.order_by(Events.start_date_time.desc()).limit(limit).offset(offset).all()
                 result_list = []
                 if event_list:
                     waiting_room = 0
@@ -12223,7 +12264,7 @@ async def nuggetabusereport(
 
                 return {
                     "status": 1,
-                    "msg": "Thanks for the reporting, we will take the action",
+                    "msg": "Thanks for letting us know your concern about this Nugget. We will take the necessary actions according to our policies",
                 }
             else:
                 return {"status": 0, "msg": "Nugget ID not correct"}
@@ -13198,6 +13239,7 @@ async def getfollowlist(
     gender: str = Form(None),
     age: str = Form(None),
     page_number: str = Form(default=1),
+    default_page_size:str=Form(default=50)
 ):
     if token == None or token.strip() == "":
         return {
@@ -13227,10 +13269,12 @@ async def getfollowlist(
             login_user_id = get_token_details.user_id if get_token_details else None
 
             current_page_no = int(page_number)
+            default_page_size=int(default_page_size)
 
             get_follow_user = db.query(FollowUser)
 
             if type == 1:  # Followers
+
                 if not user_id:
                     get_follow_user = get_follow_user.filter(
                         FollowUser.follower_userid == login_user_id
@@ -13317,12 +13361,25 @@ async def getfollowlist(
 
                     # get_follow_user=get_follow_user.filter(or_(or_(FollowUser.following_userid.in_(user_ages),FollowUser.follower_userid.in_(user_ages)),FollowUser.following_userid.in_(user_ages),FollowUser.follower_userid.in_(user_ages)))
 
+            # Omit blocked users nuggets
+            requested_by = None
+            request_status = 3  # Rejected
+            response_type = 1
+
+            get_all_blocked_users = get_friend_requests(
+                db, login_user_id, requested_by, request_status, response_type
+            )
+            
+            blocked_users = get_all_blocked_users["blocked"]
+            
+            get_follow_user = get_follow_user.filter(FollowUser.following_userid.not_in(blocked_users),FollowUser.follower_userid.not_in(blocked_users))
+            
             get_row_count = get_follow_user.count()
 
             if get_row_count < 1:
                 return {"status": 0, "msg": "Unable to get Profile"}
             else:
-                default_page_size = 50
+                
                 limit, offset, total_pages = get_pagination(
                     get_row_count, current_page_no, default_page_size
                 )
@@ -14604,6 +14661,8 @@ async def getinfluencercategory(
 # 79 actionSocialmedialogin
 @router.post("/socialmedialogin")
 async def socialmedialogin(
+    *,
+    request:Request,
     db: Session = Depends(deps.get_db),
     signin_type: str = Form(
         None, description="2->Apple,3->Twitter,4->Instagram,5->Google"
@@ -14741,10 +14800,10 @@ async def socialmedialogin(
             else:
                 return {"status": 0, "msg": "Unable to signup"}
 
+            user_ip=request.client.host
 
             if check_email_id:
                 email_id=email_id if email_id else check_email_id.email_id
-                
                 reply = await logins(
                     db,
                     email_id,
@@ -14755,7 +14814,9 @@ async def socialmedialogin(
                     login_from,
                     voip_token,
                     app_type,
-                    1
+                    1,
+                    user_ip
+
                 )
             
                 return reply
@@ -14771,13 +14832,14 @@ async def socialmedialogin(
                     login_from,
                     voip_token,
                     app_type,
-                    1
+                    1,
+                    user_ip
                 )
             
                 return reply
 
             else:
-                userIP = get_ip()
+                userIP = request.client.host
                 
                 display_name = (
                     f"{first_name.strip()} {last_name.strip()}"
@@ -14838,6 +14900,9 @@ async def socialmedialogin(
                 db.add(model)
                 db.commit()
                 db.refresh(model)
+
+                user_ip=request.client.host
+
                 if model:
                     user_ref_id = GenerateUserRegID(model.id)
                     password = user_ref_id
@@ -15035,9 +15100,10 @@ async def socialmedialogin(
                         login_from,
                         voip_token,
                         app_type,
-                        0
+                        0,
+                        user_ip
                     )
-                    print(reply)
+                
                     return reply
                 else:
                     return {
@@ -15944,7 +16010,7 @@ async def groupabusereport(
                     if group.created_by == login_user_id:
                         return {
                             "status": 1,
-                            "msg": "Thanks for the reporting, we will take the action",
+                            "msg": "Thanks for letting us know your concern about this Group. We will take the necessary actions according to our policies",
                         }
                     else:
                         # Delete Friend Group
@@ -15970,7 +16036,7 @@ async def groupabusereport(
 
                             return {
                                 "status": 1,
-                                "msg": "Thanks for the reporting, we will take the action",
+                                "msg": "Thanks for letting us know your concern about this Group. We will take the necessary actions according to our policies",
                             }
                         except:
                             return {

@@ -122,3 +122,7 @@ class User(Base):
     event_abuse_report = relationship("EventAbuseReport", back_populates="user")
     verify_accounts = relationship("VerifyAccounts", back_populates="user")
     qr_tokens = relationship("QrTokens", back_populates="user")
+
+
+
+# ALTER TABLE `user` ADD `verification_token` VARCHAR(255) NULL COMMENT 'id verify token' AFTER `chime_user_id`; 
