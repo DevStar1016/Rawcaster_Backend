@@ -44,10 +44,10 @@ base_domain_url = ""
 base_url_segment = "/rawcaster"
 base_upload_folder = "local_uploads"
 # Dev
-# data_base =credentials['db_connection']
+data_base =credentials['db_connection']
 
 # Local
-data_base = "mysql+pymysql://maemysqluser:%s@192.168.1.109/rawcaster" % quote("MaeNewMysql2@2@")
+# data_base = "mysql+pymysql://maemysqluser:%s@192.168.1.109/rawcaster" % quote("MaeNewMysql2@2@")
 
 api_doc_path = "/docs"
 
