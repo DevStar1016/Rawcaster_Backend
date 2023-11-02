@@ -540,10 +540,11 @@ async def add_verify_account(
                       "callbackUrl":"https://devapi.rawcaster.com/rawcaster/webhook_account_verify"}
 
                 response = requests.post(url, json=data, auth=HTTPBasicAuth(username, password))
-                
+                print(response.status_code)
                 # Check the response
+                verifyResponse=json.loads(response.content)
+
                 if response.status_code in [200, 201]:
-                    verifyResponse=json.loads(response.content)
                     id_verify_token=verifyResponse['authToken']
                     # Update Idenfy Token
                     getUser=db.query(User).filter(User.id == login_user_id,User.status == 1).first()
@@ -558,8 +559,8 @@ async def add_verify_account(
                     "verification_token":id_verify_token,
                     "redirect_url":f"https://ivs.idenfy.com/api/v2/redirect?authToken={id_verify_token}"
                     }
-                
-                return {"status":0,"msg":"Failed"}                   
+                else:
+                    return {"status":0,"msg":verifyResponse['message']}                   
 
             else:
                 return {"status": 0, "msg": "you are already requested to verification"}
