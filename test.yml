@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: user
-  namespace: dev
+  namespace: prod
   labels:
     app: user
   # namespace: default
@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
         - name: user
-          image: 562114208112.dkr.ecr.us-east-1.amazonaws.com/rawcasterecr:ai_and_chime
+          image: 562114208112.dkr.ecr.us-east-1.amazonaws.com/rawcaster-python-api-prod:ai_and_chime
           imagePullPolicy: Always
           envFrom:
           - secretRef:
@@ -40,7 +40,7 @@ metadata:
   labels:
     name: user
   name: user
-  namespace: dev
+  namespace: prod
 spec:
   type: NodePort
   ports:
