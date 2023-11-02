@@ -526,7 +526,7 @@ async def add_verify_account(
                     verify_date=datetime.utcnow(),
                     created_at=datetime.utcnow(),
                     status=1,
-                    verify_status=0,
+                    verify_status=0, 
                 )
                 db.add(add_clain)
                 # db.commit()
