@@ -43,7 +43,6 @@ base_domain_url = ""
 
 base_url_segment = "/rawcaster"
 base_upload_folder = "local_uploads"
-
 # Dev
 # data_base =credentials['db_connection']
 
