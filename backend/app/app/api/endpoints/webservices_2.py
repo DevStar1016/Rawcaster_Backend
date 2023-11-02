@@ -515,6 +515,7 @@ async def add_verify_account(
                 .first()
             )
             if not get_accounts:
+
                 add_clain = VerifyAccounts(
                     user_id=login_user_id,
                     first_name=first_name.strip(),
@@ -529,7 +530,9 @@ async def add_verify_account(
                     verify_status=0, 
                 )
                 db.add(add_clain)
-                # db.commit()
+                db.commit()
+                db.refresh(add_clain)
+                
                 # Idenfy Verify
                 username=config.idenfy_api_key
                 password=config.idenfy_secret_key
@@ -540,17 +543,17 @@ async def add_verify_account(
                 # "callbackUrl":"https://devapi.rawcaster.com/rawcaster/webhook_account_verify"
 
                 response = requests.post(url, json=data, auth=HTTPBasicAuth(username, password))
-                print(response.status_code)
+               
                 # Check the response
                 verifyResponse=json.loads(response.content)
 
                 if response.status_code in [200, 201]:
                     id_verify_token=verifyResponse['authToken']
+                    
                     # Update Idenfy Token
-                    getUser=db.query(User).filter(User.id == login_user_id,User.status == 1).first()
-                    if getUser :
-                        getUser.verification_token=id_verify_token
-                        # db.commit()
+                    add_clain.verification_token= id_verify_token
+                    add_clain.verification_response = verifyResponse
+                    db.commit()
                     
                     return {
                     "status": 1,

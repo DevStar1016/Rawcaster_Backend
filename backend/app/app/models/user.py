@@ -77,7 +77,6 @@ class User(Base):
     influencer_category = Column(String(20))
     existing_user = Column(TINYINT, default=1)
     chime_user_id = Column(String(100))
-    verification_token=Column(String(255),comment="id verify token")
     # Newly Added
     work_at = Column(String(100))
     studied_at = Column(String(100))
