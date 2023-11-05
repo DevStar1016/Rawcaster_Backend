@@ -62,6 +62,6 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$TAGS
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$TAG
 
-      #- name: Deploy to EKS
-      #  run: |
-      #    kubectl rollout restart deployment/user -n dev
+      - name: Deploy to EKS
+        run: |
+          kubectl rollout restart deployment/user -n dev
