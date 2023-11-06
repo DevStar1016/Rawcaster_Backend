@@ -536,8 +536,7 @@ async def add_verify_account(
                 # Idenfy Verify
                 username=config.idenfy_api_key
                 password=config.idenfy_secret_key
-                # username="VZKR14voA2J"
-                # password="2j0Aps2XTgmgr6Olvznh"
+               
 
                 url = 'https://ivs.idenfy.com/api/v2/token'
                 
@@ -581,22 +580,18 @@ async def add_verify_account(
 
 
 #Add Webhook call history for Account Verifcation
-@router.post("/webhook_account_verify")
+@router.api_route("/webhook_account_verify",methods=["GET","POST"])
 async def webhookAccountVerify(*,db:Session=Depends(deps.get_db),request: Request):
-    api= str(request.url)
-    call_method=request.method
-    if call_method=="GET":
-        data=request.query_params
-    else:
-        data=await request.form()
+    request_data=await request.body()
     
     # Add Webhook Call History
-    addWebHookHistory=AccountVerifyWebhook(request=data,
+    addWebHookHistory=AccountVerifyWebhook(request=request_data,
                                            created_at=datetime.utcnow(),
                                            status =1)
     db.add(addWebHookHistory)
     db.commit()
     db.refresh(addWebHookHistory) 
+    return {"status":1,"msg":"Success"}
 
     return {'status':1,'msg':"Success"}
     
@@ -1494,3 +1489,54 @@ def complementary_membership(
 
 
 #     return "Success"
+
+
+
+
+# 64  Complementory Membership Update
+@router.post("/video_convert")
+def video_convert(
+    db: Session = Depends(deps.get_db), 
+    upload_file:UploadFile=File(None)
+):
+   
+    # try:
+    #     os.makedirs(base_dir, mode=0o777, exist_ok=True)
+    # except OSError as e:
+    #     sys.exit("Can't create {dir}: {err}".format(dir=base_dir, err=e))
+
+    # output_dir = base_dir + "/"
+
+    # characters = string.ascii_letters + string.digits
+    # # Generate the random string
+    # random_string = "".join(random.choice(characters) for i in range(18))
+    # print(ext,"dffffffffffffffffffffffffffff")
+    # filename = f"uploadfile_{random_string}{ext}"
+    # print(filename)
+    # save_full_path = f"{output_dir}{filename}"
+    # if ext in ["jpg", "jpeg", "png", "gif"]:
+    #     img = Image.open(upload_file)
+    #     img.save(save_full_path, quality=80)
+
+    # else:
+    #     with open(save_full_path, "wb") as buffer:
+    #         for chunk in iter(lambda: upload_file.file.read(65536), b""):
+    #             buffer.write(chunk)
+
+    import moviepy.editor as moviepy
+    video = moviepy.VideoFileClip("rk.mp4")
+    video.write_videofile("rk.mp4", codec='libx264', audio_codec='aac')
+    video.close()
+    # clip = moviepy.VideoFileClip("rk.mp4")
+    # return clip.duration
+
+    # # Convert
+    # clip = moviepy.VideoFileClip("rk.mp4")
+    # clip.write_videofile("rk22.mp4")
+    # return clip.duration
+                
+        
+        # with open(save_full_path, "wb") as buffer:
+        #     shutil.copyfileobj(file_name.file, buffer)
+
+

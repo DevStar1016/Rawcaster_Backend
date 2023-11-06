@@ -4577,28 +4577,13 @@ async def addnuggets(
                             elif "audio" in file_temp:
                                 file_type = "audio"
                             # File Upload
-                            ext = os.path.splitext(nuggets_media[i - 1].filename)[
-                                1
-                            ]
-                            
+                            ext=os.path.splitext(nuggets_media[i - 1].filename)[1]
                     
                             file_ext=ext if file_type == 'image' else '.mp3' if file_type == 'audio' else '.mp4' if file_type == 'video' else None
                             
                             uploaded_file_path = await file_upload(
                                 nuggets_media[i - 1], ext, compress=1
                             )
-                            # duration=0
-                            # try:
-                            #     video = imageio.get_reader(uploaded_file_path)
-                            #     fps = video.get_meta_data()['fps']
-                            #     duration = video.count_frames() / fps
-                            #     video.close()
-                            #     return max(duration, 0)
-                            # except Exception as e:
-                            #     print("Error:", e)
-                            #     return None
-
-                            # return duration
                             
                             file_stat = os.stat(uploaded_file_path)
                             file_size = file_stat.st_size
@@ -4632,7 +4617,9 @@ async def addnuggets(
                                 s3_file_path = f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
 
                                 if file_type == "video":
-
+                                    from moviepy.editor import VideoFileClip
+                                    duration=VideoFileClip(uploaded_file_path)
+                                    
                                     # # create video capture object
                                     # data = cv2.VideoCapture(uploaded_file_path)
                                     
@@ -4641,8 +4628,9 @@ async def addnuggets(
                                     # fps = data.get(cv2.CAP_PROP_FPS)
                                     # total_duration = round(frames / fps)
                                     # print(total_duration)
+                                    
                                     total_duration=get_video_duration(uploaded_file_path)
-                                   
+                                    # return total_duration
                                     # return total_duration
                                     if total_duration < 330:
                                         s3_file_path = f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
