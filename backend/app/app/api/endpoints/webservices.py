@@ -13605,7 +13605,7 @@ async def addliveevent(
     db: Session = Depends(deps.get_db),
     token: str = Form(None),
     event_title: str = Form(None),
-    event_type: str = Form(None, description="1-Event, 2-Talkshow,3-Live"),
+    event_type: int = Form(None, description="1-Event, 2-Talkshow,3-Live"),
     event_start_date: Any = Form(None),
     event_start_time: Any = Form(None),
     event_banner: UploadFile = File(None),
