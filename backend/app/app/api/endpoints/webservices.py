@@ -13747,7 +13747,9 @@ async def addliveevent(
                     .first()
                 )
 
-                duration = int(userstatus.max_event_duration) * 3600
+                print(userstatus.max_event_duration)
+                duration = userstatus.max_event_duration * 3600
+                print(duration)
                 duration = (
                     datetime.datetime.min + timedelta(seconds=duration)
                 ).strftime("%H:%M:%S")
