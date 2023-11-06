@@ -112,6 +112,11 @@ async def file_upload(file_name, ext, compress):
         img.save(save_full_path, quality=80)
 
     else:
+        with open(save_full_path, "wb") as video_file:
+            content = await file_name.read()
+            video_file.write(content)
+        return save_full_path
+
         
         with open(save_full_path, "wb") as buffer:
             shutil.copyfileobj(file_name.file, buffer)

@@ -8,7 +8,7 @@ from app.api import deps
 import datetime
 from sqlalchemy.orm import Session,aliased,joinedload
 from datetime import datetime, date
-from sqlalchemy import func, case, text, extract,select,exists
+from sqlalchemy import func, case, text, extract,select,exists,cast,Date
 import re
 import base64
 import json
@@ -23,6 +23,8 @@ from .chime_chat import *
 import requests
 from bs4 import BeautifulSoup
 import cv2
+import imageio
+
 
 router = APIRouter()
 
@@ -1359,20 +1361,38 @@ async def contactus(
             }
 
 
+def checkComplementary(db,id):
+    # Get Complementary Expire Date
+    getUserSetting=db.query(UserSettings).join(User,User.user_status_id == UserSettings.id,isouter=True).filter(
+        UserSettings.user_id == id,User.user_status_id == 3,
+        cast(UserSettings.complementary_expire_date,Date) <= datetime.datetime.utcnow().date()).first()
+    
+    if getUserSetting:
+        # Update member
+        update_member=db.query(User).filter(User.id == id).update({"user_status_id":1}) 
+        updateSetting=db.query(UserSettings).filter(UserSettings.user_id == id).update({"complementary_enable_date":None,
+                                                                                        "complementary_expire_date":None})
+        db.commit()
+        
+
 def user_profile(db, id):
-    get_user = db.query(User).filter(User.id == id).first()
+    user_id=id
+    # Update Membership
+    validateMembership=checkComplementary(db,user_id)
+    
+    get_user = db.query(User).filter(User.id == user_id).first()
 
     if get_user:
         get_account_status=db.query(VerifyAccounts).filter(VerifyAccounts.user_id == get_user.id).first()
         
-        followers_count = db.query(FollowUser.id).filter_by(following_userid=id).count()
-        following_count = db.query(FollowUser.id).filter_by(follower_userid=id).count()
+        followers_count = db.query(FollowUser.id).filter_by(following_userid=user_id).count()
+        following_count = db.query(FollowUser.id).filter_by(follower_userid=user_id).count()
 
         nugget_count = (
             db.query(Nuggets)
             .join(NuggetsMaster, Nuggets.nuggets_id == NuggetsMaster.id)
             .filter(
-                Nuggets.user_id == id,
+                Nuggets.user_id == user_id,
                 Nuggets.status == 1,
                 NuggetsMaster.status == 1,
                 Nuggets.nugget_status != 2,
@@ -1403,7 +1423,12 @@ def user_profile(db, id):
             .count()
         )
         user_details = {}
-        
+
+        # Get Complementary Status Enable / Disable
+        getSettings=db.query(Settings).filter(Settings.settings_topic == "complementary_enable_disable",
+                                              Settings.settings_value == 1).first()
+        getComplementaryValue=db.query(Settings).filter(Settings.settings_topic == "complementary_period").first()
+
         
         user_details.update(
             {
@@ -1472,7 +1497,10 @@ def user_profile(db, id):
                 "chime_user_id": get_user.chime_user_id
                 if get_user.chime_user_id
                 else None,
-                "ai_content_length": 100
+                "ai_content_length": 100,
+                "complementary_status": 1 if getSettings and get_user.user_status_id == 1 else 0, # Only valued to premium member
+                "complementary_days":(getComplementaryValue.settings_value if getComplementaryValue else 0) if getSettings else 0
+
             }
         )
         token_text=f"{get_user.user_ref_id}//{datetime.datetime.utcnow().replace(tzinfo=None)}"
@@ -1553,131 +1581,6 @@ async def getmyprofile(
                 else:
                     return {"status": 0, "msg": "No result found!"}
 
-
-
-# # 11 - Get My Profile
-# @router.post("/getmyprofile")
-# async def getmyprofile(
-#     db: Session = Depends(deps.get_db),
-#     token: str = Form(None),
-#     auth_code: str = Form(None, description="SALT + token"),
-# ):
-#     if token == None or token.strip() == "":
-#         return {
-#             "status": -1,
-#             "msg": "Sorry! your login session expired. please login again.",
-#         }
-
-#     elif auth_code == None or auth_code.strip() == "":
-#         return {"status": -1, "msg": "Auth Code is missing"}
-
-#     else:
-#         access_token = checkToken(db, token.strip())
-#         auth_text = token.strip()
-
-#         if checkAuthCode(auth_code, auth_text) == False:
-#             return {"status": 0, "msg": "Authentication failed!"}
-
-#         else:
-#             if access_token == False:
-#                 return {
-#                     "status": -1,
-#                     "msg": "Sorry! your login session expired. please login again.",
-#                 }
-
-#             else:
-#                 get_token_details = (
-#                     db.query(ApiTokens.user_id).filter(ApiTokens.token == access_token).first()
-#                 )
-#                 login_user_id = get_token_details.user_id if get_token_details else None
-
-#                 get_user = db.query(User).filter(User.id == login_user_id).first()
-                
-#                 if get_user:
-#                     followers_count = db.query(FollowUser.id).filter(FollowUser.following_userid == login_user_id).count()
-#                     following_count = db.query(FollowUser.id).filter(FollowUser.follower_userid == login_user_id).count()
-#                     # nugget_count = db.query(NuggetsMaster.id).join(Nuggets,Nuggets.nuggets_id == NuggetsMaster.id).\
-#                     #     filter(NuggetsMaster.user_id == login_user_id,NuggetsMaster.status == 1).count()
-#                     event_count=db.query(Events.id).filter(Events.created_by == login_user_id, Events.status == 1).count()
-#                     # friends_count=db.query(MyFriends).filter(MyFriends.status == 1,MyFriends.request_status == 1,or_(MyFriends.sender_id == get_user.id,MyFriends.receiver_id == get_user.id)).count()
-#                     get_account_status=db.query(VerifyAccounts).filter(VerifyAccounts.user_id == get_user.id).first()
-#                     get_saved_nuggets = db.query(NuggetsSave)\
-#                         .filter(NuggetsSave.user_id == get_user.id, NuggetsSave.status == 1)\
-#                         .count()
-                    
-#                     user_details={}
-#                     user_details.update({"user_id":get_user.id,
-#                                         "user_ref_id":get_user.user_ref_id,
-#                                         'is_email_id_verified':get_user.is_email_id_verified,
-#                                         "is_mobile_no_verified":get_user.is_mobile_no_verified,
-#                                         "acc_verify_status":1 if get_user.is_email_id_verified == 1 or get_user.is_mobile_no_verified == 1 else 0,
-#                                         "is_profile_updated": 1 if get_user.dob != '' and get_user.gender != "" else 0,
-#                                         "name":get_user.display_name if get_user.display_name != '' and get_user.display_name != None else "",
-#                                         "email_id":get_user.email_id if get_user.email_id else "",
-#                                         "mobile":str(get_user.mobile_no) if get_user.mobile_no else "",
-#                                         "profile_image":get_user.profile_img if get_user.profile_img else defaultimage("profile_img"),
-#                                         "cover_image":get_user.cover_image if get_user.cover_image else defaultimage("cover_img"),
-#                                         "website":get_user.website if get_user.website else "",
-#                                         "first_name":get_user.first_name if get_user.first_name else "",
-#                                         "last_name":get_user.last_name if get_user.last_name else "",
-#                                         "gender":get_user.gender if get_user.gender else "",
-#                                         "dob":get_user.dob if get_user.dob else "",
-#                                         "country_code":get_user.country_code if get_user.country_code else "",
-#                                         "country_id":get_user.country_id if get_user.country_id else "",
-#                                         "user_code":get_user.user_code if get_user.user_code else "",
-#                                         "geo_location":get_user.geo_location if get_user.geo_location else "",
-#                                         "latitude":get_user.latitude if get_user.latitude else "",
-#                                         "longitude":get_user.longitude if get_user.longitude else "",
-#                                         "date_of_join":common_date(get_user.created_at) if get_user.created_at else "",
-#                                         "user_type":get_user.user_type_master.name if get_user.user_type_master else "",
-#                                         "user_status":get_user.user_status_master.name if get_user.user_status_master else "",
-#                                         "user_status_id":get_user.user_status_id,
-#                                         "bio_data":get_user.bio_data if get_user.bio_data else "",
-#                                         # "friends_count":friends_count,
-#                                         "followers_count":followers_count,
-#                                         "following_count":following_count,
-#                                         # "nugget_count":nugget_count,
-#                                         "event_count":event_count,  
-#                                         "work_at":get_user.work_at if get_user.work_at else "",
-#                                         'studied_at':get_user.studied_at if get_user.studied_at else "",
-#                                         'influencer_category':get_user.influencer_category if get_user.influencer_category else "",
-#                                         'account_verify_type':(2 if get_account_status.verify_status == 1 else 1) if get_account_status else 0,# 0 -Request not send , 1- Pending ,2 - Verified
-#                                         'saved_nugget_count':get_saved_nuggets,
-#                                         "nugget_content_length":get_user.user_status_master.max_nugget_char if get_user.user_status_master else 0,
-#                                         "chime_user_id":get_user.chime_user_id if get_user.chime_user_id else None,
-#                                         "ai_content_length":100
-#                                          })
-#                     token_text = (
-#                         str(get_user.user_ref_id) + str(datetime.datetime.utcnow().timestamp())
-#                         ).encode("ascii")
-#                     invite_url = inviteBaseurl()
-#                     join_link = f"{invite_url}signup?ref={token_text}"
-
-#                     user_details.update({"referral_link": join_link})
-
-#                     settings = (
-#                         db.query(UserSettings).filter(UserSettings.user_id == get_user.id).first()
-#                     )
-#                     if settings:
-#                         user_details.update(
-#                             {"language": settings.language.name if settings.language_id else ""}
-#                         )
-#                     else:
-#                         user_details.update({"language": "English"})
-
-#                     two_type_verification = OTPverificationtype(db, get_user)
-
-#                     user_details.update({"two_type_verification": two_type_verification})
-#                     # Get Notification
-#                     total_unread_count = (
-#                         db.query(Notification).filter_by(status=1, is_read=0, user_id=id).count()
-#                     )
-#                     user_details.update({"unread_notification_count": total_unread_count})
-
-#                     return {"status": 1, "msg": "Success", "profile": user_details}
-
-#                 else:
-#                     return {"status": 0, "msg": "No result found!"}
 
 
 # 12. Update My Profile
@@ -4454,6 +4357,24 @@ def process_data(
     # Insertnotification(db, login_user_id, None, notification_type, nugget_id)
     return nugget_ids
 
+def get_video_duration(file_path):
+    data = cv2.VideoCapture(file_path)
+                                    
+    # count the number of frames
+    frames = data.get(cv2.CAP_PROP_FRAME_COUNT)
+    fps = data.get(cv2.CAP_PROP_FPS)
+    total_duration = round(frames / fps)
+    return total_duration
+    # import cv2
+
+    # # create video capture object
+    # cap = cv2.VideoCapture(file_path)
+
+    # # count the number of frames
+    # fps = cap.get(cv2.CAP_PROP_FPS)
+    # totalNoFrames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+    # durationInSeconds = totalNoFrames // fps
+    # return durationInSeconds
 
 # 25. Add Nuggets
 @router.post("/addnuggets")
@@ -4471,7 +4392,7 @@ async def addnuggets(
     if token == None or token.strip() == "":
         return {
             "status": -1,
-            "msg": "Sorry! your login session expired. please login again.",
+            "msg": "Sorry! your login session expaddnuggetsired. please login again.",
         }
     elif not content and not nuggets_media:
         return {"status": 0, "msg": "Sorry! Nuggets content or Media can not be empty."}
@@ -4650,27 +4571,41 @@ async def addnuggets(
                             master_id = add_nuggets_master.id
                             file_temp = nuggets_media[i - 1].content_type
                             
-                            type = "image"
+                            file_type = "image"
                             if "video" in file_temp:
-                                type = "video"
+                                file_type = "video"
                             elif "audio" in file_temp:
-                                type = "audio"
+                                file_type = "audio"
                             # File Upload
                             ext = os.path.splitext(nuggets_media[i - 1].filename)[
                                 1
                             ]
-                            file_ext=ext if type == 'image' else '.mp3' if type == 'audio' else '.mp4' if type == 'video' else None
+                            
+                    
+                            file_ext=ext if file_type == 'image' else '.mp3' if file_type == 'audio' else '.mp4' if file_type == 'video' else None
                             
                             uploaded_file_path = await file_upload(
-                                nuggets_media[i - 1], file_ext, compress=1
+                                nuggets_media[i - 1], ext, compress=1
                             )
-                                        
+                            # duration=0
+                            # try:
+                            #     video = imageio.get_reader(uploaded_file_path)
+                            #     fps = video.get_meta_data()['fps']
+                            #     duration = video.count_frames() / fps
+                            #     video.close()
+                            #     return max(duration, 0)
+                            # except Exception as e:
+                            #     print("Error:", e)
+                            #     return None
+
+                            # return duration
+                            
                             file_stat = os.stat(uploaded_file_path)
                             file_size = file_stat.st_size
 
                             if (
                                 file_size > 1000000
-                                and type == "image"
+                                and file_type == "image"
                                 and file_ext != ".gif"
                             ):
                                 s3_file_path = f"nuggets/Image_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
@@ -4680,7 +4615,7 @@ async def addnuggets(
                                     add_nugget_attachment = NuggetsAttachment(
                                         user_id=login_user_id,
                                         nugget_id=add_nuggets_master.id,
-                                        media_type=type,
+                                        media_type=file_type,
                                         media_file_type=file_ext,
                                         file_size=file_size,
                                         path=result["url"],
@@ -4696,17 +4631,21 @@ async def addnuggets(
                             else:
                                 s3_file_path = f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
 
-                                if type == "video":
-                                    # create video capture object
-                                    data = cv2.VideoCapture(uploaded_file_path)
+                                if file_type == "video":
+
+                                    # # create video capture object
+                                    # data = cv2.VideoCapture(uploaded_file_path)
                                     
-                                    # count the number of frames
-                                    frames = data.get(cv2.CAP_PROP_FRAME_COUNT)
-                                    fps = data.get(cv2.CAP_PROP_FPS)
-                                    total_duration = round(frames / fps)
+                                    # # count the number of frames
+                                    # frames = data.get(cv2.CAP_PROP_FRAME_COUNT)
+                                    # fps = data.get(cv2.CAP_PROP_FPS)
+                                    # total_duration = round(frames / fps)
+                                    # print(total_duration)
+                                    total_duration=get_video_duration(uploaded_file_path)
                                    
+                                    # return total_duration
                                     if total_duration < 330:
-                                        s3_file_path = f"nuggets/audio_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
+                                        s3_file_path = f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
 
                                         result = upload_to_s3(
                                             uploaded_file_path, s3_file_path
@@ -4715,7 +4654,7 @@ async def addnuggets(
                                             add_nugget_attachment = NuggetsAttachment(
                                                 user_id=login_user_id,
                                                 nugget_id=add_nuggets_master.id,
-                                                media_type=type,
+                                                media_type=file_type,
                                                 media_file_type=file_ext,
                                                 file_size=file_size,
                                                 path=result["url"],
@@ -4741,7 +4680,7 @@ async def addnuggets(
                                         nugget_ids += splited_video_reposne
                                         
                                     
-                                elif type == "audio":
+                                elif file_type == "audio":
                                     base_dir = "rawcaster_uploads"
                                     try:
                                         os.makedirs(base_dir, mode=0o777, exist_ok=True)
@@ -4774,7 +4713,7 @@ async def addnuggets(
                                         add_nugget_attachment = NuggetsAttachment(
                                             user_id=login_user_id,
                                             nugget_id=add_nuggets_master.id,
-                                            media_type=type,
+                                            media_type=file_type,
                                             media_file_type=file_ext,
                                             file_size=file_size,
                                             path=result["url"],
@@ -4797,7 +4736,7 @@ async def addnuggets(
                                         add_nugget_attachment = NuggetsAttachment(
                                             user_id=login_user_id,
                                             nugget_id=add_nuggets_master.id,
-                                            media_type=type,
+                                            media_type=file_type,
                                             media_file_type=file_ext,
                                             file_size=file_size,
                                             path=result["url"],
@@ -4862,11 +4801,11 @@ async def addnuggets(
                                             for key, val in share_with.items():
                                                 if val:
                                                     for shareid in val:
-                                                        type = 2 if key == "friends" else 1
+                                                        types = 2 if key == "friends" else 1
                                                         add_NuggetsShareWith = (
                                                             NuggetsShareWith(
                                                                 nuggets_id=add_nuggets.id,
-                                                                type=type,
+                                                                type=types,
                                                                 share_with=shareid,
                                                             )
                                                         )
@@ -5033,11 +4972,11 @@ async def addnuggets(
                                         for key, val in share_with.items():
                                             if val:
                                                 for shareid in val:
-                                                    type = 2 if key == "friends" else 1
+                                                    types = 2 if key == "friends" else 1
                                                     add_NuggetsShareWith = (
                                                         NuggetsShareWith(
                                                             nuggets_id=add_nuggets.id,
-                                                            type=type,
+                                                            type=types,
                                                             share_with=shareid,
                                                         )
                                                     )
@@ -7550,7 +7489,7 @@ async def addevent(
 
     if event_title == None or event_title.strip() == "":
         return {"status": 0, "msg": "Event title cant be blank."}
-    elif event_type == None and not event_type.isnumeric():
+    elif not event_type or not event_type.isnumeric():
         return {"status": 0, "msg": "Event type cant be blank."}
     elif event_start_date == None:
         return {"status": 0, "msg": "Event start date cant be blank."}
@@ -8382,7 +8321,7 @@ async def listevents(
             if get_row_count < 1:
                 return {
                     "status": 1,
-                    "msg": "No Result found",
+                    "msg": "No new or future events found",
                     "events_count": 0,
                     "total_pages": 1,
                     "current_page_no": 1,
@@ -10769,13 +10708,11 @@ async def getusersettings(db: Session = Depends(deps.get_db), token: str = Form(
                         UserProfileDisplayGroup.user_id == login_user_id,
                         UserProfileDisplayGroup.profile_id == "public_event_display",
                     )
-                    .all()
-                )
+                    .all())
+                
                 if online_group_list:
-                    list = []
-                    for gp_list in online_group_list:
-                        list.append(gp_list.groupid)
-                    result_list.update({"event_display_list": list})
+                    list.append(gp_list.groupid)
+                result_list.update({"event_display_list": list})
             else:
                 result_list.update({"event_display_list": []})
 
@@ -10798,7 +10735,7 @@ async def getusersettings(db: Session = Depends(deps.get_db), token: str = Form(
                         "title": user_default_melody.title,
                     }
                 )
-
+           
             result_list.update(
                 {
                     "event_type": get_user_settings.default_event_type,
@@ -10859,7 +10796,7 @@ async def getusersettings(db: Session = Depends(deps.get_db), token: str = Form(
                     "read_out_accent_name":get_user_settings.read_out_accent.accent 
                     if get_user_settings.read_out_accent_id 
                     else "",
-                    "opt_in":1 if get_user_settings.opt_in else 0
+                    "opt_in":1 if get_user_settings.opt_in else 0,
                     
                 }
             )
