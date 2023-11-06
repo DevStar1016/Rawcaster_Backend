@@ -13622,7 +13622,7 @@ async def addliveevent(
         }
 
     elif event_type == None or not event_type.isnumeric():
-        return {"status": 0, "msg": "Event type is missing", "val1":event_type == None, "val2":not event_type.isnumeric()}
+        return {"status": 0, "msg": "Event type is missing"}
 
     # elif event_banner == None:
     #     return {"status":0,"msg":"Event Banner is missing"}
@@ -13747,7 +13747,7 @@ async def addliveevent(
                     .first()
                 )
 
-                duration = userstatus.max_event_duration * 3600
+                duration = int(userstatus.max_event_duration) * 3600
                 duration = (
                     datetime.datetime.min + timedelta(seconds=duration)
                 ).strftime("%H:%M:%S")
