@@ -530,16 +530,25 @@ async def add_verify_account(
                     verify_status=0, 
                 )
                 db.add(add_clain)
-                db.commit()
-                db.refresh(add_clain)
+                # db.commit()
+                # db.refresh(add_clain)
                 
                 # Idenfy Verify
                 username=config.idenfy_api_key
                 password=config.idenfy_secret_key
+                # username="VZKR14voA2J"
+                # password="2j0Aps2XTgmgr6Olvznh"
 
                 url = 'https://ivs.idenfy.com/api/v2/token'
+                
+                data={'clientId':get_token_details.user.user_ref_id,
+                      "successUrl":"https://ui.idenfy.com/result?status=success",
+                      "errorUrl":"https://ui.idenfy.com/result?status=fail",
+                      "unverifiedUrl":"https://ui.idenfy.com/result?status=fail",
+                      
+                     
+                      }
 
-                data={'clientId':get_token_details.user.user_ref_id}
                 # "callbackUrl":"https://devapi.rawcaster.com/rawcaster/webhook_account_verify"
 
                 response = requests.post(url, json=data, auth=HTTPBasicAuth(username, password))
@@ -552,7 +561,7 @@ async def add_verify_account(
                     
                     # Update Idenfy Token
                     add_clain.verification_token= id_verify_token
-                    add_clain.verification_response = verifyResponse
+                    add_clain.verification_response = response.content
                     db.commit()
                     
                     return {
@@ -1358,6 +1367,61 @@ def nuggetcontentaudio(
 
         else:
             return {"status": 0, "msg": "Invalid Nugget"}
+
+
+
+
+# 64  Complementory Membership Update
+@router.post("/complementary_membership")
+def complementary_membership(
+    db: Session = Depends(deps.get_db),
+    token: str = Form(None)
+):
+    if token == None or token.strip() == "":
+        return {
+            "status": -1,
+            "msg": "Sorry! your login session expired. please login again.",
+        }
+    
+    # Check token
+    access_token = checkToken(db, token)
+
+    if access_token == False:
+        return {
+            "status": -1,
+            "msg": "Sorry! your login session expired. please login again.",
+        }
+    else:       
+        get_token_details = (
+            db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+        )
+        login_user_id = get_token_details.user_id if get_token_details else None
+        # Check Complementary Enable Disable status
+        getSettings=db.query(Settings).filter(Settings.settings_topic == "complementary_enable_disable",
+                                              Settings.settings_value == 1).first()
+        if getSettings: # if Enable
+            getComplementoryDays=db.query(Settings).filter(Settings.settings_topic == "complementary_period").first()
+            if getComplementoryDays:
+               
+                currentDate = datetime.utcnow()
+                expireDate=currentDate + timedelta(days=int(getComplementoryDays.settings_value) if getComplementoryDays.settings_value else 0) 
+
+                updateComplDate=db.query(UserSettings).filter(
+                    UserSettings.user_id == login_user_id
+                ).update({"complementary_enable_date":currentDate,
+                            "complementary_expire_date":expireDate})
+                db.commit()
+                if updateComplDate:
+                    getUser=db.query(User).filter(User.id == login_user_id,User.user_status_id == 1).update({"user_status_id":3})
+                    db.commit()
+                    return {'status':1,"msg":f"You have been granted a complementary upgrade for {getComplementoryDays.settings_value} days",
+                            "user_status": get_token_details.user.user_status_master.name
+                                if get_token_details.user.user_status_id
+                            else "",  # -----
+                            "user_status_id": get_token_details.user.user_status_id}
+        else:
+            return {"status":0,"msg":"Unable to use"}
+                    
 
 
 
