@@ -105,20 +105,19 @@ async def file_upload(file_name, ext, compress):
     random_string = "".join(random.choice(characters) for i in range(18))
 
     filename = f"uploadfile_{random_string}{ext}"
-    print(filename)
+    
     save_full_path = f"{output_dir}{filename}"
     if ext in ["jpg", "jpeg", "png", "gif"]:
         img = Image.open(file_name)
         img.save(save_full_path, quality=80)
 
     else:
-        with open(save_full_path, "wb") as buffer:
-            for chunk in iter(lambda: file_name.file.read(65536), b""):
-                buffer.write(chunk)
-        
-        
         # with open(save_full_path, "wb") as buffer:
-        #     shutil.copyfileobj(file_name.file, buffer)
+        #     for chunk in iter(lambda: file_name.file.read(65536), b""):
+        #         buffer.write(chunk)
+        
+        with open(save_full_path, "wb") as buffer:
+            shutil.copyfileobj(file_name.file, buffer)
 
     return save_full_path
 

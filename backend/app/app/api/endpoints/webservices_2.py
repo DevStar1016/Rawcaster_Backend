@@ -511,7 +511,8 @@ async def add_verify_account(
             # Check Already requested
             get_accounts = (
                 db.query(VerifyAccounts)
-                .filter(VerifyAccounts.user_id == login_user_id)
+                .filter(VerifyAccounts.user_id == login_user_id,
+                        VerifyAccounts.status == 1)
                 .first()
             )
             if not get_accounts:
@@ -530,8 +531,8 @@ async def add_verify_account(
                     verify_status=0, 
                 )
                 db.add(add_clain)
-                # db.commit()
-                # db.refresh(add_clain)
+                db.commit()
+                db.refresh(add_clain)
                 
                 # Idenfy Verify
                 username=config.idenfy_api_key
@@ -547,8 +548,6 @@ async def add_verify_account(
                       
                      
                       }
-
-                # "callbackUrl":"https://devapi.rawcaster.com/rawcaster/webhook_account_verify"
 
                 response = requests.post(url, json=data, auth=HTTPBasicAuth(username, password))
                
@@ -578,22 +577,52 @@ async def add_verify_account(
 
 
 
-
 #Add Webhook call history for Account Verifcation
 @router.api_route("/webhook_account_verify",methods=["GET","POST"])
 async def webhookAccountVerify(*,db:Session=Depends(deps.get_db),request: Request):
     request_data=await request.body()
-    
+
+    response=json.loads(request_data)
+    # Verify status
+    verify_status=response['status']["overall"]
+    scan_ref=response['scanRef']
+    clientId=response['clientId']
     # Add Webhook Call History
-    addWebHookHistory=AccountVerifyWebhook(request=request_data,
+    addWebHookHistory=AccountVerifyWebhook(request=response,
+                                           client_id=clientId,
+                                           scan_ref=scan_ref,
+                                           verify_status=verify_status,
                                            created_at=datetime.utcnow(),
                                            status =1)
     db.add(addWebHookHistory)
     db.commit()
-    db.refresh(addWebHookHistory) 
-    return {"status":1,"msg":"Success"}
+    db.refresh(addWebHookHistory)
 
-    return {'status':1,'msg':"Success"}
+    # Update Account Verify
+    getVerifyAccount=db.query(VerifyAccounts).join(User.id == VerifyAccounts.user_id)\
+                .filter(User.user_ref_id == clientId,VerifyAccounts.verify_status == 0).first()
+    if getVerifyAccount:
+        if verify_status == "APPROVED":
+            getVerifyAccount.verify_status = 1
+            db.commit()
+            return "APPROVED"
+
+        if verify_status == "DENIED":
+            getVerifyAccount.verify_status = -1
+            db.commit()
+            return "DENIED"
+        
+        if verify_status == "SUSPECTED":
+            getVerifyAccount.verify_status = -1
+            db.commit()
+            return "SUSPECTED"
+        
+        if verify_status == "EXPIRED":
+            getVerifyAccount.verify_status = -1
+            db.commit()
+            return "EXPIRED"
+
+    
     
     
     
@@ -1495,48 +1524,15 @@ def complementary_membership(
 
 # 64  Complementory Membership Update
 @router.post("/video_convert")
-def video_convert(
+async def video_convert(
     db: Session = Depends(deps.get_db), 
     upload_file:UploadFile=File(None)
 ):
-   
-    # try:
-    #     os.makedirs(base_dir, mode=0o777, exist_ok=True)
-    # except OSError as e:
-    #     sys.exit("Can't create {dir}: {err}".format(dir=base_dir, err=e))
 
-    # output_dir = base_dir + "/"
-
-    # characters = string.ascii_letters + string.digits
-    # # Generate the random string
-    # random_string = "".join(random.choice(characters) for i in range(18))
-    # print(ext,"dffffffffffffffffffffffffffff")
-    # filename = f"uploadfile_{random_string}{ext}"
-    # print(filename)
-    # save_full_path = f"{output_dir}{filename}"
-    # if ext in ["jpg", "jpeg", "png", "gif"]:
-    #     img = Image.open(upload_file)
-    #     img.save(save_full_path, quality=80)
-
-    # else:
-    #     with open(save_full_path, "wb") as buffer:
-    #         for chunk in iter(lambda: upload_file.file.read(65536), b""):
-    #             buffer.write(chunk)
-
-    import moviepy.editor as moviepy
-    video = moviepy.VideoFileClip("rk.mp4")
-    video.write_videofile("rk.mp4", codec='libx264', audio_codec='aac')
-    video.close()
-    # clip = moviepy.VideoFileClip("rk.mp4")
-    # return clip.duration
-
-    # # Convert
-    # clip = moviepy.VideoFileClip("rk.mp4")
-    # clip.write_videofile("rk22.mp4")
-    # return clip.duration
-                
-        
-        # with open(save_full_path, "wb") as buffer:
-        #     shutil.copyfileobj(file_name.file, buffer)
+    file_path = os.path.join(upload_file.filename)
+    with open(file_path, "wb") as buffer:
+        buffer.write(await upload_file.read())
+    return {"filename": upload_file.filename}
+    
 
 
