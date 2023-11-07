@@ -588,7 +588,7 @@ async def webhookAccountVerify(*,db:Session=Depends(deps.get_db),request: Reques
     scan_ref=response['scanRef']
     clientId=response['clientId']
     # Add Webhook Call History
-    addWebHookHistory=AccountVerifyWebhook(request=response,
+    addWebHookHistory=AccountVerifyWebhook(request=request_data,
                                            client_id=clientId,
                                            scan_ref=scan_ref,
                                            verify_status=verify_status,
@@ -599,28 +599,29 @@ async def webhookAccountVerify(*,db:Session=Depends(deps.get_db),request: Reques
     db.refresh(addWebHookHistory)
 
     # Update Account Verify
-    getVerifyAccount=db.query(VerifyAccounts).join(User.id == VerifyAccounts.user_id)\
+    getVerifyAccount=db.query(VerifyAccounts).join(User,User.id == VerifyAccounts.user_id,isouter=True)\
                 .filter(User.user_ref_id == clientId,VerifyAccounts.verify_status == 0).first()
+    
     if getVerifyAccount:
         if verify_status == "APPROVED":
             getVerifyAccount.verify_status = 1
             db.commit()
-            return "APPROVED"
+            return {"status":1,"msg":"APPROVED"}
 
         if verify_status == "DENIED":
             getVerifyAccount.verify_status = -1
             db.commit()
-            return "DENIED"
+            return {"status":0,"msg":"DENIED"}
         
         if verify_status == "SUSPECTED":
             getVerifyAccount.verify_status = -1
             db.commit()
-            return "SUSPECTED"
+            return {"status":0,"msg":"SUSPECTED"}
         
         if verify_status == "EXPIRED":
             getVerifyAccount.verify_status = -1
             db.commit()
-            return "EXPIRED"
+            return {"status":0,"msg":"EXPIRED"}
 
     
     
