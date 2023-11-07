@@ -62,12 +62,12 @@ email_username=credentials['email_username']
 email_password=credentials['email_password']
 
 # ID Verification 
-# idenfy_api_key="bpCwxSYDCuo"
-# idenfy_secret_key='s7eXCWA0dOEqLuiaeqvu'
+idenfy_api_key="bpCwxSYDCuo"
+idenfy_secret_key='s7eXCWA0dOEqLuiaeqvu'
 
 #  Production
-idenfy_api_key="VZKR14voA2J"
-idenfy_secret_key="2j0Aps2XTgmgr6Olvznh"
+# idenfy_api_key="VZKR14voA2J"
+# idenfy_secret_key="2j0Aps2XTgmgr6Olvznh"
 
 
 class Settings(BaseSettings):

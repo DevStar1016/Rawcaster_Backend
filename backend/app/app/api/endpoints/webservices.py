@@ -4358,23 +4358,14 @@ def process_data(
     return nugget_ids
 
 def get_video_duration(file_path):
-    data = cv2.VideoCapture(file_path)
-                                    
-    # count the number of frames
-    frames = data.get(cv2.CAP_PROP_FRAME_COUNT)
-    fps = data.get(cv2.CAP_PROP_FPS)
-    total_duration = round(frames / fps)
-    return total_duration
-    # import cv2
+    import moviepy.editor as moviepy
 
-    # # create video capture object
-    # cap = cv2.VideoCapture(file_path)
+    clip = moviepy.VideoFileClip(file_path)
 
-    # # count the number of frames
-    # fps = cap.get(cv2.CAP_PROP_FPS)
-    # totalNoFrames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-    # durationInSeconds = totalNoFrames // fps
-    # return durationInSeconds
+    clip.write_videofile("myvideo.mp4")
+    return 2
+
+
 
 # 25. Add Nuggets
 @router.post("/addnuggets")
@@ -4620,16 +4611,17 @@ async def addnuggets(
                                     from moviepy.editor import VideoFileClip
                                     duration=VideoFileClip(uploaded_file_path)
                                     
-                                    # # create video capture object
-                                    # data = cv2.VideoCapture(uploaded_file_path)
+                                    # create video capture object
+                                    data = cv2.VideoCapture(uploaded_file_path)
                                     
-                                    # # count the number of frames
-                                    # frames = data.get(cv2.CAP_PROP_FRAME_COUNT)
-                                    # fps = data.get(cv2.CAP_PROP_FPS)
-                                    # total_duration = round(frames / fps)
-                                    # print(total_duration)
+                                    # count the number of frames
+                                    frames = data.get(cv2.CAP_PROP_FRAME_COUNT)
+                                    fps = data.get(cv2.CAP_PROP_FPS)
+                                    total_duration = round(frames / fps)
+                                    print(total_duration)
                                     
-                                    total_duration=get_video_duration(uploaded_file_path)
+                                    # total_duration=get_video_duration(uploaded_file_path)
+                                    # return total_duration
                                     # return total_duration
                                     # return total_duration
                                     if total_duration < 330:
