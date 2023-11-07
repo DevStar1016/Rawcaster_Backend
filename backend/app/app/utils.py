@@ -110,16 +110,16 @@ async def file_upload(file_name, ext, compress):
     if ext in ["jpg", "jpeg", "png", "gif"]:
         img = Image.open(file_name)
         img.save(save_full_path, quality=80)
+        return save_full_path
 
     else:
-        # with open(save_full_path, "wb") as buffer:
-        #     for chunk in iter(lambda: file_name.file.read(65536), b""):
-        #         buffer.write(chunk)
-        
+        # out_file_path=f"{output_dir}uploadfile_{random_string}1.mp4"
         with open(save_full_path, "wb") as buffer:
             shutil.copyfileobj(file_name.file, buffer)
-
-    return save_full_path
+        
+        # os.popen(f"ffmpeg -i {save_full_path} -ac 2 -b:v 2000k -c:a aac -c:v libx264 -b:a 160k -vprofile high -bf 0 -strict experimental -f mp4 {out_file_path}")
+        # # os.remove(save_full_path)
+        return save_full_path
 
 
 async def read_file_upload(file_name, ext, compress):
