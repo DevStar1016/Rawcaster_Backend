@@ -1983,7 +1983,7 @@ async def searchrawcasterusers(
 async def invitetorawcaster(
     db: Session = Depends(deps.get_db),
     token: str = Form(None),
-    email_id: str = Form(None, description="email ids"),
+    email_id: str = Form(None, description="email ids,example=['abc@gmail.com','xyz@gmail.com]"),
     auth_code: str = Form(None, description="SALT + token"),
 ):
     if token == None or token.strip() == "":
@@ -2080,7 +2080,7 @@ async def invitetorawcaster(
                     if total == failed:
                         return {"status": 0, "msg": "Failed to send invites"}
                     if success == total:
-                        return {"status": 1, "msg": "Invites sent"}
+                        return {"status": 1, "msg": "Invites sent."}
                     else:
                         return {"status": 1, "msg": "Invites sent"}
 
@@ -4608,9 +4608,6 @@ async def addnuggets(
                                 s3_file_path = f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
 
                                 if file_type == "video":
-                                    from moviepy.editor import VideoFileClip
-                                    duration=VideoFileClip(uploaded_file_path)
-                                    
                                     # create video capture object
                                     data = cv2.VideoCapture(uploaded_file_path)
                                     
@@ -4618,12 +4615,8 @@ async def addnuggets(
                                     frames = data.get(cv2.CAP_PROP_FRAME_COUNT)
                                     fps = data.get(cv2.CAP_PROP_FPS)
                                     total_duration = round(frames / fps)
-                                    print(total_duration)
+                                   
                                     
-                                    # total_duration=get_video_duration(uploaded_file_path)
-                                    # return total_duration
-                                    # return total_duration
-                                    # return total_duration
                                     if total_duration < 330:
                                         s3_file_path = f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
 
@@ -4658,7 +4651,7 @@ async def addnuggets(
                                             share_with
                                         )
                                         nugget_ids += splited_video_reposne
-                                        
+                                            
                                     
                                 elif file_type == "audio":
                                     base_dir = "rawcaster_uploads"

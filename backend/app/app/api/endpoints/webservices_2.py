@@ -1526,13 +1526,12 @@ def complementary_membership(
 @router.post("/video_convert")
 async def video_convert(
     db: Session = Depends(deps.get_db), 
-    upload_file:UploadFile=File(None)
+    file:UploadFile=File(None)
 ):
+    from moviepy.video.io.VideoFileClip import VideoFileClip
+    video = VideoFileClip("uploadfile_OAtnWzzfAQnUAdXW011.mp4")
+    duration = video.duration
+    return duration
 
-    file_path = os.path.join(upload_file.filename)
-    with open(file_path, "wb") as buffer:
-        buffer.write(await upload_file.read())
-    return {"filename": upload_file.filename}
-    
 
 
