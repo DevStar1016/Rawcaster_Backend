@@ -196,17 +196,17 @@ async def add_claim_account(
                 db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
             )
             login_user_id = get_token_details.user_id if get_token_details else None
-            # Check requests
+            # # Check requests
             check_requests = (
                 db.query(ClaimAccounts)
                 .filter(
                     ClaimAccounts.user_id == login_user_id,
-                    ClaimAccounts.influencer_id == influencer_id,
-                    ClaimAccounts.admin_status != 2
+                    ClaimAccounts.influencer_id == influencer_id
                 )
                 .first()
             )
             if not check_requests:
+
                 add_clain = ClaimAccounts(
                     user_id=login_user_id,
                     influencer_id=influencer_id,
@@ -223,10 +223,11 @@ async def add_claim_account(
                 )
                 db.add(add_clain)
                 db.commit()
+                db.refresh(add_clain)
                 return {
                     "status": 1,
                     "msg": "You have placed a claim on a predefined influencer profile, We will contact you to validate your claim. Please contact us at info@rawcaster.com if you have any questions.",
-                }
+                    }
             else:
                 return {"status": 0, "msg": "Already sent"}
 

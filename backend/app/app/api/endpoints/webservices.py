@@ -5366,8 +5366,8 @@ async def listnuggets(
                     get_nuggets = get_nuggets.filter(
                         or_(
                             Nuggets.user_id == login_user_id,
-                            Nuggets.user_id.in_(my_followers),
-                            Nuggets.share_type != 2,
+                            and_(Nuggets.user_id.in_(my_followers),
+                            Nuggets.share_type != 2)
                         )
                     )  
                 else:
