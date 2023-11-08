@@ -1,23 +1,36 @@
-import requests
-from requests.auth import HTTPBasicAuth
+import cv2
+import numpy as np
 
-# Replace these variables with your actual username and password
-username = 'bpCwxSYDCuo'
-password = 's7eXCWA0dOEqLuiaeqvu'
+def skin_detection(image_path):
+    # Load the image
+    img = cv2.imread(image_path)
 
-# URL you want to make a request to
-url = 'https://ivs.idenfy.com/api/v2/token'
-data={'clientId':"8903257051"}
+    # Convert image to YCrCb color space
+    img_ycrcb = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
 
-# Making a GET request with Basic Auth
-response = requests.post(url, json={'clientId':"1212"}, auth=HTTPBasicAuth(username, password))
-print(response.content)
-# Check the response
-if response.status_code == 200:
-    # If the request was successful (status code 200)
-    print("Request successful")
-    print(response.text)  # Response data
+    # Define skin color range in YCrCb
+    lower_skin = np.array([0, 133, 77], dtype=np.uint8)
+    upper_skin = np.array([255, 173, 127], dtype=np.uint8)
+
+    # Masking the image to detect skin color within the defined range
+    skin_mask = cv2.inRange(img_ycrcb, lower_skin, upper_skin)
+    result = cv2.bitwise_and(img, img, mask=skin_mask)
+
+    # Checking the percentage of skin color in the image
+    total_pixels = np.prod(img.shape[:2])
+    skin_pixels = cv2.countNonZero(skin_mask)
+    skin_percentage = (skin_pixels / total_pixels) * 100
+
+    return skin_percentage
+
+# Example usage
+image_path = 'path/to/your/image.jpg'
+percentage_skin = skin_detection(image_path)
+
+# Define a threshold for skin percentage to determine abusive content
+threshold = 1.0  # Set your preferred threshold
+
+if percentage_skin > threshold:
+    print("Abusive content (skin detected).")
 else:
-    # If the request was not successful
-    print("Request failed")
-    print(f"Status code: {response.status_code}")
+    print("No abusive content detected.")

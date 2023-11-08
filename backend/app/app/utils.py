@@ -225,6 +225,7 @@ async def send_email(db, to_mail, subject, message):
         return True
 
     else:
+        print("dd")
         return False
 
 
@@ -1029,9 +1030,9 @@ def getFollowings(db, user_id):
             db.query(FollowUser).filter_by(status=1, follower_userid=user_id).all()
         )
         if following_users_list:
-            following_ids = [
-                follow_usr.following_userid for follow_usr in following_users_list
-            ]
+            for follow_usr in following_users_list:
+                following_ids.append(follow_usr.following_userid)
+          
     return following_ids
 
 
