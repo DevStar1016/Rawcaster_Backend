@@ -269,6 +269,11 @@ async def signup(
                 db.commit()
                 db.refresh(add_user)
                 if add_user:
+                    # Group Link Via Join
+                    group_login=0
+                    group_name=None
+                    group_id=None
+
                     user_ref_id = GenerateUserRegID(add_user.id)
 
                     # update ref id
@@ -439,6 +444,103 @@ async def signup(
                                         except Exception as e:
                                             print(f"Referrer:{e}")
 
+                        if len(referrer_ref_id) == 3:
+                            group_login=1
+                            referred_user = (
+                                db.query(User)
+                                .filter(
+                                    User.user_ref_id == referrer_ref_id[0],
+                                    User.status == 1,
+                                )
+                                .first()
+                            )
+                            if referred_user:
+                                referred_id = referred_user.id
+                                # update referrer id
+                                update_referrer = (
+                                    db.query(User)
+                                    .filter(User.id == add_user.id)
+                                    .update(
+                                        {
+                                            "referrer_id": referred_user.id,
+                                            "invited_date": referrer_ref_id[1],
+                                        }
+                                    )
+                                )
+                                db.commit()
+
+                                ref_friend = MyFriends(
+                                    sender_id=referred_user.id,
+                                    receiver_id=add_user.id,
+                                    request_date=datetime.datetime.utcnow(),
+                                    request_status=1,
+                                    status_date=None,
+                                    status=1,
+                                )
+                                db.add(ref_friend)
+                                db.commit()
+                                # Add Friend Group
+                                group_id=referrer_ref_id[2]
+
+                                get_friend_group = (
+                                    db.query(FriendGroups)
+                                    .filter(
+                                        FriendGroups.id == group_id
+                                    )
+                                    .first()
+                                )
+
+                                if get_friend_group:
+                                    group_name=get_friend_group.group_name
+
+                                    add_follow_user = FollowUser(
+                                        follower_userid=add_user.id,
+                                        following_userid=referred_user.id,
+                                        created_date=datetime.datetime.utcnow(),
+                                    )
+                                    db.add(add_follow_user)
+                                    db.commit()
+
+                                    # Check FriendGroupMembers
+                                    friend_group_member = (
+                                        db.query(FriendGroupMembers)
+                                        .filter(
+                                            FriendGroupMembers.group_id
+                                            == get_friend_group.id,
+                                            FriendGroupMembers.user_id
+                                            == referred_user.id,
+                                        )
+                                        .all()
+                                    )
+
+                                    if not friend_group_member:
+                                        add_friend_group_member = FriendGroupMembers(
+                                            group_id=get_friend_group.id,
+                                            user_id=add_user.id,
+                                            added_date=datetime.datetime.utcnow(),
+                                            added_by=referred_user.id,
+                                            is_admin=0,
+                                            disable_notification=1,
+                                            status=1,
+                                        )
+                                        db.add(add_friend_group_member)
+                                        db.commit()
+
+                                        # Add Members in Channel
+                                        channel_arn = channel_arn
+                                        chime_bearer = user_arn
+                                        member_id = (
+                                            list(referred_user.chime_user_id)
+                                            if referred_user.chime_user_id
+                                            else None
+                                        )
+                                        try:
+                                            addmembers(
+                                                channel_arn, chime_bearer, member_id
+                                            )
+                                        except Exception as e:
+                                            print(f"Referrer:{e}")
+
                     # Referral Auto Add Friend Ends
                     type = 2
                     rawcaster_support_id = GetRawcasterUserID(db, type)
@@ -503,7 +605,7 @@ async def signup(
                     db.commit()
                     db.refresh(add_token)
 
-                    return {
+                    data={
                         "status": 1,
                         "msg": "Success",
                         "email_id": email_id,
@@ -513,8 +615,13 @@ async def signup(
                         "acc_verify_status": 0,
                         "first_time": 1,
                         "remaining_seconds": 90,
-                        "signup_type": int(signup_type),
+                        "signup_type": int(signup_type)
                     }  # First Time (1 - New to rawcaster, 0 - existing user)
+                    if group_login == 1:
+                        data.update({"group_id":group_id})
+
+
+                    return data
 
                 else:
                     return {"status": 0, "msg": "Failed to add User"}
@@ -528,6 +635,7 @@ async def signupverify(
     db: Session = Depends(deps.get_db),
     auth_code: str = Form(None, description="SALT + otp_ref_id"),
     otp_ref_id: str = Form(None, description="From service no. 1"),
+    group_id:str=Form(None,description="refer by group"),
     otp: str = Form(None),
     otp_flag: str = Form(None),
     alt_token_id: str = Form(None),
@@ -542,6 +650,9 @@ async def signupverify(
     
     elif opt_in and not opt_in.isnumeric():
         return {"status":0,"msg":"Invalid opt type"}
+    
+    elif group_id and not group_id.isnumeric():
+        return {"status":0,"msg":"Invalid Group Id"}
 
     else:
         otp_ref_id = otp_ref_id.strip()
@@ -647,7 +758,20 @@ async def signupverify(
                                     request.client.host
 
                                 )
-                                return generate_access_token
+                                data=generate_access_token
+
+                                get_friend_group = (
+                                    db.query(FriendGroups.group_name,FriendGroups.id)
+                                    .filter(
+                                        FriendGroups.id == group_id
+                                    )
+                                    .first()
+                                )
+                                if get_friend_group:
+                                    data.update({"group_id":get_friend_group.id,
+                                                    "group_name":get_friend_group.group_name})
+                                
+                                return data
 
                     return {
                         "status": 1,
@@ -669,11 +793,14 @@ async def resendotp(
     db: Session = Depends(deps.get_db),
     auth_code: str = Form(None, description="SALT + otp_ref_id"),
     otp_ref_id: str = Form(None),
+    group_id:str=Form(None),
     token: str = Form(None),
     otp_flag: str = Form(None),
 ):
     if otp_flag and otp_flag.strip() == "" or otp_flag == None:
         otp_flag = "email"
+    if group_id and not group_id.isnumeric():
+        return {"status":0,"msg":"Group id is invalid"}
 
     auth_text = otp_ref_id if otp_ref_id != None else "Rawcaster"
     if auth_code == None or auth_code.strip() == "":
@@ -795,15 +922,29 @@ async def resendotp(
 
             if current_time < target_time:
                 remaining_seconds = int(target_time - current_time)
+            
+            get_friend_group = (
+                db.query(FriendGroups.group_name,FriendGroups.id)
+                .filter(
+                    FriendGroups.id == group_id
+                )
+                .first()
+            )
 
             reply_msg = f"Please enter the One Time Password (OTP) sent to {to}"
-            return {
+            data= {
                 "status": 1,
                 "msg": reply_msg,
                 "email_id": to,
                 "otp_ref_id": int(otp_ref_id),
                 "remaining_seconds": remaining_seconds,
-            }
+                }
+            
+            if get_friend_group:
+                data.update({"group_id":get_friend_group.id,
+                                "group_name":get_friend_group.group_name})
+
+            return data
 
 
 # # 3 - Resend OTP  (PHP Code)
@@ -2768,6 +2909,15 @@ async def listallfriendgroups(
                         grouptype = 2
                         group_category = 3
 
+                    # Generate URl
+                    token_text=f"{get_user.user_ref_id}//{datetime.datetime.utcnow().replace(tzinfo=None)}//{res.id}"
+                    user_ref_id = token_text.encode("ascii")
+                    
+                    hashed_user_ref_id = (base64.b64encode(user_ref_id)).decode("ascii")
+                    
+                    invite_url = inviteBaseurl()
+                    join_link = f"{invite_url}signup?ref={hashed_user_ref_id}"
+
                     get_group_chat = (
                         db.query(GroupChat)
                         .filter(GroupChat.status == 1, GroupChat.group_id == res.id)
@@ -2899,7 +3049,8 @@ async def listallfriendgroups(
                                 "result_list": 3,
                                 "group_member_ids": members,
                                 "group_members_list": memberlist,
-                                "my_group": my_group
+                                "my_group": my_group,
+                                "referral_link":join_link
                             }
                         )
 
@@ -5079,6 +5230,7 @@ async def listnuggets(
     search_key: str = Form(None),
     page_number: str = Form(default=1),
     nugget_type: str = Form(None, description="1-video,2-Other than video,0-all"),
+    global_search:str=Form(None,description="1")
     ):
     
     if token == None or token.strip() == "":
@@ -5093,6 +5245,9 @@ async def listnuggets(
         return {"status": 0, "msg": "Invalid Nugget Type"}
     elif not str(page_number).isnumeric():
         return {"status": 0, "msg": "Invalid page Number"}
+    elif global_search and not global_search.isnumeric():
+        return {"status": 0, "msg": "Invalid global search"}
+
     else:
         nugget_type = int(nugget_type) if nugget_type else None
         filter_type = int(filter_type) if filter_type else None
@@ -5153,6 +5308,7 @@ async def listnuggets(
                                 NuggetsMaster.status == 1)\
                         .group_by(Nuggets.id)
             
+            
             if search_key:
                 get_nuggets = get_nuggets.filter(
                     or_(
@@ -5192,186 +5348,187 @@ async def listnuggets(
                 get_nuggets = get_nuggets.filter(Nuggets.user_id == user_id)
             
             else:
-                if nugget_type == 1:  # Video
-                    get_nuggets = get_nuggets.filter(
-                        Nuggets.nuggets_id == NuggetsAttachment.nugget_id,
-                        NuggetsAttachment.media_type == "video",
-                    )
-                
-                elif nugget_type == 2:  # Audio and Image
-                    get_nuggets = get_nuggets.outerjoin(
-                        NuggetsAttachment,
-                        Nuggets.nuggets_id == NuggetsAttachment.nugget_id,
-                    ).filter(
-                        or_(
-                            NuggetsAttachment.media_type == None,
-                            NuggetsAttachment.media_type == "image",
-                            NuggetsAttachment.media_type == "audio",
+                if not search_key and not global_search:
+                    if nugget_type == 1:  # Video
+                        get_nuggets = get_nuggets.filter(
+                            Nuggets.nuggets_id == NuggetsAttachment.nugget_id,
+                            NuggetsAttachment.media_type == "video",
                         )
-                    )
+                    
+                    elif nugget_type == 2:  # Audio and Image
+                        get_nuggets = get_nuggets.outerjoin(
+                            NuggetsAttachment,
+                            Nuggets.nuggets_id == NuggetsAttachment.nugget_id,
+                        ).filter(
+                            or_(
+                                NuggetsAttachment.media_type == None,
+                                NuggetsAttachment.media_type == "image",
+                                NuggetsAttachment.media_type == "audio",
+                            )
+                        )
+                    
+                    if filter_type == 1: # Influencer
+                        my_followers = []  # my_followers
+                        follow_user = (
+                            db.query(FollowUser.following_userid)
+                            .filter(FollowUser.follower_userid == login_user_id)
+                            .all()
+                        )
+                        if follow_user:
+                            for group_list in follow_user:
+                                my_followers.append(group_list.following_userid)
+                    
+                        get_nuggets = get_nuggets.filter(
+                                Nuggets.user_id.in_(my_followers),Nuggets.share_type != 2
+                        )
                 
-                if filter_type == 1: # Influencer
-                    my_followers = []  # my_followers
-                    follow_user = (
-                        db.query(FollowUser.following_userid)
-                        .filter(FollowUser.follower_userid == login_user_id)
-                        .all()
-                    )
-                    if follow_user:
-                        for group_list in follow_user:
-                            my_followers.append(group_list.following_userid)
-                 
-                    get_nuggets = get_nuggets.filter(
-                            Nuggets.user_id.in_(my_followers),Nuggets.share_type != 2
-                    )
-             
-                elif user_public_nugget_display_setting == 0:  # Rawcaster
-                    get_nuggets = get_nuggets.filter(
-                        or_(Nuggets.user_id == login_user_id, Nuggets.user_id == raw_id)
-                    )
-                    
-                elif user_public_nugget_display_setting == 1:  # Public
-                    
-                    get_nuggets = get_nuggets.filter(
-                        or_(
-                            Nuggets.user_id == login_user_id,
-                            and_(Nuggets.share_type == 1),
-                            and_(
-                                Nuggets.share_type == 2,
+                    elif user_public_nugget_display_setting == 0:  # Rawcaster
+                        get_nuggets = get_nuggets.filter(
+                            or_(Nuggets.user_id == login_user_id, Nuggets.user_id == raw_id)
+                        )
+                        
+                    elif user_public_nugget_display_setting == 1:  # Public
+                        
+                        get_nuggets = get_nuggets.filter(
+                            or_(
                                 Nuggets.user_id == login_user_id,
-                            ),
-                            and_(
-                                Nuggets.share_type == 3,
-                                NuggetsShareWith.type == 1,
-                                NuggetsShareWith.share_with.in_(group_ids),
-                            ),
-                            and_(
-                                Nuggets.share_type == 4,
-                                NuggetsShareWith.type == 2,
-                                NuggetsShareWith.share_with.in_([login_user_id]),
-                            ),
-                            and_(
-                                Nuggets.share_type == 6, Nuggets.user_id.in_(my_friends)
-                            ),
-                            and_(
-                                Nuggets.share_type == 7,
-                                Nuggets.user_id.in_(my_followings),
-                            ),
-                            and_(Nuggets.user_id == raw_id),
-                        )
-                    )    
-                elif user_public_nugget_display_setting == 2:  # All Connections
-                    get_nuggets = get_nuggets.filter(
-                        or_(
-                            and_(Nuggets.user_id == login_user_id),
-                            and_(
-                                Nuggets.user_id.in_(my_friends), Nuggets.share_type != 2
-                            ),
-                        )
-                    )
-
-                elif user_public_nugget_display_setting == 3:  # Specific Connections
-                   
-                    my_friends = []  # Selected Connections id's
-
-                    online_group_list = (
-                        db.query(UserProfileDisplayGroup)
-                        .filter(
-                            UserProfileDisplayGroup.user_id == login_user_id,
-                            UserProfileDisplayGroup.profile_id
-                            == "public_nugget_display",
-                        )
-                        .all()
-                    )
-
-                    if online_group_list:
-                        for group_list in online_group_list:
-                            my_friends.append(group_list.groupid)
-                    # Without specfic connetions
-                    
-                    statement=select([NuggetsShareWith]).where(NuggetsShareWith.nuggets_id == Nuggets.id).correlate_except(Nuggets)
-                    get_nuggets = get_nuggets.filter(
-                            
-                            or_(Nuggets.user_id == login_user_id,
+                                and_(Nuggets.share_type == 1),
                                 and_(
-                                    Nuggets.user_id.in_(my_friends),
-                                    Nuggets.share_type != 2,
-                                    ~exists(statement)
-                                )
+                                    Nuggets.share_type == 2,
+                                    Nuggets.user_id == login_user_id,
+                                ),
+                                and_(
+                                    Nuggets.share_type == 3,
+                                    NuggetsShareWith.type == 1,
+                                    NuggetsShareWith.share_with.in_(group_ids),
+                                ),
+                                and_(
+                                    Nuggets.share_type == 4,
+                                    NuggetsShareWith.type == 2,
+                                    NuggetsShareWith.share_with.in_([login_user_id]),
+                                ),
+                                and_(
+                                    Nuggets.share_type == 6, Nuggets.user_id.in_(my_friends)
+                                ),
+                                and_(
+                                    Nuggets.share_type == 7,
+                                    Nuggets.user_id.in_(my_followings),
+                                ),
+                                and_(Nuggets.user_id == raw_id),
+                            )
+                        )    
+                    elif user_public_nugget_display_setting == 2:  # All Connections
+                        get_nuggets = get_nuggets.filter(
+                            or_(
+                                and_(Nuggets.user_id == login_user_id),
+                                and_(
+                                    Nuggets.user_id.in_(my_friends), Nuggets.share_type != 2
+                                ),
                             )
                         )
 
-                elif user_public_nugget_display_setting == 4:  # All Groups
-                    get_nuggets = get_nuggets.join(
-                        FriendGroupMembers,
-                        Nuggets.user_id == FriendGroupMembers.user_id,
-                        isouter=True,
-                    )
-                    get_nuggets = get_nuggets.join(
-                        FriendGroups, FriendGroupMembers.group_id == FriendGroups.id,isouter=True
-                    ).filter(FriendGroups.status == 1)
-                    get_nuggets = get_nuggets.filter(
-                        or_(
-                            Nuggets.user_id == login_user_id,
-                            and_(
-                                FriendGroups.created_by == login_user_id,
-                                Nuggets.share_type != 2,
-                            ),
-                        )
-                    )
-
-                elif user_public_nugget_display_setting == 5:  # Specific Groups
-                    my_friends = []
-                    online_group_list = (
-                        db.query(UserProfileDisplayGroup)
-                        .filter(
-                            UserProfileDisplayGroup.user_id == login_user_id,
-                            UserProfileDisplayGroup.profile_id
-                            == "public_nugget_display",
-                        )
-                        .all()
-                    )
-                    if online_group_list:
-                        for group_list in online_group_list:
-                            my_friends.append(group_list.groupid)
-
-                    get_nuggets = get_nuggets.join(
-                        FriendGroupMembers,
-                        Nuggets.user_id == FriendGroupMembers.user_id,
-                    )
-                    get_nuggets = get_nuggets.join(
-                        FriendGroups, FriendGroupMembers.group_id == FriendGroups.id
-                    ).filter(FriendGroups.status == 1)
-
-                    get_nuggets = get_nuggets.filter(
-                        or_(
-                            Nuggets.user_id == login_user_id,
-                            and_(
-                                FriendGroups.id.in_(my_friends), Nuggets.share_type != 2
-                            ),
-                        )
-                    )
-
-                elif user_public_nugget_display_setting == 6:  # My influencers
-                    my_followers = []  # Selected Connections id's
-                    follow_user = (
-                        db.query(FollowUser)
-                        .filter(FollowUser.follower_userid == login_user_id)
-                        .all()
-                    )
-                    if follow_user:
-                        for group_list in follow_user:
-                            my_followers.append(group_list.following_userid)
+                    elif user_public_nugget_display_setting == 3:  # Specific Connections
                     
-                    get_nuggets = get_nuggets.filter(
-                        or_(
-                            Nuggets.user_id == login_user_id,
-                            and_(Nuggets.user_id.in_(my_followers),
-                            Nuggets.share_type != 2)
+                        my_friends = []  # Selected Connections id's
+
+                        online_group_list = (
+                            db.query(UserProfileDisplayGroup)
+                            .filter(
+                                UserProfileDisplayGroup.user_id == login_user_id,
+                                UserProfileDisplayGroup.profile_id
+                                == "public_nugget_display",
+                            )
+                            .all()
                         )
-                    )  
-                else:
-                    get_nuggets=get_nuggets.filter(or_(Nuggets.user_id == login_user_id))
+
+                        if online_group_list:
+                            for group_list in online_group_list:
+                                my_friends.append(group_list.groupid)
+                        # Without specfic connetions
+                        
+                        statement=select([NuggetsShareWith]).where(NuggetsShareWith.nuggets_id == Nuggets.id).correlate_except(Nuggets)
+                        get_nuggets = get_nuggets.filter(
+                                
+                                or_(Nuggets.user_id == login_user_id,
+                                    and_(
+                                        Nuggets.user_id.in_(my_friends),
+                                        Nuggets.share_type != 2,
+                                        ~exists(statement)
+                                    )
+                                )
+                            )
+
+                    elif user_public_nugget_display_setting == 4:  # All Groups
+                        get_nuggets = get_nuggets.join(
+                            FriendGroupMembers,
+                            Nuggets.user_id == FriendGroupMembers.user_id,
+                            isouter=True,
+                        )
+                        get_nuggets = get_nuggets.join(
+                            FriendGroups, FriendGroupMembers.group_id == FriendGroups.id,isouter=True
+                        ).filter(FriendGroups.status == 1)
+                        get_nuggets = get_nuggets.filter(
+                            or_(
+                                Nuggets.user_id == login_user_id,
+                                and_(
+                                    FriendGroups.created_by == login_user_id,
+                                    Nuggets.share_type != 2,
+                                ),
+                            )
+                        )
+
+                    elif user_public_nugget_display_setting == 5:  # Specific Groups
+                        my_friends = []
+                        online_group_list = (
+                            db.query(UserProfileDisplayGroup)
+                            .filter(
+                                UserProfileDisplayGroup.user_id == login_user_id,
+                                UserProfileDisplayGroup.profile_id
+                                == "public_nugget_display",
+                            )
+                            .all()
+                        )
+                        if online_group_list:
+                            for group_list in online_group_list:
+                                my_friends.append(group_list.groupid)
+
+                        get_nuggets = get_nuggets.join(
+                            FriendGroupMembers,
+                            Nuggets.user_id == FriendGroupMembers.user_id,
+                        )
+                        get_nuggets = get_nuggets.join(
+                            FriendGroups, FriendGroupMembers.group_id == FriendGroups.id
+                        ).filter(FriendGroups.status == 1)
+
+                        get_nuggets = get_nuggets.filter(
+                            or_(
+                                Nuggets.user_id == login_user_id,
+                                and_(
+                                    FriendGroups.id.in_(my_friends), Nuggets.share_type != 2
+                                ),
+                            )
+                        )
+
+                    elif user_public_nugget_display_setting == 6:  # My influencers
+                        my_followers = []  # Selected Connections id's
+                        follow_user = (
+                            db.query(FollowUser)
+                            .filter(FollowUser.follower_userid == login_user_id)
+                            .all()
+                        )
+                        if follow_user:
+                            for group_list in follow_user:
+                                my_followers.append(group_list.following_userid)
+                        
+                        get_nuggets = get_nuggets.filter(
+                            or_(
+                                Nuggets.user_id == login_user_id,
+                                and_(Nuggets.user_id.in_(my_followers),
+                                Nuggets.share_type != 2)
+                            )
+                        )  
+                    else:
+                        get_nuggets=get_nuggets.filter(or_(Nuggets.user_id == login_user_id))
                 
             if category:
                 get_nuggets=get_nuggets.filter(User.influencer_category.like("%" + category + "%"),Nuggets.user_id != login_user_id)
@@ -13457,6 +13614,7 @@ async def addnuggetview(
                 nugget_id = int(nugget_id) if int(nugget_id) > 0 else ""
 
                 access_check = NuggetAccessCheck(db, login_user_id, nugget_id)
+                print(access_check)
                 if not access_check:
                     return {"status": 0, "msg": "Unauthorized access"}
 

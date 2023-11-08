@@ -224,6 +224,23 @@ async def add_claim_account(
                 db.add(add_clain)
                 db.commit()
                 db.refresh(add_clain)
+
+                # Send SMS and Mail 
+                getUsers=db.query(Admin).filter(Admin.status == 1).all()
+                emailIds=[usr.username for usr in getUsers]
+                mobileNos=[usr.contact_no for usr in getUsers]
+                subject="Claim Account Verification "
+                body="Account verification"
+                
+                try:
+                    for mail in emailIds:  # Mail
+                        send_mail = await send_email(db, mail, subject, body) 
+
+                    for mobile_no in mobileNos:  # Send SMS
+                        send_sms = await sendSMS(mobile_no, 'Claim account verification')
+                except:
+                    pass
+
                 return {
                     "status": 1,
                     "msg": "You have placed a claim on a predefined influencer profile, We will contact you to validate your claim. Please contact us at info@rawcaster.com if you have any questions.",
