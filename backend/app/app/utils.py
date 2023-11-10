@@ -225,7 +225,6 @@ async def send_email(db, to_mail, subject, message):
         return True
 
     else:
-        print("dd")
         return False
 
 
@@ -245,6 +244,7 @@ def sendSMS(mobile_no, message):
         print(
             f'SMS sent successfully to {mobile_no} with message ID: {response["MessageId"]}'
         )
+        return True
     else:
         print("Failed to send SMS")
 
@@ -1669,7 +1669,7 @@ def eventPostNotifcationEmail(db, event_id):
             )
             return sms_message, body
     else:
-        print("Invalid Event Id")
+       
         exit()
 
 

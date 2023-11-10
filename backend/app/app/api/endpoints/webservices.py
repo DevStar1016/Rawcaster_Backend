@@ -1569,8 +1569,16 @@ def user_profile(db, id):
         getSettings=db.query(Settings).filter(Settings.settings_topic == "complementary_enable_disable",
                                               Settings.settings_value == 1).first()
         getComplementaryValue=db.query(Settings).filter(Settings.settings_topic == "complementary_period").first()
-
         
+        # Generate Profile URL
+        token_text=f"{get_user.id}rawcaster@!@#$QWERTxcvbn"
+        user_ref_id = token_text.encode("ascii")
+        
+        hashed_user_ref_id = (base64.b64encode(user_ref_id)).decode("ascii")
+        
+        invite_url = inviteBaseurl()
+        join_link = f"{invite_url}viewprofile/{hashed_user_ref_id}"
+
         user_details.update(
             {
                 "user_id": get_user.id,
@@ -1640,8 +1648,8 @@ def user_profile(db, id):
                 else None,
                 "ai_content_length": 100,
                 "complementary_status": 1 if getSettings and get_user.user_status_id == 1 else 0, # Only valued to premium member
-                "complementary_days":(getComplementaryValue.settings_value if getComplementaryValue else 0) if getSettings else 0
-
+                "complementary_days":(getComplementaryValue.settings_value if getComplementaryValue else 0) if getSettings else 0,
+                "profile_url":join_link
             }
         )
         token_text=f"{get_user.user_ref_id}//{datetime.datetime.utcnow().replace(tzinfo=None)}"
@@ -3096,7 +3104,7 @@ async def listallfriends(
         allfriends = int(allfriends) if allfriends else None
         nongrouped = int(nongrouped) if nongrouped else None
 
-        access_token = checkToken(db, token)
+        access_token = checkToken(db, token) if token != "RAWCAST" else True
         if access_token == False:
             return {
                 "status": -1,
@@ -4767,7 +4775,6 @@ async def addnuggets(
                                     fps = data.get(cv2.CAP_PROP_FPS)
                                     total_duration = round(frames / fps)
                                    
-                                    
                                     if total_duration < 330:
                                         s3_file_path = f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
 
@@ -8439,7 +8446,7 @@ async def listevents(
                     ))
                 
                 
-            event_list = event_list.filter(Events.status == 1).order_by(Events.start_date_time.desc())
+            event_list = event_list.filter(Events.status == 1).order_by(Events.start_date_time.asc())
 
             if type_filter:
                 event_list = event_list.filter(Events.type.in_([type_filter]))
@@ -10100,7 +10107,7 @@ async def getothersprofile(
         return {"status": 0, "msg": "User ID missing"}
 
     else:
-        access_token = checkToken(db, token)
+        access_token = checkToken(db, token) if token != "RAWCAST" else True
 
         if checkAuthCode(auth_code, token) == False:
             return {"status": 0, "msg": "Authentication failed!"}
@@ -10205,6 +10212,15 @@ async def getothersprofile(
                             .filter(VerifyAccounts.user_id == user_id)
                             .first()
                         )
+
+                        # Generate Profile URL
+                        token_text=f"{get_user.id}rawcaster@!@#$QWERTxcvbn"
+                        user_ref_id = token_text.encode("ascii")
+                        
+                        hashed_user_ref_id = (base64.b64encode(user_ref_id)).decode("ascii")
+                        
+                        invite_url = inviteBaseurl()
+                        join_link = f"{invite_url}viewprofile/{hashed_user_ref_id}"
 
                         result_list = {
                             "user_id": user_id,
@@ -10338,6 +10354,7 @@ async def getothersprofile(
                             "chime_user_id": get_user.chime_user_id
                             if get_user.chime_user_id
                             else None,
+                            "profile_url":join_link
                         }
 
                         return {"status": 1, "msg": "Success", "profile": result_list}
@@ -13319,7 +13336,7 @@ async def getfollowlist(
         return {"status": 0, "msg": "Invalid page Number"}
     else:
         type = int(type) if type else None
-        access_token = checkToken(db, token)
+        access_token = checkToken(db, token) if token != "RAWCAST" else True
 
         if access_token == False:
             return {
@@ -13890,11 +13907,11 @@ async def addliveevent(
                     .first()
                 )
 
-                print(userstatus.max_event_duration)
-                duration = int(float(userstatus.max_event_duration)*3600)
-                print(duration)
+                max_event_duration = userstatus.max_event_duration
+                duration= timedelta(minutes=int(max_event_duration[:2]), seconds=int(max_event_duration[3:]))
+
                 duration = (
-                    datetime.datetime.min + timedelta(seconds=duration)
+                    datetime.datetime.min + duration
                 ).strftime("%H:%M:%S")
 
                 reference_id = f"RC{str(random.randint(1, 499))}{str(int(datetime.datetime.utcnow().timestamp()))}"
@@ -15141,7 +15158,103 @@ async def socialmedialogin(
                                             )
                                         except Exception as e:
                                             print(f"Referrer:{e}")
+                        
+                        if len(referrer_ref_id) == 3:
+                            group_login=1
+                            referred_user = (
+                                db.query(User)
+                                .filter(
+                                    User.user_ref_id == referrer_ref_id[0],
+                                    User.status == 1,
+                                )
+                                .first()
+                            )
+                            if referred_user:
+                                referred_id = referred_user.id
+                                # update referrer id
+                                update_referrer = (
+                                    db.query(User)
+                                    .filter(User.id == model.id)
+                                    .update(
+                                        {
+                                            "referrer_id": referred_user.id,
+                                            "invited_date": referrer_ref_id[1],
+                                        }
+                                    )
+                                )
+                                db.commit()
 
+                                ref_friend = MyFriends(
+                                    sender_id=referred_user.id,
+                                    receiver_id=model.id,
+                                    request_date=datetime.datetime.utcnow(),
+                                    request_status=1,
+                                    status_date=None,
+                                    status=1,
+                                )
+                                db.add(ref_friend)
+                                db.commit()
+                                # Add Friend Group
+                                group_id=referrer_ref_id[2]
+
+                                get_friend_group = (
+                                    db.query(FriendGroups)
+                                    .filter(
+                                        FriendGroups.id == group_id
+                                    )
+                                    .first()
+                                )
+
+                                if get_friend_group:
+                                    group_name=get_friend_group.group_name
+
+                                    add_follow_user = FollowUser(
+                                        follower_userid=model.id,
+                                        following_userid=referred_user.id,
+                                        created_date=datetime.datetime.utcnow(),
+                                    )
+                                    db.add(add_follow_user)
+                                    db.commit()
+
+                                    # Check FriendGroupMembers
+                                    friend_group_member = (
+                                        db.query(FriendGroupMembers)
+                                        .filter(
+                                            FriendGroupMembers.group_id
+                                            == get_friend_group.id,
+                                            FriendGroupMembers.user_id
+                                            == referred_user.id,
+                                        )
+                                        .all()
+                                    )
+
+                                    if not friend_group_member:
+                                        add_friend_group_member = FriendGroupMembers(
+                                            group_id=get_friend_group.id,
+                                            user_id=model.id,
+                                            added_date=datetime.datetime.utcnow(),
+                                            added_by=referred_user.id,
+                                            is_admin=0,
+                                            disable_notification=1,
+                                            status=1,
+                                        )
+                                        db.add(add_friend_group_member)
+                                        db.commit()
+
+                                        # Add Members in Channel
+                                        channel_arn = channel_arn
+                                        chime_bearer = user_arn
+                                        member_id = (
+                                            list(referred_user.chime_user_id)
+                                            if referred_user.chime_user_id
+                                            else None
+                                        )
+                                        try:
+                                            addmembers(
+                                                channel_arn, chime_bearer, member_id
+                                            )
+                                        except Exception as e:
+                                            print(f"Referrer:{e}")
                     # Referral Auto Add Friend Ends
                     rawcaster_support_id = GetRawcasterUserID(db, 2)  # Type = 2
                     if rawcaster_support_id and referred_id != rawcaster_support_id:

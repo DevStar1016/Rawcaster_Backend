@@ -229,15 +229,27 @@ async def add_claim_account(
                 getUsers=db.query(Admin).filter(Admin.status == 1).all()
                 emailIds=[usr.username for usr in getUsers]
                 mobileNos=[usr.contact_no for usr in getUsers]
-                subject="Claim Account Verification "
-                body="Account verification"
+                subject="Your Influencer page claim request is received"
                 
                 try:
                     for mail in emailIds:  # Mail
+                        getUserName=db.query(Admin.first_name).filter(Admin.username.like(mail)).first()
+                        name=getUserName.first_name if getUserName else ""
+                        influencer_name=check_requests.user2.display_name
+                        body=f'''
+                                <p>Dear {name},</p>
+                                <p>We have received your request to claim the pre-uploaded profile page and content created in the name of {influencer_name}. Your request is being evaluated and you will be notified when the process is complete.</p>
+                                <p>We value your membership of the Rawcaster community. When the claim process is complete, the content and fans will be merged to your existing profile, and you will be able to manage them as one profile page under the account you created.</p>
+                                <p>If you have any questions, please contact us at <a href="mailto:info@rawcatser.com">info@rawcaster.com</a>.</p>
+                                <p>Sincerely,<br>Rawcaster.com LLC</p>
+                                '''
+
                         send_mail = await send_email(db, mail, subject, body) 
 
                     for mobile_no in mobileNos:  # Send SMS
-                        send_sms = await sendSMS(mobile_no, 'Claim account verification')
+                        message=f'''Your Influencer page claim request has been received. You will be notified by email after processing.\n
+                                    Rawcaster.com LLC'''
+                        send_sms = await sendSMS(mobile_no, message)
                 except:
                     pass
 
