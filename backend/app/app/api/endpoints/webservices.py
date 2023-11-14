@@ -4282,10 +4282,10 @@ async def deletefriendgroup(
 def process_data(
     db, uploaded_file_path, login_user_id, master_id, share_type, share_with
 ):
+    print(uploaded_file_path)
     input_file = uploaded_file_path
     output_prefix = f"rawcaster_uploads/output_part_{int(datetime.datetime.utcnow().timestamp())}"  # Prefix for the output video parts
     duration = 299  # Duration of each video part in seconds
-
     command = [
         "ffmpeg",
         "-i",
@@ -4734,13 +4734,12 @@ async def addnuggets(
                             uploaded_file_path = await file_upload(
                                 nuggets_media[i - 1], ext, compress=1
                             )
-                            
+                           
                             file_stat = os.stat(uploaded_file_path)
                             file_size = file_stat.st_size
 
                             if (
-                                file_size > 1000000
-                                and file_type == "image"
+                                file_type == "image"
                                 and file_ext != ".gif"
                             ):
                                 s3_file_path = f"nuggets/Image_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
@@ -4767,6 +4766,7 @@ async def addnuggets(
                                 s3_file_path = f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
 
                                 if file_type == "video":
+                                    
                                     # create video capture object
                                     data = cv2.VideoCapture(uploaded_file_path)
                                     
@@ -4774,7 +4774,8 @@ async def addnuggets(
                                     frames = data.get(cv2.CAP_PROP_FRAME_COUNT)
                                     fps = data.get(cv2.CAP_PROP_FPS)
                                     total_duration = round(frames / fps)
-                                   
+                                    # print(total_duration)
+                                    
                                     if total_duration < 330:
                                         s3_file_path = f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
 
@@ -5749,6 +5750,15 @@ async def listnuggets(
                         )
                         .first()
                     )
+
+                    # Generate Profile URL
+                    token_text=f"{nuggets.id}rawcaster@!@#$QWERTxcvbn"
+                    user_ref_id = token_text.encode("ascii")
+                    
+                    hashed_user_ref_id = (base64.b64encode(user_ref_id)).decode("ascii")
+                    
+                    invite_url = inviteBaseurl()
+                    share_link = f"{invite_url}view/{hashed_user_ref_id}"
                     
                     nuggets_list.append({"nugget_id":nuggets.id,
                                         "content": nuggets.nuggets_master.content,
@@ -5784,7 +5794,8 @@ async def listnuggets(
                                         'voted': 1 if voted else 0,
                                         'voted_option': voted.poll_option_id if voted else None,
                                         'total_vote':total_poll,
-                                        'saved': True if saved else False
+                                        'saved': True if saved else False,
+                                        "share_link":share_link
                                         })
                 
                 return {

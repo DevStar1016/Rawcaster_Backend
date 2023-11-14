@@ -567,14 +567,23 @@ async def add_verify_account(
                 # Idenfy Verify
                 username=config.idenfy_api_key
                 password=config.idenfy_secret_key
+
+                # Generate Profile URL
+                token_text=f"{login_user_id}rawcaster@!@#$QWERTxcvbn"
+                user_ref_id = token_text.encode("ascii")
+                
+                hashed_user_ref_id = (base64.b64encode(user_ref_id)).decode("ascii")
+                
+                invite_url = inviteBaseurl()
+                join_link = f"{invite_url}viewprofile/{hashed_user_ref_id}"
                
 
                 url = 'https://ivs.idenfy.com/api/v2/token'
                 
                 data={'clientId':get_token_details.user.user_ref_id,
-                      "successUrl":"https://ui.idenfy.com/result?status=success",
-                      "errorUrl":"https://ui.idenfy.com/result?status=fail",
-                      "unverifiedUrl":"https://ui.idenfy.com/result?status=fail",
+                      "successUrl":join_link,
+                      "errorUrl":join_link,
+                      "unverifiedUrl":join_link,
                       
                      
                       }

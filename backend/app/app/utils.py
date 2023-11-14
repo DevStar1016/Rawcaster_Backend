@@ -29,6 +29,9 @@ from profanityfilter import ProfanityFilter
 from gtts import gTTS
 from urllib.parse import urlparse
 from fastapi import Request
+import subprocess
+from moviepy.editor import VideoFileClip,concatenate_videoclips
+import re
 
 access_key = config.access_key
 access_secret = config.access_secret
@@ -90,7 +93,6 @@ def EncryptandDecrypt(otp, flag=1):
 
 
 async def file_upload(file_name, ext, compress):
-    
     base_dir = "rawcaster_uploads"
 
     try:
@@ -105,20 +107,56 @@ async def file_upload(file_name, ext, compress):
     random_string = "".join(random.choice(characters) for i in range(18))
 
     filename = f"uploadfile_{random_string}{ext}"
-    
     save_full_path = f"{output_dir}{filename}"
     if ext in ["jpg", "jpeg", "png", "gif"]:
         img = Image.open(file_name)
         img.save(save_full_path, quality=80)
         return save_full_path
 
+    # elif ext in ['.mp4','mp4','avi','mkv','webm','mov']:
+    #     inputFile = file_name.filename
+    #     outputFile = save_full_path
+
+    #     # Run FFmpeg command
+    #     ffmpegCmd = f'ffmpeg -i {inputFile} -c:v libx264 -c:a aac -strict experimental {outputFile}'
+    #     subprocess.run(ffmpegCmd, shell=True)
+
+    #     clip = VideoFileClip(outputFile)
+    #     duration = clip.duration
+
+    #     clip_duration = 10
+    #     num_clips = int(duration // clip_duration)
+    #     clip_paths = []
+
+    #     for i in range(num_clips):
+    #         start_time = i * clip_duration
+    #         end_time = min((i + 1) * clip_duration, duration)
+    #         clip_i = VideoFileClip(outputFile).subclip(start_time, end_time)
+
+    #         # Save each clip to a separate file
+    #         clip_path = f"rawcaster_uploads/output_part_{int(datetime.datetime.utcnow().timestamp())}"  # Prefix for the output video parts
+    #         clip_i.write_videofile(clip_path)
+    #         clip_paths.append(clip_path)
+        
+    #     return clip_paths
+
+
+    #     # local_file_path=f"{output_dir}upload_file_{int(datetime.datetime.now().timestamp())}.mp4"
+    #     # with open(local_file_path, "wb") as buffer:
+    #     #     shutil.copyfileobj(file_name.file, buffer)
+
+    #     # # Run FFmpeg command
+    #     # ffmpegCmd = f'ffmpeg -i {file_name.filename} -c:v libx264 -c:a aac -strict experimental {save_full_path}'
+    #     # subprocess.run(ffmpegCmd, shell=True)
+    #     # # os.remove(local_file_path)
+
+    #     return save_full_path
+
     else:
-        # out_file_path=f"{output_dir}uploadfile_{random_string}1.mp4"
+        
         with open(save_full_path, "wb") as buffer:
             shutil.copyfileobj(file_name.file, buffer)
         
-        # os.popen(f"ffmpeg -i {save_full_path} -ac 2 -b:v 2000k -c:a aac -c:v libx264 -b:a 160k -vprofile high -bf 0 -strict experimental -f mp4 {out_file_path}")
-        # # os.remove(save_full_path)
         return save_full_path
 
 
