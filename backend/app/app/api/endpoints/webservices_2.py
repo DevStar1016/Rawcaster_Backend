@@ -312,7 +312,8 @@ async def listunclaimaccount(
                     User.user_status_id == UserStatusMaster.id,
                     isouter=True,
                 )
-                .filter(User.created_by == 1, UserStatusMaster.type == 2)
+                .filter(User.created_by == 1, UserStatusMaster.type == 2,
+                        User.status != 2)
             )
             if location:
                 get_unclaimed_account = get_unclaimed_account.filter(
@@ -542,7 +543,8 @@ async def add_verify_account(
             get_accounts = (
                 db.query(VerifyAccounts)
                 .filter(VerifyAccounts.user_id == login_user_id,
-                        VerifyAccounts.status == 1)
+                        VerifyAccounts.status == 1,
+                        VerifyAccounts.verify_status != -1)
                 .first()
             )
             if not get_accounts:

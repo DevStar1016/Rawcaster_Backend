@@ -17,9 +17,9 @@ class VerifyAccounts(Base):
     verify_date = Column(DateTime)
     verification_token=Column(String(255),comment="authtoken for Account verify")
     verification_response=Column(TEXT)
-    verify_status = Column(TINYINT, default=0, comment="0-pending,1- verified")
+    verify_status = Column(TINYINT, default=0, comment="0-pending,1- verified,-1- delete")
     created_at = Column(DateTime)
-    status = Column(TINYINT, comment="1-Active,0-Inactive")
+    status = Column(TINYINT, comment="1-Active,0-Inactive,-1-delete")
 
     user = relationship("User", back_populates="verify_accounts")
 
