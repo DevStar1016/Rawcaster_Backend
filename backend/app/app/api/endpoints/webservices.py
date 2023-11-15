@@ -1524,7 +1524,8 @@ def user_profile(db, id):
     get_user = db.query(User).filter(User.id == user_id).first()
 
     if get_user:
-        get_account_status=db.query(VerifyAccounts).filter(VerifyAccounts.user_id == get_user.id).first()
+        get_account_status=db.query(VerifyAccounts).filter(VerifyAccounts.user_id == get_user.id,
+                                                            VerifyAccounts.verify_status != -1).first()
         
         followers_count = db.query(FollowUser.id).filter_by(following_userid=user_id).count()
         following_count = db.query(FollowUser.id).filter_by(follower_userid=user_id).count()
