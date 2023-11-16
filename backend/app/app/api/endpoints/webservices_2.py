@@ -1487,10 +1487,135 @@ def complementary_membership(
                             "user_status_id": get_token_details.user.user_status_id}
         else:
             return {"status":0,"msg":"Unable to use"}
+
+
+@router.post("/update_nugget_totals")
+def update_nugget_totals(
+    db: Session = Depends(deps.get_db)
+):
+    getNuggets=db.query(Nuggets).filter(Nuggets.status == 1).all()
+    
+    for nugget in getNuggets:
+        getLikes=db.query(NuggetsLikes).filter(NuggetsLikes.nugget_id == nugget.id,NuggetsLikes.status ==1).count()
+        getNuggetsComments=db.query(NuggetsComments).filter(NuggetsComments.nugget_id == nugget.id,NuggetsComments.status ==1).count()
+        
+        nugget.total_like_count = getLikes
+        nugget.total_comment_count=getNuggetsComments
+        db.commit()
+
+    return {"status":1,"msg":"Success"}
+    
+
+
+
+# Nugget Script
+
+@router.post("/script_add_nugget")
+def script_add_nugget(
+    db: Session = Depends(deps.get_db)
+):
+    getNuggets=db.query(Nuggets).join(NuggetsMaster,NuggetsMaster.id == Nuggets.nuggets_id).filter(Nuggets.status == 1,Nuggets.id == 5).all()
+    for nugget in getNuggets:
+        getNuggetAttachment=db.query(NuggetsAttachment).filter(NuggetsAttachment.nugget_id == nugget.nuggets_id)
+        getNuggetAttachmentCount=getNuggetAttachment.count()
+        print(nugget.id,"nugget id")
+        print(getNuggetAttachmentCount,"count")
+        if getNuggetAttachmentCount > 1 :
+            getNuggetAttachment=getNuggetAttachment.all()
+            getAttachIds=[nug_att.id for nug_att in getNuggetAttachment]
+
+            removedNugget=getAttachIds.pop(0) # Remove First Index
+            print(nugget.nuggets_id)
+            # Get Attach Nuggets
+            getNuggets=db.query(Nuggets).filter(Nuggets.nuggets_id == nugget.nuggets_id).first()
+            print(getNuggets.id)
+            if getNuggets:
+                for nug_attc in getAttachIds:
+
+                    # Add NuggetMaster
+                    addNuggetMaster=NuggetsMaster(
+                                                user_id=getNuggets.nuggets_master.user_id,
+                                                poll_duration=getNuggets.nuggets_master.poll_duration,
+                                                modified_date=getNuggets.nuggets_master.modified_date,
+                                                _metadata=getNuggets.nuggets_master._metadata,
+                                                content=None,
+                                                created_date=getNuggets.nuggets_master.created_date,
+                                                status=getNuggets.nuggets_master.status
+                                                )
+                    db.add(addNuggetMaster)
+                    db.commit()
+                    db.refresh(addNuggetMaster)
                     
+                    # Add Nugget
+                    addNugget=Nuggets(share_type=getNuggets.share_type,
+                                    warning_mail_count=getNuggets.warning_mail_count,
+                                    created_date=getNuggets.created_date,
+                                    warning_mail_status=getNuggets.warning_mail_status,
+                                    modified_date=getNuggets.modified_date,
+                                    warning_mail_sent_date=getNuggets.warning_mail_sent_date,
+                                    total_view_count=getNuggets.total_view_count,
+                                    nugget_status=getNuggets.nugget_status,
+                                    nuggets_id=addNuggetMaster.id,
+                                    total_like_count=getNuggets.total_like_count,
+                                    status=getNuggets.status,
+                                    total_comment_count=getNuggets.total_comment_count,
+                                    user_id=getNuggets.user_id,
+                                    total_poll_count=getNuggets.total_poll_count,
+                                    type=getNuggets.type
+                                )
+                    db.add(addNugget)
+                    db.commit()
+                    db.refresh(addNugget)
+
+                    # Update NuggetMaster Id in Attachment
+                    getAttachment=db.query(NuggetsAttachment).filter(NuggetsAttachment.id == nug_attc).update({"nugget_id":addNuggetMaster.id})
+                    db.commit()   
+
+        # Share With  ----------------------------------
+                    share_type= getNuggets.share_type
+
+                    if (share_type == 3 or share_type == 4 or share_type == 5):
+                        getShareWithNuggets=db.query(NuggetsShareWith).filter(
+                            NuggetsShareWith.nuggets_id == addNugget.id
+                        ).all()
+
+                        for shareNugg in getShareWithNuggets:
+                            add_NuggetsShareWith = (
+                                    NuggetsShareWith(
+                                        nuggets_id=addNugget.id,
+                                        type=shareNugg.type,
+                                        share_with=shareNugg.share_with,
+                                    )
+                                )
+                            db.add(add_NuggetsShareWith)
+                            db.commit()
+    return {"status":1,"msg":"Success"}
 
 
 
+
+
+
+
+# def update_poll_count(
+#     db: Session = Depends(deps.get_db)
+# ):
+#     getNuggets=db.query(Nuggets).join(NuggetsMaster,NuggetsMaster.id == Nuggets.nuggets_id).join(NuggetPollOption,NuggetPollOption.nuggets_master_id == Nuggets.nuggets_id,isouter=True).filter(NuggetsMaster.poll_duration != None).all()
+    
+#     for nugget in getNuggets:
+        
+#         if nugget.nuggets_master.poll_duration:
+            
+#             getPollCount=db.query(NuggetPollOption).filter(NuggetPollOption.nuggets_master_id == nugget.nuggets_id).all()
+#             poll_vote=0
+            
+#             for poll in getPollCount:
+#                 poll_vote += poll.votes if poll.votes else 0
+            
+#             nugget.total_poll_count = poll_vote
+#             db.commit()
+
+#     return "Success"
 
 
 
@@ -1536,44 +1661,3 @@ def complementary_membership(
 #                   if get_user_readout_language 
 #                   else "en-US")
 # )
-
-
-
-# @router.post("/update_poll_count")
-# def update_poll_count(
-#     db: Session = Depends(deps.get_db)
-# ):
-#     getNuggets=db.query(Nuggets).join(NuggetsMaster,NuggetsMaster.id == Nuggets.nuggets_id).join(NuggetPollOption,NuggetPollOption.nuggets_master_id == Nuggets.nuggets_id,isouter=True).filter(NuggetsMaster.poll_duration != None).all()
-    
-#     for nugget in getNuggets:
-
-#         if nugget.nuggets_master.poll_duration:
-            
-#             getPollCount=db.query(NuggetPollOption).filter(NuggetPollOption.nuggets_master_id == nugget.nuggets_id).all()
-#             poll_vote=0
-            
-#             for poll in getPollCount:
-#                 poll_vote += poll.votes if poll.votes else 0
-            
-#             nugget.total_poll_count = poll_vote
-#             db.commit()
-
-
-#     return "Success"
-
-
-
-
-# 64  Complementory Membership Update
-@router.post("/video_convert")
-async def video_convert(
-    db: Session = Depends(deps.get_db), 
-    file:UploadFile=File(None)
-):
-    from moviepy.video.io.VideoFileClip import VideoFileClip
-    video = VideoFileClip("uploadfile_OAtnWzzfAQnUAdXW011.mp4")
-    duration = video.duration
-    return duration
-
-
-
