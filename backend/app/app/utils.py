@@ -1985,6 +1985,14 @@ def GetGroupDetails(db, user_id, id):  # Id -Group ID
                         "typing": 0,
                     }
                 )
+         # Generate URl
+        token_text=f"{friendGroup.user.user_ref_id}//{datetime.datetime.utcnow().replace(tzinfo=None)}//{friendGroup.id}"
+        user_ref_id = token_text.encode("ascii")
+        
+        hashed_user_ref_id = (base64.b64encode(user_ref_id)).decode("ascii")
+        
+        invite_url = inviteBaseurl()
+        join_link = f"{invite_url}signup?ref={hashed_user_ref_id}"
        
         group_details = {
             "group_id": friendGroup.id,
@@ -1999,7 +2007,8 @@ def GetGroupDetails(db, user_id, id):  # Id -Group ID
             "group_member_ids": members,
             "group_members_list": memberlist,
             "typing": 0,
-            "my_group":my_group
+            "my_group":my_group,
+            "referral_link":join_link
         }
         return group_details
 

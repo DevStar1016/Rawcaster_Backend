@@ -1504,9 +1504,9 @@ async def contactus(
 
 def checkComplementary(db,id):
     # Get Complementary Expire Date
-    getUserSetting=db.query(UserSettings).join(User,User.user_status_id == UserSettings.id,isouter=True).filter(
+    getUserSetting=db.query(UserSettings).join(User,User.id == UserSettings.user_id,isouter=True).filter(
         UserSettings.user_id == id,User.user_status_id == 3,
-        cast(UserSettings.complementary_expire_date,Date) <= datetime.datetime.utcnow().date()).first()
+        cast(UserSettings.complementary_expire_date,Date) < datetime.datetime.utcnow().date()).first()
     
     if getUserSetting:
         # Update member
@@ -1520,7 +1520,6 @@ def user_profile(db, id):
     user_id=id
     # Update Membership
     validateMembership=checkComplementary(db,user_id)
-    
     get_user = db.query(User).filter(User.id == user_id).first()
 
     if get_user:
@@ -5320,13 +5319,32 @@ async def listnuggets(
             
             if search_key:
                 get_nuggets = get_nuggets.filter(
-                    or_(
+                        (Nuggets.share_type == 1)
+                        | (
+                            (Nuggets.share_type == 2)
+                            & (Nuggets.user_id == login_user_id)
+                        )
+                        | (
+                            (Nuggets.share_type == 3)
+                            & (NuggetsShareWith.type == 1)
+                            & (NuggetsShareWith.share_with.in_(group_ids))
+                        )
+                        | (
+                            (Nuggets.share_type == 4)
+                            & (NuggetsShareWith.type == 2)
+                            & (NuggetsShareWith.share_with.in_([login_user_id]))
+                        )
+                        | (
+                            (Nuggets.share_type == 6)
+                            & (Nuggets.user_id.in_(my_friends))
+                        )
+                    ,or_(
                         NuggetsMaster.content.ilike("%" + search_key + "%"),
                         User.display_name.ilike("%" + search_key + "%"),
                         User.first_name.ilike("%" + search_key + "%"),
                         User.last_name.ilike("%" + search_key + "%"),
                         User.email_id.ilike("%"+ search_key +"%")
-                    )
+                    ),
                 )
             if access_token == "RAWCAST":
                 get_nuggets = get_nuggets.join( NuggetsAttachment,
@@ -5350,11 +5368,12 @@ async def listnuggets(
                 get_nuggets = get_nuggets.filter(NuggetsSave.user_id == login_user_id)
                 
             elif user_id:        # Other's Nuggets
+                get_nuggets = get_nuggets.filter(Nuggets.user_id == user_id)
+
                 if login_user_id != user_id:
                     get_nuggets = get_nuggets.filter(
                         Nuggets.user_id == user_id, Nuggets.share_type == 1
                     )
-                get_nuggets = get_nuggets.filter(Nuggets.user_id == user_id)
             
             else:
                 if not search_key and not global_search:
@@ -5556,6 +5575,7 @@ async def listnuggets(
             if blocked_users:
                 get_nuggets = get_nuggets.filter(Nuggets.user_id.not_in(blocked_users))
 
+            # get_nuggets = get_nuggets.order_by(Nuggets.created_date.desc())
             get_nuggets = get_nuggets.order_by(Nuggets.id.desc())
 
             get_nuggets_count = get_nuggets.count()
@@ -15382,7 +15402,7 @@ async def influencerlist(
                 isouter=True,
             )
             criteria = criteria.filter(User.id != login_user_id, User.status == 1)
-            criteria = criteria.filter(FollowUser.id == None)
+            criteria = criteria.filter(FollowUser.id == None,UserStatusMaster.type == 2) # type 2 means influencer
 
             # Omit blocked users
             get_all_blocked_users = get_friend_requests(
