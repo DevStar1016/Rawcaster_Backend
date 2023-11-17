@@ -15,7 +15,7 @@ import json
 import pytz
 import boto3
 from urllib.parse import urlparse
-from .webservices_2 import croninfluencemember
+from .webservices_2 import upgradeMember
 import ast
 from mail_templates.mail_template import *
 import subprocess
@@ -1524,10 +1524,14 @@ def user_profile(db, id):
 
     if get_user:
         get_account_status=db.query(VerifyAccounts).filter(VerifyAccounts.user_id == get_user.id,
-                                                            VerifyAccounts.verify_status != -1).first()
+                                                              VerifyAccounts.verify_status != -1).first()
         
-        getWebhookCalls=db.query(AccountVerifyWebhook).filter(AccountVerifyWebhook.client_id == get_user.user_ref_id)\
-                                        .order_by(AccountVerifyWebhook.id.desc()).first()
+        getWebhookCalls=db.query(AccountVerifyWebhook).filter(AccountVerifyWebhook.client_id == get_user.user_ref_id,
+                                                              AccountVerifyWebhook.verify_seen_status == 0)
+                                        
+        unseenWebhookCallstatus=getWebhookCalls.order_by(AccountVerifyWebhook.id.desc()).first()
+        updateSeenStatus=getWebhookCalls.update({"verify_seen_status":1}) # Update Seen Status
+        db.commit()
         
         followers_count = db.query(FollowUser.id).filter_by(following_userid=user_id).count()
         following_count = db.query(FollowUser.id).filter_by(follower_userid=user_id).count()
@@ -1642,7 +1646,7 @@ def user_profile(db, id):
                 if get_user.influencer_category
                 else "",
                 "account_verify_type":(2 if get_account_status.verify_status == 1 else 1) if get_account_status else 0,# 0 -Request not send , 1- Pending ,2 - Verified
-                "last_verify_status":getWebhookCalls.verify_status if getWebhookCalls else None, # Idenfy Last verify status
+                "last_verify_status":unseenWebhookCallstatus.verify_status if unseenWebhookCallstatus else None, # Idenfy Last verify status
                 "saved_nugget_count": get_saved_nuggets,
                 "nugget_content_length": get_user.user_status_master.max_nugget_char
                 if get_user.user_status_master.max_nugget_char
@@ -2914,7 +2918,7 @@ async def listallfriendgroups(
                     elif groupname == "My Fans" and res.created_by != login_user_id:
                         grouptype = 1
                         group_category = 2
-                        groupname = f"Influencer: {(res.user.display_name if res.user.display_name else '') if res.created_by else ''}"
+                        groupname = f"Influencer: {(get_user.display_name if get_user.display_name else '') if res.created_by else ''}"
                         my_group=0
 
                     elif groupname != "My Fans":
@@ -13267,14 +13271,13 @@ async def followandunfollow(
                             if add_frnd_group.user.chime_user_id
                             else None
                         )
-                             
+                        
                         try:
                             addmembers(channel_arn, chime_bearer, member_id)
                         except Exception as e:
                             print(f"Follow:{e}")
 
-                        get_influence_count = croninfluencemember(db, get_user.id)
-
+                        get_influence_count = upgradeMember(db, get_user.id)
                         return {
                             "status": 1,
                             "msg": f"Now you are fan of {add_follow_user.user2.display_name}",
@@ -13319,11 +13322,9 @@ async def followandunfollow(
                             print(f"UnFollow:{e}")
                             
                         delFriendGroups=get_friend_group_member.delete()
-                        
-                        db.commit()  # Remove member in Friend group member table
+                        db.commit()
 
                     msg = f"{follow_user.user2.display_name if follow_user else ''} not influencing you"
-                    get_influence_count = croninfluencemember(db, get_user.id)
                     # notification_type=15
                     # add_notification=Insertnotification(db,follow_userid,login_user_id,notification_type,add_frnd_group.id)
 
@@ -13336,6 +13337,9 @@ async def followandunfollow(
                         .delete()
                     )
                     db.commit()
+                    
+                    # Membership Update
+                    get_influence_count = upgradeMember(db, get_user.id)
 
                     return {"status": 1, "msg": msg}
 

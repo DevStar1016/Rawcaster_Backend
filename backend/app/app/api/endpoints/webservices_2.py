@@ -114,11 +114,7 @@ async def add_event_abuse_report(
                 return {"status": 0, "msg": "Invalid Event ID"}
 
 
-# CRON
-@router.post("/croninfluencemember")
-async def croninfluencemember(
-    db: Session = Depends(deps.get_db), user_id: int = Form(None)
-):
+def upgradeMember(db,user_id):
     if user_id:
         get_user_details = (
             db.query(User).filter(User.id == user_id, User.status == 1).all()
@@ -129,10 +125,10 @@ async def croninfluencemember(
     for usr in get_user_details:
         get_follow_user = (
             db.query(FollowUser)
-            .filter(FollowUser.follower_userid == usr.id, FollowUser.status == 1)
+            .filter(FollowUser.following_userid == usr.id,FollowUser.status == 1)
             .count()
         )
-
+        
         if get_follow_user:
             user_status_master = (
                 db.query(UserStatusMaster)
@@ -145,11 +141,21 @@ async def croninfluencemember(
                 )
                 .first()
             )
-
             if user_status_master:
                 usr.user_status_id = user_status_master.id
                 db.commit()
-                return "Done"
+
+    return {"status":1,"msg":"Success"}
+
+# CRON
+@router.post("/croninfluencemember")
+async def croninfluencemember(
+    db: Session = Depends(deps.get_db), user_id:str=Form(None)
+):
+    
+    respons=upgradeMember(db,user_id)
+    return respons
+   
 
 
 # 86  Add Claim Account
@@ -1514,7 +1520,7 @@ def update_nugget_totals(
 def script_add_nugget(
     db: Session = Depends(deps.get_db)
 ):
-    getNuggets=db.query(Nuggets).join(NuggetsMaster,NuggetsMaster.id == Nuggets.nuggets_id).filter(Nuggets.status == 1,Nuggets.id == 82).all()
+    getNuggets=db.query(Nuggets).join(NuggetsMaster,NuggetsMaster.id == Nuggets.nuggets_id).filter(Nuggets.status == 1,Nuggets.id == 168).all()
     for nugget in getNuggets:
         getNuggetAttachment=db.query(NuggetsAttachment).filter(NuggetsAttachment.nugget_id == nugget.nuggets_id)
         getNuggetAttachmentCount=getNuggetAttachment.count()
@@ -1573,7 +1579,7 @@ def script_add_nugget(
 
                     if (share_type == 3 or share_type == 4 or share_type == 5):
                         getShareWithNuggets=db.query(NuggetsShareWith).filter(
-                            NuggetsShareWith.nuggets_id == addNugget.id
+                            NuggetsShareWith.nuggets_id == getNuggets.id
                         ).all()
 
                         for shareNugg in getShareWithNuggets:
