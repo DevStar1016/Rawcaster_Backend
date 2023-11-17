@@ -13,6 +13,7 @@ class AccountVerifyWebhook(Base):
     request = Column(TEXT)
     response=Column(TEXT)
     created_at = Column(DateTime)
+    verify_seen_status=Column(TINYINT,default=0,comment="1-seen,0-unseen")
     status = Column(TINYINT, comment="0->Inactive, 1->Active,-1-delete")
 
 
