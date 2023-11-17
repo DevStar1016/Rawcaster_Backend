@@ -1526,6 +1526,9 @@ def user_profile(db, id):
         get_account_status=db.query(VerifyAccounts).filter(VerifyAccounts.user_id == get_user.id,
                                                             VerifyAccounts.verify_status != -1).first()
         
+        getWebhookCalls=db.query(AccountVerifyWebhook).filter(AccountVerifyWebhook.client_id == get_user.user_ref_id)\
+                                        .order_by(AccountVerifyWebhook.id.desc()).first()
+        
         followers_count = db.query(FollowUser.id).filter_by(following_userid=user_id).count()
         following_count = db.query(FollowUser.id).filter_by(follower_userid=user_id).count()
 
@@ -1639,6 +1642,7 @@ def user_profile(db, id):
                 if get_user.influencer_category
                 else "",
                 "account_verify_type":(2 if get_account_status.verify_status == 1 else 1) if get_account_status else 0,# 0 -Request not send , 1- Pending ,2 - Verified
+                "last_verify_status":getWebhookCalls.verify_status if getWebhookCalls else None, # Idenfy Last verify status
                 "saved_nugget_count": get_saved_nuggets,
                 "nugget_content_length": get_user.user_status_master.max_nugget_char
                 if get_user.user_status_master.max_nugget_char
