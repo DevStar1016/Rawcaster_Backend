@@ -1514,24 +1514,21 @@ def update_nugget_totals(
 def script_add_nugget(
     db: Session = Depends(deps.get_db)
 ):
-    getNuggets=db.query(Nuggets).join(NuggetsMaster,NuggetsMaster.id == Nuggets.nuggets_id).filter(Nuggets.status == 1,Nuggets.id == 5).all()
+    getNuggets=db.query(Nuggets).join(NuggetsMaster,NuggetsMaster.id == Nuggets.nuggets_id).filter(Nuggets.status == 1,Nuggets.id == 82).all()
     for nugget in getNuggets:
         getNuggetAttachment=db.query(NuggetsAttachment).filter(NuggetsAttachment.nugget_id == nugget.nuggets_id)
         getNuggetAttachmentCount=getNuggetAttachment.count()
-        print(nugget.id,"nugget id")
-        print(getNuggetAttachmentCount,"count")
+       
         if getNuggetAttachmentCount > 1 :
             getNuggetAttachment=getNuggetAttachment.all()
             getAttachIds=[nug_att.id for nug_att in getNuggetAttachment]
-
             removedNugget=getAttachIds.pop(0) # Remove First Index
-            print(nugget.nuggets_id)
+           
             # Get Attach Nuggets
             getNuggets=db.query(Nuggets).filter(Nuggets.nuggets_id == nugget.nuggets_id).first()
-            print(getNuggets.id)
+           
             if getNuggets:
                 for nug_attc in getAttachIds:
-
                     # Add NuggetMaster
                     addNuggetMaster=NuggetsMaster(
                                                 user_id=getNuggets.nuggets_master.user_id,
