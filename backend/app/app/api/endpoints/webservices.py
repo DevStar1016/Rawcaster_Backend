@@ -10291,9 +10291,10 @@ async def getothersprofile(
                             )
                             if get_user.geo_location
                             else "",
-                            "bio_data": ProfilePreference(
-                                db, login_user_id, get_user.id, field, get_user.bio_data
-                            ),
+                            # "bio_data": ProfilePreference(
+                            #     db, login_user_id, get_user.id, field, get_user.bio_data
+                            # ),
+                            "bio_data":get_user.bio_data if get_user.bio_data else "",
                             "profile_image": get_user.profile_img
                             if get_user.profile_img
                             else defaultimage("profile_img"),
@@ -10387,7 +10388,10 @@ async def getothersprofile(
                             "chime_user_id": get_user.chime_user_id
                             if get_user.chime_user_id
                             else None,
-                            "profile_url":join_link
+                            "profile_url":join_link,
+                            "influencer_category": get_user.influencer_category
+                                if get_user.influencer_category
+                                else "",
                         }
 
                         return {"status": 1, "msg": "Success", "profile": result_list}
