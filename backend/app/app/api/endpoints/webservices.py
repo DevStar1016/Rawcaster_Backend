@@ -23,7 +23,6 @@ from .chime_chat import *
 import requests
 from bs4 import BeautifulSoup
 import cv2
-import imageio
 
 
 router = APIRouter()
@@ -4290,7 +4289,6 @@ async def deletefriendgroup(
 def process_data(
     db, uploaded_file_path, login_user_id, master_id, share_type, share_with
 ):
-    print(uploaded_file_path)
     input_file = uploaded_file_path
     output_prefix = f"rawcaster_uploads/output_part_{int(datetime.datetime.utcnow().timestamp())}"  # Prefix for the output video parts
     duration = 299  # Duration of each video part in seconds
@@ -4310,6 +4308,15 @@ def process_data(
         "1",
         output_prefix + "%03d.mp4",
     ]
+    # command = [
+    #     'ffmpeg',
+    #     '-i', input_file,
+    #     '-c', 'copy',
+    #     '-map', '0',
+    #     '-segment_time', str(duration),
+    #     '-f', 'segment',
+    #     f'{output_prefix}%03d.mp4'
+    # ]
 
     # Run the command using subprocess
     subprocess.run(command)
@@ -4322,7 +4329,7 @@ def process_data(
         if not os.path.exists(file_path):
             break
         splited_file_path.append(file_path)
-
+    print(splited_file_path)
     
     #remove local file path
     os.remove(uploaded_file_path)
@@ -4782,42 +4789,41 @@ async def addnuggets(
                                     frames = data.get(cv2.CAP_PROP_FRAME_COUNT)
                                     fps = data.get(cv2.CAP_PROP_FPS)
                                     total_duration = round(frames / fps)
-                                    # print(total_duration)
                                     
-                                    if total_duration < 330:
-                                        s3_file_path = f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
+                                    # if total_duration < 330:
+                                    #     s3_file_path = f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
 
-                                        result = upload_to_s3(
-                                            uploaded_file_path, s3_file_path
-                                        )
-                                        if result["status"] == 1:
-                                            add_nugget_attachment = NuggetsAttachment(
-                                                user_id=login_user_id,
-                                                nugget_id=add_nuggets_master.id,
-                                                media_type=file_type,
-                                                media_file_type=file_ext,
-                                                file_size=file_size,
-                                                path=result["url"],
-                                                created_date=datetime.datetime.utcnow(),
-                                                status=1,
-                                            )
-                                            db.add(add_nugget_attachment)
-                                            db.commit()
-                                            db.refresh(add_nugget_attachment)
-                                        else:
-                                            return result
-                                    else:
-                                        
-                                        splites_flag=1
-                                        splited_video_reposne=process_data(
-                                            db,
-                                            uploaded_file_path,
-                                            login_user_id,
-                                            master_id,
-                                            share_type,
-                                            share_with
-                                        )
-                                        nugget_ids += splited_video_reposne
+                                    #     result = upload_to_s3(
+                                    #         uploaded_file_path, s3_file_path
+                                    #     )
+                                    #     if result["status"] == 1:
+                                    #         add_nugget_attachment = NuggetsAttachment(
+                                    #             user_id=login_user_id,
+                                    #             nugget_id=add_nuggets_master.id,
+                                    #             media_type=file_type,
+                                    #             media_file_type=file_ext,
+                                    #             file_size=file_size,
+                                    #             path=result["url"],
+                                    #             created_date=datetime.datetime.utcnow(),
+                                    #             status=1,
+                                    #         )
+                                    #         db.add(add_nugget_attachment)
+                                    #         db.commit()
+                                    #         db.refresh(add_nugget_attachment)
+                                    #     else:
+                                    #         return result
+                                    # else:
+                                    
+                                    splites_flag=1
+                                    splited_video_reposne=process_data(
+                                        db,
+                                        uploaded_file_path,
+                                        login_user_id,
+                                        master_id,
+                                        share_type,
+                                        share_with
+                                    )
+                                    nugget_ids += splited_video_reposne
                                             
                                     
                                 elif file_type == "audio":
@@ -5780,14 +5786,15 @@ async def listnuggets(
                         .first()
                     )
 
-                    # Generate Profile URL
-                    token_text=f"{nuggets.id}rawcaster@!@#$QWERTxcvbn"
-                    user_ref_id = token_text.encode("ascii")
+                # Generate Share Nugget URL
+
+                    # token_text=f"{nuggets.id}rawcaster@!@#$QWERTxcvbn"
+                    # user_ref_id = token_text.encode("ascii")
                     
-                    hashed_user_ref_id = (base64.b64encode(user_ref_id)).decode("ascii")
+                    # hashed_user_ref_id = (base64.b64encode(user_ref_id)).decode("ascii")
                     
-                    invite_url = inviteBaseurl()
-                    share_link = f"{invite_url}view/{hashed_user_ref_id}"
+                    # invite_url = inviteBaseurl()
+                    # share_link = f"{invite_url}view/{hashed_user_ref_id}"
                     
                     nuggets_list.append({"nugget_id":nuggets.id,
                                         "content": nuggets.nuggets_master.content,
@@ -5824,7 +5831,7 @@ async def listnuggets(
                                         'voted_option': voted.poll_option_id if voted else None,
                                         'total_vote':total_poll,
                                         'saved': True if saved else False,
-                                        "share_link":share_link
+                                        # "share_link":share_link
                                         })
                 
                 return {
@@ -7818,7 +7825,7 @@ async def addevent(
 
                 # Combine the datetime objects
                 datetime_str = datetime.datetime.combine(date_obj, time_obj)
-
+                print(datetime_str)
                 new_event = Events(
                     title= detect_and_remove_offensive(event_title),
                     ref_id=reference_id,
@@ -8114,7 +8121,7 @@ async def addevent(
 
                     return {
                         "status": 1,
-                        "msg": "Event saved successfully !",
+                        "msg": "Event Created Successfully !",
                         "ref_id": reference_id,
                         "event_detail": event,
                     }
@@ -9489,32 +9496,25 @@ async def uploadchatattachment(
             get_token_details = (
                 db.query(ApiTokens.user_id).filter(ApiTokens.token == access_token).first()
             )
-            login_user_id = get_token_details.user_id
 
-            readed_file = await chatattachment.read()
-            file_size = len(readed_file)
             file_ext = os.path.splitext(chatattachment.filename)[1]
 
-            if file_size > 100000000:
-                return {"status": 0, "msg": "Max 100MB allowed"}
+            uploaded_file_path = await file_upload(
+                chatattachment, file_ext, compress=None
+            )
+            s3_file_path = f"chat/attachment_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
 
+            result = upload_to_s3(uploaded_file_path, s3_file_path)
+            if result["status"] == 1:
+                return {
+                    "status": 1,
+                    "msg": "Success",
+                    "filepath": result["url"],
+                    "refid": refid,
+                    "file_type": file_ext.replace(".", ""),
+                }
             else:
-                uploaded_file_path = await read_file_upload(
-                    readed_file, file_ext, compress=None
-                )
-                s3_file_path = f"chat/attachment_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-
-                result = upload_to_s3(uploaded_file_path, s3_file_path)
-                if result["status"] == 1:
-                    return {
-                        "status": 1,
-                        "msg": "Success",
-                        "filepath": result["url"],
-                        "refid": refid,
-                        "file_type": file_ext.replace(".", ""),
-                    }
-                else:
-                    return {"status": 0, "msg": "Not able to upload"}
+                return {"status": 0, "msg": "Not able to upload"}
 
 
 # 47. List Notifications
@@ -11981,8 +11981,11 @@ async def globalsearchevents(
                 limit, offset, total_pages = get_pagination(
                     get_row_count, current_page_no, default_page_size
                 )
-                
-                event_list=criteria.order_by(Events.start_date_time.desc()).limit(limit).offset(offset).all()
+                if search_key:
+                    event_list=criteria.order_by(Events.start_date_time.desc()).limit(limit).offset(offset).all()
+                else:
+                    event_list=criteria.order_by(Events.start_date_time.asc()).limit(limit).offset(offset).all()
+
                 result_list = []
                 if event_list:
                     waiting_room = 0
@@ -13671,7 +13674,7 @@ async def addnuggetview(
                 nugget_id = int(nugget_id) if int(nugget_id) > 0 else ""
 
                 access_check = NuggetAccessCheck(db, login_user_id, nugget_id)
-                print(access_check)
+                
                 if not access_check:
                     return {"status": 0, "msg": "Unauthorized access"}
 
@@ -14008,18 +14011,17 @@ async def addliveevent(
                     if event_banner:
                         file_name = event_banner.filename
                         file_temp = event_banner.content_type
-                        file_read = await event_banner.read()
-                        file_size = len(file_read)
+                      
                         file_ext = os.path.splitext(event_banner.filename)[1]
 
-                        type = "image"
+                        file_type = "image"
                         if "video" in file_temp:
-                            type = "video"
+                            file_type = "video"
 
-                        if file_size > 1024 and type == "image" and file_ext != ".gif":
+                        if file_type == "image" and file_ext != ".gif":
                             s3_path = f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                            uploaded_file_path = await read_file_upload(
-                                file_read, file_ext, compress=1
+                            uploaded_file_path = await file_upload(
+                                event_banner, file_ext, compress=1
                             )
 
                             result = upload_to_s3(uploaded_file_path, s3_path)
@@ -14031,8 +14033,8 @@ async def addliveevent(
                                 return result
                         else:
                             s3_path = f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                            uploaded_file_path = await read_file_upload(
-                                file_read, file_ext, compress=None
+                            uploaded_file_path = await file_upload(
+                                event_banner, file_ext, compress=None
                             )
 
                             result = upload_to_s3(uploaded_file_path, s3_path)
@@ -14154,7 +14156,7 @@ async def addliveevent(
 
                     return {
                         "status": 1,
-                        "msg": "Event saved successfully !",
+                        "msg": "Event Created Successfully !",
                         "ref_id": reference_id,
                         "event_detail": event,
                     }
@@ -14337,22 +14339,22 @@ async def editliveevent(
 
                 # Upload Banner Image
                 if event_banner:
-                    file_name = event_banner.filename
                     file_temp = event_banner.content_type
-                    file_read = await event_banner.read()
-                    file_size = len(file_read)
+        
                     file_ext = os.path.splitext(event_banner.filename)[1]
 
-                    type = "image"
-                    if "video" in file_temp:
-                        type = "video"
+                     # Compress Image
+                    compress = 1
+                    uploaded_file_path = await file_upload(
+                        event_banner, file_ext, compress
+                    )
 
-                    if file_size > 1024 and type == "image" and file_ext != ".gif":
-                        # Compress Image
-                        compress = 1
-                        uploaded_file_path = await read_file_upload(
-                            file_read, file_ext, compress
-                        )
+                    file_type = "image"
+                    if "video" in file_temp:
+                        file_type = "video"
+
+                    if file_type == "image" and file_ext != ".gif":
+                       
 
                         s3_path = f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                         # Upload to S3
@@ -14364,10 +14366,6 @@ async def editliveevent(
                         else:
                             return result
                     else:
-                        compress = None
-                        uploaded_file_path = await read_file_upload(
-                            file_read, file_ext, compress
-                        )
 
                         s3_path = f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                         result = upload_to_s3(uploaded_file_path, s3_path)
@@ -14605,7 +14603,7 @@ async def addgoliveevent(
                     event = get_event_detail(db, new_event.id, login_user_id)
                     return {
                         "status": 1,
-                        ",msg": "Go Live event saved successfully !",
+                        ",msg": "Go Live event created successfully !",
                         "ref_id": reference_id,
                         "event_detail": event,
                     }

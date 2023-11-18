@@ -18,7 +18,6 @@ from PIL import Image
 import os, boto3
 import sys
 import time
-import subprocess
 from mail_templates.mail_template import *
 from cryptography.fernet import Fernet
 from app.core import config
@@ -29,8 +28,6 @@ from profanityfilter import ProfanityFilter
 from gtts import gTTS
 from urllib.parse import urlparse
 from fastapi import Request
-import subprocess
-from moviepy.editor import VideoFileClip,concatenate_videoclips
 import re
 
 access_key = config.access_key
@@ -75,26 +72,8 @@ def EncryptandDecrypt(otp, flag=1):
         decrypted = f.decrypt(message)
         return decrypted
 
-# def upload_file_using_ffmpeg(input_file,ext):
-#     base_dir = f"rawcaster_uploads/uploadfile_{random.randint(1111,9999)}{ext}"
-
-#     try:
-#         os.makedirs(base_dir, mode=0o777, exist_ok=True)
-#     except OSError as e:
-#         sys.exit("Can't create {dir}: {err}".format(dir=base_dir, err=e))
-
-    
-#     save_full_path = base_dir
-    
-#     ffmpeg_command = ['ffmpeg', '-i', input_file, '-f', 'ftp', save_full_path]
-#     subprocess.run(ffmpeg_command)
-#     os.remove(input_file)
-#     return save_full_path
-
-
 async def file_upload(file_name, ext, compress):
     base_dir = "rawcaster_uploads"
-
     try:
         os.makedirs(base_dir, mode=0o777, exist_ok=True)
     except OSError as e:
@@ -108,108 +87,11 @@ async def file_upload(file_name, ext, compress):
 
     filename = f"uploadfile_{random_string}{ext}"
     save_full_path = f"{output_dir}{filename}"
-    if ext in ["jpg", "jpeg", "png", "gif"]:
-        img = Image.open(file_name)
-        img.save(save_full_path, quality=80)
-        return save_full_path
-
-    # elif ext in ['.mp4','mp4','avi','mkv','webm','mov']:
-    #     inputFile = file_name.filename
-    #     outputFile = save_full_path
-
-    #     # Run FFmpeg command
-    #     ffmpegCmd = f'ffmpeg -i {inputFile} -c:v libx264 -c:a aac -strict experimental {outputFile}'
-    #     subprocess.run(ffmpegCmd, shell=True)
-
-    #     clip = VideoFileClip(outputFile)
-    #     duration = clip.duration
-
-    #     clip_duration = 10
-    #     num_clips = int(duration // clip_duration)
-    #     clip_paths = []
-
-    #     for i in range(num_clips):
-    #         start_time = i * clip_duration
-    #         end_time = min((i + 1) * clip_duration, duration)
-    #         clip_i = VideoFileClip(outputFile).subclip(start_time, end_time)
-
-    #         # Save each clip to a separate file
-    #         clip_path = f"rawcaster_uploads/output_part_{int(datetime.datetime.utcnow().timestamp())}"  # Prefix for the output video parts
-    #         clip_i.write_videofile(clip_path)
-    #         clip_paths.append(clip_path)
-        
-    #     return clip_paths
-
-
-    #     # local_file_path=f"{output_dir}upload_file_{int(datetime.datetime.now().timestamp())}.mp4"
-    #     # with open(local_file_path, "wb") as buffer:
-    #     #     shutil.copyfileobj(file_name.file, buffer)
-
-    #     # # Run FFmpeg command
-    #     # ffmpegCmd = f'ffmpeg -i {file_name.filename} -c:v libx264 -c:a aac -strict experimental {save_full_path}'
-    #     # subprocess.run(ffmpegCmd, shell=True)
-    #     # # os.remove(local_file_path)
-
-    #     return save_full_path
-
-    else:
-        
-        with open(save_full_path, "wb") as buffer:
-            shutil.copyfileobj(file_name.file, buffer)
-        
-        return save_full_path
-
-
-async def read_file_upload(file_name, ext, compress):
-    # base_dir = f"{st.BASE_DIR}rawcaster_uploads"
-    base_dir = "rawcaster_uploads"
-
-    try:
-        os.makedirs(base_dir, mode=0o777, exist_ok=True)
-    except OSError as e:
-        sys.exit("Can't create {dir}: {err}".format(dir=base_dir, err=e))
-
-    output_dir = base_dir + "/"
-
-    characters = string.ascii_letters + string.digits
-    # Generate the random string
-    random_string = "".join(random.choice(characters) for i in range(18))
-
-    filename = f"uploadfile_{random_string}{ext}"
-
-    save_full_path = f"{output_dir}{filename}"
+    
     with open(save_full_path, "wb") as buffer:
-        buffer.write(file_name)
-
+        shutil.copyfileobj(file_name.file, buffer)
+    
     return save_full_path
-
-
-# def video_file_upload(upload_file, compress, file_ext):
-#     # base_dir = f"{st.BASE_DIR}rawcaster_uploads"
-#     base_dir = "rawcaster_uploads"
-
-#     try:
-#         os.makedirs(base_dir, mode=0o777, exist_ok=True)
-#     except OSError as e:
-#         sys.exit("Can't create {dir}: {err}".format(dir=base_dir, err=e))
-
-#     output_dir = base_dir + "/"
-
-#     characters = string.ascii_letters + string.digits
-#     # Generate the random string
-#     random_string = "".join(random.choice(characters) for i in range(18))
-#     filename = f"video_{random_string}{file_ext}"
-
-#     save_full_path = f"{output_dir}{filename}"
-
-#     with open(save_full_path, "wb") as buffer:
-#         buffer.write(upload_file.file)
-
-#     if compress:
-#         command = f"ffmpeg -i {save_full_path} -vcodec libx265 -crf 50 {save_full_path}"
-#         subprocess.run(command, shell=True, check=True)
-
-#     return save_full_path
 
 
 def upload_to_s3(local_file_pth, s3_bucket_path):
@@ -1771,9 +1653,13 @@ def get_event_detail(db, event_id, login_user_id):
                 if event_details.no_of_participants
                 else "",
                 "duration": event_details.duration if event_details.duration else "",
-                "start_date_time": common_date(event_details.start_date_time)
-                if event_details.start_date_time
-                else "",
+                "start_date_time": (
+                        event_details.start_date_time
+                        if event_details.start_date_time
+                        else ""
+                    )
+                    if event_details.created_at
+                    else "",
                 "start_date": common_date(
                     ((event_details.start_date_time).date()), without_time=1
                 )
