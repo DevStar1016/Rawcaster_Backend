@@ -13750,7 +13750,7 @@ async def getreferrallist(
                     "status": 1,
                     "msg": "No Result found",
                     "referral_count": referral_count,
-                    "referral_needed_count": referral_need_count,
+                    "referral_needed_count": referral_need_count if referral_need_count > 0 else 0,
                     "current_page_no": 1,
                 }
             else:
