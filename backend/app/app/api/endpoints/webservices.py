@@ -4293,6 +4293,7 @@ def process_data(
     output_prefix = f"rawcaster_uploads/output_part_{int(datetime.datetime.utcnow().timestamp())}"  # Prefix for the output video parts
     duration = 299  # Duration of each video part in seconds
 
+    frame_size='640x480'
     command = [
         'ffmpeg',
         '-i', input_file,
@@ -4301,7 +4302,7 @@ def process_data(
         '-map', '-0:s',  # Exclude subtitle streams from copying
         '-reset_timestamps', '1',
         '-avoid_negative_ts', '1',
-        '-s',
+        '-s', frame_size,
         '-segment_time', str(duration),
         '-f', 'segment',
         f'{output_prefix}%03d.mp4'
