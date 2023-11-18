@@ -86,7 +86,7 @@ async def add_event_abuse_report(
                     if file_ext in file_extensions:
                         try:
                             s3_path = f"events/image_{random.randint(11111,99999)}{int(datetime.utcnow().timestamp())}{file_ext}"
-                            uploaded_file_path = file_upload(attachment, compress=None)
+                            uploaded_file_path = file_upload(attachment, file_ext,compress=None)
 
                             result = upload_to_s3(uploaded_file_path, s3_path)
                             # Upload to S3
@@ -1429,7 +1429,7 @@ def nuggetcontentaudio(
                         if get_user_readout_language and get_user_readout_language.audio_support:
                             text=translated.text
                             target_language=target_language
-                            print(target_language,accent)
+                            
                             audioResponse=textTOAudio(text,target_language,accent)
                             return audioResponse
                         else:
