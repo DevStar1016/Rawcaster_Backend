@@ -4292,34 +4292,23 @@ def process_data(
     input_file = uploaded_file_path
     output_prefix = f"rawcaster_uploads/output_part_{int(datetime.datetime.utcnow().timestamp())}"  # Prefix for the output video parts
     duration = 299  # Duration of each video part in seconds
+
     command = [
-        "ffmpeg",
-        "-i",
-        input_file,
-        "-c",
-        "copy",
-        "-map",
-        "0",
-        "-segment_time",
-        str(duration),
-        "-f",
-        "segment",
-        "-reset_timestamps",
-        "1",
-        output_prefix + "%03d.mp4",
+        'ffmpeg',
+        '-i', input_file,
+        '-c', 'copy',
+        '-map', '0',
+        '-map', '-0:s',  # Exclude subtitle streams from copying
+        '-reset_timestamps', '1',
+        '-avoid_negative_ts', '1',
+        '-s',
+        '-segment_time', str(duration),
+        '-f', 'segment',
+        f'{output_prefix}%03d.mp4'
     ]
-    # command = [
-    #     'ffmpeg',
-    #     '-i', input_file,
-    #     '-c', 'copy',
-    #     '-map', '0',
-    #     '-segment_time', str(duration),
-    #     '-f', 'segment',
-    #     f'{output_prefix}%03d.mp4'
-    # ]
 
     # Run the command using subprocess
-    subprocess.run(command)
+    subprocess.run(command,capture_output=True, text=True)
 
     # Generate the output file paths
     splited_file_path = []
@@ -4329,7 +4318,6 @@ def process_data(
         if not os.path.exists(file_path):
             break
         splited_file_path.append(file_path)
-    print(splited_file_path)
     
     #remove local file path
     os.remove(uploaded_file_path)
