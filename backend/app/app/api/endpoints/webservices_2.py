@@ -22,9 +22,8 @@ access_secret = config.access_secret
 bucket_name = config.bucket_name
 
 
+
 # 85 Event Abuse Report
-
-
 @router.post("/addeventabusereport")
 async def add_event_abuse_report(
     db: Session = Depends(deps.get_db),
