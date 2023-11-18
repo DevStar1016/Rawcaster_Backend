@@ -5562,7 +5562,11 @@ async def listnuggets(
                         get_nuggets=get_nuggets.filter(or_(Nuggets.user_id == login_user_id))
                 
             if category:
-                get_nuggets=get_nuggets.filter(User.influencer_category.like("%" + category + "%"),Nuggets.user_id != login_user_id)
+                get_follow_user = db.query(FollowUser).filter(FollowUser.follower_userid == login_user_id).all()
+                
+                followingUserIds=[followingUser.following_userid for  followingUser in get_follow_user]
+
+                get_nuggets=get_nuggets.filter(Nuggets.user_id.in_(followingUserIds),User.influencer_category.like("%" + category + "%"),Nuggets.user_id != login_user_id)
                  
             # Omit blocked users nuggets
             requested_by = None
