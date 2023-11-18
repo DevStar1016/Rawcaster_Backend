@@ -1520,16 +1520,18 @@ def update_nugget_totals(
 def script_add_nugget(
     db: Session = Depends(deps.get_db)
 ):
-    getNuggets=db.query(Nuggets).join(NuggetsMaster,NuggetsMaster.id == Nuggets.nuggets_id).filter(Nuggets.status == 1,Nuggets.id == 168).all()
+    getNuggets=db.query(Nuggets).join(NuggetsMaster,NuggetsMaster.id == Nuggets.nuggets_id).filter(Nuggets.status == 1).all()
     for nugget in getNuggets:
         getNuggetAttachment=db.query(NuggetsAttachment).filter(NuggetsAttachment.nugget_id == nugget.nuggets_id)
         getNuggetAttachmentCount=getNuggetAttachment.count()
-       
+        
         if getNuggetAttachmentCount > 1 :
+            # print(getNuggetAttachmentCount)
             getNuggetAttachment=getNuggetAttachment.all()
             getAttachIds=[nug_att.id for nug_att in getNuggetAttachment]
             removedNugget=getAttachIds.pop(0) # Remove First Index
-           
+            # print(nugget.id)
+            # return getAttachIds
             # Get Attach Nuggets
             getNuggets=db.query(Nuggets).filter(Nuggets.nuggets_id == nugget.nuggets_id).first()
            
@@ -1577,21 +1579,21 @@ def script_add_nugget(
         # Share With  ----------------------------------
                     share_type= getNuggets.share_type
 
-                    if (share_type == 3 or share_type == 4 or share_type == 5):
-                        getShareWithNuggets=db.query(NuggetsShareWith).filter(
-                            NuggetsShareWith.nuggets_id == getNuggets.id
-                        ).all()
+                    # if (share_type == 3 or share_type == 4 or share_type == 5):
+                    getShareWithNuggets=db.query(NuggetsShareWith).filter(
+                        NuggetsShareWith.nuggets_id == getNuggets.id
+                    ).all()
 
-                        for shareNugg in getShareWithNuggets:
-                            add_NuggetsShareWith = (
-                                    NuggetsShareWith(
-                                        nuggets_id=addNugget.id,
-                                        type=shareNugg.type,
-                                        share_with=shareNugg.share_with,
-                                    )
+                    for shareNugg in getShareWithNuggets:
+                        add_NuggetsShareWith = (
+                                NuggetsShareWith(
+                                    nuggets_id=addNugget.id,
+                                    type=shareNugg.type,
+                                    share_with=shareNugg.share_with,
                                 )
-                            db.add(add_NuggetsShareWith)
-                            db.commit()
+                            )
+                        db.add(add_NuggetsShareWith)
+                        db.commit()
     return {"status":1,"msg":"Success"}
 
 

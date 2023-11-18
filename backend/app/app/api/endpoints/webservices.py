@@ -5583,8 +5583,8 @@ async def listnuggets(
             if blocked_users:
                 get_nuggets = get_nuggets.filter(Nuggets.user_id.not_in(blocked_users))
 
-            # get_nuggets = get_nuggets.order_by(Nuggets.created_date.desc())
-            get_nuggets = get_nuggets.order_by(Nuggets.id.desc())
+            get_nuggets = get_nuggets.order_by(Nuggets.created_date.desc())
+            # get_nuggets = get_nuggets.order_by(Nuggets.id.desc())
 
             get_nuggets_count = get_nuggets.count()
             
