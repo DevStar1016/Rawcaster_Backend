@@ -2388,6 +2388,10 @@ async def logins(
                         .update({"chime_user_id": check_chat_id})
                     )
                     db.commit()
+            
+            # Verify Account
+            get_user.is_email_id_verified = 1
+            db.commit()
 
             return {
                 "status": 1,

@@ -14926,6 +14926,8 @@ async def socialmedialogin(
 
             if check_email_id:
                 email_id=email_id if email_id else check_email_id.email_id
+                
+
                 reply = await logins(
                     db,
                     email_id,
@@ -14940,7 +14942,6 @@ async def socialmedialogin(
                     user_ip
 
                 )
-            
                 return reply
 
             if check_phone:
