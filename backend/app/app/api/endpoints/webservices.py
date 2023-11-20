@@ -1902,7 +1902,7 @@ async def updatemyprofile(
                     get_user_profile.work_at = work_at
                     get_user_profile.studied_at = studied_at
                     get_user_profile.influencer_category = (
-                        influencer_category.strip() if influencer_category else None
+                        influencer_category.strip() if influencer_category else get_user_profile.influencer_category
                     )
                     get_user_profile.other_gender=other_gender
                     db.commit()
@@ -5368,7 +5368,8 @@ async def listnuggets(
                 get_nuggets = get_nuggets.filter(Nuggets.user_id == login_user_id)
             
             elif saved == 1:     # Saved Nuggets
-                get_nuggets = get_nuggets.filter(NuggetsSave.user_id == login_user_id)
+                get_nuggets = get_nuggets.filter(NuggetsSave.user_id == login_user_id,
+                                                    NuggetsSave.status == 1)
                 
             elif user_id:        # Other's Nuggets
                 get_nuggets = get_nuggets.filter(Nuggets.user_id == user_id)
@@ -10970,16 +10971,16 @@ async def getusersettings(db: Session = Depends(deps.get_db), token: str = Form(
                     else "",
                     "read_out_language_id": get_user_settings.read_out_language_id
                     if get_user_settings.read_out_language_id
-                    else 3,
+                    else 27,
                     "read_out_language": get_user_settings.read_out_language.language
                     if get_user_settings.read_out_language_id
-                    else "",
+                    else "English",
                     "read_out_accent_id":get_user_settings.read_out_accent_id 
                     if get_user_settings.read_out_accent_id 
-                    else None,
+                    else 1,
                     "read_out_accent_name":get_user_settings.read_out_accent.accent 
                     if get_user_settings.read_out_accent_id 
-                    else "",
+                    else "United States",
                     "opt_in":1 if get_user_settings.opt_in else 0,
                     
                 }
@@ -13790,7 +13791,7 @@ async def getreferrallist(
                     "status": 1,
                     "msg": "Success",
                     "referral_count": referral_count,
-                    "referral_needed_count": referral_need_count,
+                    "referral_needed_count": referral_need_count if referral_need_count > 0 else 0,
                     "total_pages": total_pages,
                     "current_page_no": current_page_no,
                     "referral_list": result_list,
@@ -15052,7 +15053,7 @@ async def socialmedialogin(
                         nuggets="000",
                         events="000",
                         status=1,
-                        read_out_language_id=27,
+                        read_out_language_id=27, # Default Language
                         read_out_accent_id=1
                     )
                     db.add(user_settings_model)
@@ -16109,7 +16110,7 @@ async def saveandunsavenugget(
 
 
 @router.post("/exitfromgroup")
-async def saveandunsavenugget(
+async def exitfromgroup(
     db: Session = Depends(deps.get_db),
     token: str = Form(None),
     group_id: str = Form(None),
