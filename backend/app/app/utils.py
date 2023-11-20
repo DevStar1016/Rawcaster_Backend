@@ -2390,9 +2390,10 @@ async def logins(
                     db.commit()
             
             # Verify Account
-            get_user.is_email_id_verified = 1
-            get_user.status= 1
-            db.commit()
+            if social == 1:
+                get_user.is_email_id_verified = 1
+                get_user.status= 1
+                db.commit()
 
             return {
                 "status": 1,
