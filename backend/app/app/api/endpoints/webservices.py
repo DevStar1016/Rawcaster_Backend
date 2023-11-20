@@ -1566,7 +1566,8 @@ def user_profile(db, id):
         # Get Save Nuggets Count
         get_saved_nuggets = (
             db.query(NuggetsSave)
-            .filter(NuggetsSave.user_id == get_user.id, NuggetsSave.status == 1)
+            .filter(NuggetsSave.user_id == get_user.id, NuggetsSave.status == 1,
+                    Nuggets.nugget_status == 1)
             .count()
         )
         user_details = {}
