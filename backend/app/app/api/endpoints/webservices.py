@@ -1566,8 +1566,9 @@ def user_profile(db, id):
         # Get Save Nuggets Count
         get_saved_nuggets = (
             db.query(NuggetsSave).join(Nuggets,Nuggets.id == NuggetsSave.nugget_id)
+            .join(NuggetsMaster,Nuggets.nuggets_id == NuggetsMaster.id,isouter=True)
             .filter(NuggetsSave.user_id == get_user.id, NuggetsSave.status == 1,
-                    Nuggets.nugget_status == 1)
+                    Nuggets.nugget_status == 1,NuggetsMaster.status == 1)
             .count()
         )
         user_details = {}
@@ -1803,6 +1804,11 @@ async def updatemyprofile(
                 get_user_profile = (
                     db.query(User).filter(User.id == login_user_id).first()
                 )
+                # Check Account Verification
+                accountVerify=db.query(VerifyAccounts)\
+                    .filter(VerifyAccounts.user_id==login_user_id,
+                            VerifyAccounts.verify_status == 1).first()
+
                 name = name
                 first_name = first_name if first_name else get_user_profile.first_name
                 last_name = last_name if last_name else get_user_profile.last_name
@@ -1867,16 +1873,19 @@ async def updatemyprofile(
                     )
                     get_user_profile.first_name = (
                         first_name.strip()
-                        if first_name
+                        if first_name and not accountVerify
                         else get_user_profile.first_name
                     )
                     get_user_profile.last_name = (
-                        last_name.strip() if last_name else get_user_profile.last_name
+                        last_name.strip() if last_name and not accountVerify
+                        else get_user_profile.last_name
                     )
                     get_user_profile.gender = (
-                        gender if gender != None else get_user_profile.gender
+                        gender if gender != None and not accountVerify
+                        else get_user_profile.gender
                     )
-                    get_user_profile.dob = dob if dob else get_user_profile.dob
+                    get_user_profile.dob = (dob if dob and not accountVerify
+                        else get_user_profile.dob)
                     get_user_profile.country_code = (
                         country_code if country_code else get_user_profile.country_code
                     )
