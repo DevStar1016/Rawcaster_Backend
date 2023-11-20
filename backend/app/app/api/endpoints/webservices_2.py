@@ -509,6 +509,7 @@ async def add_verify_account(
     token: str = Form(None),
     first_name: str = Form(None),
     last_name: str = Form(None),
+    gender:str=Form(None,description="1- male, 2- female"),
     telephone: str = Form(None),
     email_id: str = Form(None),
     dob: str = Form(None),
@@ -530,8 +531,16 @@ async def add_verify_account(
         return {"status": 0, "msg": "Invalid Date"}
     elif not telephone:
         return {"status": 0, "msg": "Mobile number can't be Blank"}
+    elif not gender:
+        return {"status": 0, "msg": "Gender can't be Blank"}
+    
+    elif gender and not gender.isnumeric():
+        return {"status": 0, "msg": "Invalid gender type"}
+
+
 
     else:
+       
         access_token = checkToken(db, token)
         
         if access_token == False:
@@ -553,6 +562,15 @@ async def add_verify_account(
                 .first()
             )
             if not get_accounts:
+
+                # update profile
+                getUser=db.query(User).filter(User.id == login_user_id).first()
+                if getUser:
+                    getUser.first_name= first_name
+                    getUser.last_name= last_name
+                    getUser.gender= gender
+                    getUser.dob= dob
+                    db.commit()
 
                 add_clain = VerifyAccounts(
                     user_id=login_user_id,
@@ -588,6 +606,10 @@ async def add_verify_account(
                 url = 'https://ivs.idenfy.com/api/v2/token'
                 
                 data={'clientId':get_token_details.user.user_ref_id,
+                      'firstName':first_name,
+                      'lastName':last_name,
+                      'sex':'M' if int(gender) == 1 else 'F',
+                      'dateOfBirth':dob,
                       "successUrl":join_link,
                       "errorUrl":join_link,
                       "unverifiedUrl":join_link,
