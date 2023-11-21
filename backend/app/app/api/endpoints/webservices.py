@@ -931,6 +931,7 @@ async def resendotp(
                 "email_id": to,
                 "otp_ref_id": int(otp_ref_id),
                 "remaining_seconds": 90, # remaining_seconds
+                "sms_type":sms_type
                 }
             
             if get_friend_group:
@@ -1182,7 +1183,7 @@ async def forgotpassword(
                     "status": 1,
                     "msg": msg,
                     "otp_ref_id": otp_ref_id,
-                    "remaining_seconds": 10,
+                    "remaining_seconds": 90,
                     "sms_type":sms_type
                 }  # remaining_seconds
 
