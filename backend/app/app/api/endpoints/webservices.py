@@ -147,18 +147,8 @@ async def signup(
 
                     salt_token = token_text + str(user_id) + str(characters) + str(dt)
 
-                    salt = st.SALT_KEY
-                    hash_code = str(token_text) + str(salt)
-
                     user_id = check_user.id
                     exptime = int(dt) + int(dt)
-
-                    paylod = {
-                        "iat": dt,
-                        "iss": "localhost",
-                        "exp": exptime,
-                        "token": token_text,
-                    }
 
                     # token = jwt.encode(paylod, st.SECRET_KEY)
                     userIP = request.client.host
@@ -936,7 +926,7 @@ async def resendotp(
                 "msg": reply_msg,
                 "email_id": to,
                 "otp_ref_id": int(otp_ref_id),
-                "remaining_seconds": remaining_seconds,
+                "remaining_seconds": 90, # remaining_seconds
                 }
             
             if get_friend_group:
@@ -944,83 +934,6 @@ async def resendotp(
                                 "group_name":get_friend_group.group_name})
 
             return data
-
-
-# # 3 - Resend OTP  (PHP Code)
-
-# @router.post("/resendotp")
-# async def resendotp(db:Session=Depends(deps.get_db),auth_code:str=Form(...,description="SALT + otp_ref_id"),otp_ref_id:str=Form(None),token:str=Form(None),otp_flag:str=Form(None)):
-#     if otp_flag and otp_flag.strip() == "" or otp_flag== None:
-#         otp_flag='email'
-
-#     auth_text = otp_ref_id if otp_ref_id is not None else "Rawcaster"
-#     if checkAuthCode(auth_code,auth_text) == False:
-#         return {"status":0,"msg": "Authentication failed!"}
-#     else:
-
-#         if otp_ref_id == None:
-#             if token.strip():
-#                 return {"status":0,"msg":"Sorry! your login session expired. please login again."}
-#             else:
-#                 login_user_id=0
-#                 access_token=checkToken(token)
-
-#                 if access_token == False:
-#                     return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-#                 else:
-#                     get_token_details=db.query(ApiTokens).filter(ApiTokens.token ==access_token).all()
-#                     for token in get_token_details:
-#                         login_user_id=token.user_id
-
-#                 otp=generateOTP()
-#                 otp_time=datetime.datetime.utcnow()
-#                 otp_model=OtpLog(user_id=login_user_id,otp=otp,otp_type=1,created_at=otp_time,status=1)
-#                 db.add(otp_model)
-#                 db.commit()
-
-#                 if otp_model:
-#                     otp_ref_id=otp_model.id
-#         else:
-#             get_otp_log=db.query(OtpLog).filter(OtpLog.id == otp_ref_id,OtpLog.status == 1).first()
-
-#             if not get_otp_log:
-#                 return {"status":0,"msg":"Invalid request!"}
-#             else:
-
-#                 otp_time=datetime.datetime.utcnow()
-#                 otp_model.created_at=otp_time
-#                 db.commit()
-
-#                 otp=get_otp_log.otp
-
-#                 if otp_model.otp_type == 1:  # if signup
-#                     mail_sub="Rawcaster - Account Verification"
-#                     mail_msg="Your OTP for Rawcaster account verification is : "
-
-#                 elif  otp_model.otp_type == 3 : # if forgot password
-#                     mail_sub="Rawcaster - Password Reset"
-#                     mail_msg="Your OTP for Rawcaster account password reset is"
-
-#                 if otp_flag == "sms":
-#                     to=otp_model.user.mobile_no
-#                     print("SMS")
-#                 else:
-#                     to=otp_model.user.email_id
-
-#                     print("MAIL")
-
-#                 remaining_seconds=0
-#                 target_time= int(round(otp_time.timestamp())) + 300
-#                 current_time=datetime.datetime.utcnow()
-#                 if current_time < target_time:
-#                     remaining_seconds=target_time - current_time
-
-#                 reply_msg=f'Please enter the One Time Password (OTP) sent to {to}'
-#                 return {"status":1,"msg":reply_msg,"email":to,"otp_ref_id":otp_ref_id,"remaining_seconds":remaining_seconds}
-
-#             # else:
-#             #     return {"status" :0, "msg" :"Failed to resend otp, please try again"}
-
 
 # 4 - Login
 @router.post("/login")
@@ -1580,10 +1493,8 @@ def user_profile(db, id):
         
         # Generate Profile URL
         token_text=f"{get_user.id}rawcaster@!@#$QWERTxcvbn"
-        user_ref_id = token_text.encode("ascii")
-        
-        hashed_user_ref_id = (base64.b64encode(user_ref_id)).decode("ascii")
-        
+        hashed_user_ref_id=generateLink(token_text)
+                
         invite_url = inviteBaseurl()
         join_link = f"{invite_url}viewprofile/{hashed_user_ref_id}"
 
@@ -1662,14 +1573,12 @@ def user_profile(db, id):
             }
         )
         token_text=f"{get_user.user_ref_id}//{datetime.datetime.utcnow().replace(tzinfo=None)}"
-        user_ref_id = token_text.encode("ascii")
-        
-        hashed_user_ref_id = (base64.b64encode(user_ref_id)).decode("ascii")
+        hashed_user_ref_id=generateLink(token_text)
         
         invite_url = inviteBaseurl()
-        join_link = f"{invite_url}signup?ref={hashed_user_ref_id}"
+        signup_link = f"{invite_url}signup?ref={hashed_user_ref_id}"
 
-        user_details.update({"referral_link": join_link})
+        user_details.update({"referral_link": signup_link})
 
         settings = (
             db.query(UserSettings).filter(UserSettings.user_id == get_user.id).first()
@@ -2217,10 +2126,10 @@ async def invitetorawcaster(
                                     .filter(User.id == login_user_id)
                                     .first()
                                 )
+                                token_text=f"{get_user.user_ref_id}//{datetime.datetime.utcnow().replace(tzinfo=None)}"
 
-                                token_text = base64.b64encode(
-                                    f"{get_user.user_ref_id}//{datetime.datetime.utcnow()}".encode()
-                                ).decode()
+                                join_link=generateLink(token_text)
+                                 
                                 invite_link = inviteBaseurl()
                                 join_link = (
                                     f"{invite_link}signup?ref={token_text}&mail={mail}"
@@ -2936,9 +2845,7 @@ async def listallfriendgroups(
 
                     # Generate URl
                     token_text=f"{get_user.user_ref_id}//{datetime.datetime.utcnow().replace(tzinfo=None)}//{res.id}"
-                    user_ref_id = token_text.encode("ascii")
-                    
-                    hashed_user_ref_id = (base64.b64encode(user_ref_id)).decode("ascii")
+                    hashed_user_ref_id=generateLink(token_text)
                     
                     invite_url = inviteBaseurl()
                     join_link = f"{invite_url}signup?ref={hashed_user_ref_id}"
@@ -8686,7 +8593,7 @@ async def listevents(
                     
                 return {
                     "status": 1,
-                    ",msg": "Success",
+                    "msg": "Success",
                     "events_count": get_row_count,
                     "total_pages": total_pages,
                     "current_page_no": current_page_no,
@@ -10259,9 +10166,7 @@ async def getothersprofile(
 
                         # Generate Profile URL
                         token_text=f"{get_user.id}rawcaster@!@#$QWERTxcvbn"
-                        user_ref_id = token_text.encode("ascii")
-                        
-                        hashed_user_ref_id = (base64.b64encode(user_ref_id)).decode("ascii")
+                        hashed_user_ref_id=generateLink(token_text)
                         
                         invite_url = inviteBaseurl()
                         join_link = f"{invite_url}viewprofile/{hashed_user_ref_id}"
@@ -14611,13 +14516,13 @@ async def addgoliveevent(
                     event = get_event_detail(db, new_event.id, login_user_id)
                     return {
                         "status": 1,
-                        ",msg": "Go Live event created successfully !",
+                        "msg": "Go Live event created successfully !",
                         "ref_id": reference_id,
                         "event_detail": event,
                     }
 
                 else:
-                    return {"status": 0, ",msg": "Go Live event cant be created."}
+                    return {"status": 0, "msg": "Go Live event cant be created."}
 
 
 # 77 Enable golive event
