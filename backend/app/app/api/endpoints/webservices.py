@@ -4789,41 +4789,41 @@ async def addnuggets(
                                     fps = data.get(cv2.CAP_PROP_FPS)
                                     total_duration = round(frames / fps)
                                     
-                                    # if total_duration < 330:
-                                    #     s3_file_path = f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
+                                    if total_duration < 330:
+                                        s3_file_path = f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
 
-                                    #     result = upload_to_s3(
-                                    #         uploaded_file_path, s3_file_path
-                                    #     )
-                                    #     if result["status"] == 1:
-                                    #         add_nugget_attachment = NuggetsAttachment(
-                                    #             user_id=login_user_id,
-                                    #             nugget_id=add_nuggets_master.id,
-                                    #             media_type=file_type,
-                                    #             media_file_type=file_ext,
-                                    #             file_size=file_size,
-                                    #             path=result["url"],
-                                    #             created_date=datetime.datetime.utcnow(),
-                                    #             status=1,
-                                    #         )
-                                    #         db.add(add_nugget_attachment)
-                                    #         db.commit()
-                                    #         db.refresh(add_nugget_attachment)
-                                    #     else:
-                                    #         return result
-                                    # else:
+                                        result = upload_to_s3(
+                                            uploaded_file_path, s3_file_path
+                                        )
+                                        if result["status"] == 1:
+                                            add_nugget_attachment = NuggetsAttachment(
+                                                user_id=login_user_id,
+                                                nugget_id=add_nuggets_master.id,
+                                                media_type=file_type,
+                                                media_file_type=file_ext,
+                                                file_size=file_size,
+                                                path=result["url"],
+                                                created_date=datetime.datetime.utcnow(),
+                                                status=1,
+                                            )
+                                            db.add(add_nugget_attachment)
+                                            db.commit()
+                                            db.refresh(add_nugget_attachment)
+                                        else:
+                                            return result
+                                    else:
                                     
-                                    splites_flag=1
-                                    splited_video_reposne=process_data(
-                                        db,
-                                        uploaded_file_path,
-                                        login_user_id,
-                                        master_id,
-                                        share_type,
-                                        share_with
-                                    )
-                                    nugget_ids += splited_video_reposne
-                                            
+                                        splites_flag=1
+                                        splited_video_reposne=process_data(
+                                            db,
+                                            uploaded_file_path,
+                                            login_user_id,
+                                            master_id,
+                                            share_type,
+                                            share_with
+                                        )
+                                        nugget_ids += splited_video_reposne
+                                                
                                     
                                 elif file_type == "audio":
                                     base_dir = "rawcaster_uploads"
