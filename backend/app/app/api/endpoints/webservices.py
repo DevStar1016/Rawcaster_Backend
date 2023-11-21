@@ -14956,6 +14956,8 @@ async def socialmedialogin(
                 return reply
 
             if check_phone:
+                mobile_no=mobile_no if mobile_no else check_phone.mobile_no
+
                 reply = await logins(
                     db,
                     email_id,
