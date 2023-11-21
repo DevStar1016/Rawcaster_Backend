@@ -1182,6 +1182,12 @@ def inviteBaseurl():
     # return 'https://rawcaster.com/'
 
 
+def generateLink(text:str):
+    user_ref_id = text.encode("ascii")
+    hashed_user_ref_id = (base64.b64encode(user_ref_id)).decode("ascii")
+    
+    return hashed_user_ref_id
+
 def OTPverificationtype(db, get_user):
     type = 0
     country = ""
