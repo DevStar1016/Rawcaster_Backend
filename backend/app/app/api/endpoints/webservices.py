@@ -16037,12 +16037,12 @@ async def saveandunsavenugget(
             check_nuggets = db.query(Nuggets).filter(Nuggets.id == nugget_id).first()
             if check_nuggets:
                 get_saved_nugget = (
-                    db.query(NuggetsSave)
-                    .filter(
-                        NuggetsSave.user_id == login_user_id, NuggetsSave.status == 1
-                    )
+                    db.query(NuggetsSave).join(Nuggets,Nuggets.id == NuggetsSave.nugget_id)
+                    .join(NuggetsMaster,Nuggets.nuggets_id == NuggetsMaster.id,isouter=True)
+                    .filter(NuggetsSave.user_id == login_user_id, NuggetsSave.status == 1,
+                            Nuggets.nugget_status == 1,NuggetsMaster.status == 1)
                     .count()
-                )
+                    )
 
                 if save == 1:  # Save
                     checkprevioussave = (
