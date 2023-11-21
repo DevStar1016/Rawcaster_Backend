@@ -532,8 +532,8 @@ async def add_verify_account(
         return {"status": 0, "msg": "Invalid Date"}
     elif not telephone:
         return {"status": 0, "msg": "Mobile number can't be Blank"}
-    elif not gender:
-        return {"status": 0, "msg": "Gender can't be Blank"}
+    # elif not gender:
+    #     return {"status": 0, "msg": "Gender can't be Blank"}
     
     elif gender and not gender.isnumeric():
         return {"status": 0, "msg": "Invalid gender type"}
@@ -550,6 +550,7 @@ async def add_verify_account(
                 "msg": "Sorry! your login session expired. please login again.",
             }
         else:
+            gender=gender
             get_token_details = (
                 db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
             )
@@ -569,9 +570,11 @@ async def add_verify_account(
                 if getUser:
                     getUser.first_name= first_name
                     getUser.last_name= last_name
-                    getUser.gender= gender
+                    getUser.gender= gender if gender else getUser.gender
                     getUser.dob= dob
                     db.commit()
+
+                    gender=getUser.gender
 
                 add_clain = VerifyAccounts(
                     user_id=login_user_id,
@@ -609,13 +612,12 @@ async def add_verify_account(
                 data={'clientId':get_token_details.user.user_ref_id,
                       'firstName':first_name,
                       'lastName':last_name,
-                      'sex':'M' if int(gender) == 1 else 'F',
+                      'sex':'M' if gender and int(gender) == 1 else 'F',
                       'dateOfBirth':dob,
                       "successUrl":join_link,
                       "errorUrl":join_link,
                       "unverifiedUrl":join_link,
                       
-                     
                       }
 
                 response = requests.post(url, json=data, auth=HTTPBasicAuth(username, password))
