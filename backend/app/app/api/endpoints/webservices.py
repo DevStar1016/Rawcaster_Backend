@@ -785,11 +785,14 @@ async def resendotp(
     group_id:str=Form(None),
     token: str = Form(None),
     otp_flag: str = Form(None),
+    sms_type:str=Form(default=0,description="1-email,2-sms")
 ):
     if otp_flag and otp_flag.strip() == "" or otp_flag == None:
         otp_flag = "email"
     if group_id and not group_id.isnumeric():
         return {"status":0,"msg":"Group id is invalid"}
+    if sms_type and not sms_type.isnumeric():
+        return {"status":0,"msg":"SMS type is invalid"}
 
     auth_text = otp_ref_id if otp_ref_id != None else "Rawcaster"
     if auth_code == None or auth_code.strip() == "":
@@ -804,7 +807,7 @@ async def resendotp(
         if not otp_ref_id:
             if not token and token.strip() == "":
                 return {
-                    "status": 0,
+                    "status": -1,
                     "msg": "Sorry! your login session expired. please login again.",
                 }
 
@@ -843,7 +846,8 @@ async def resendotp(
                 # return {"status":1,"otp_ref_id":otp_ref_id,"msg":"Success"}
 
         get_otp_log = (
-            db.query(OtpLog).filter(OtpLog.id == otp_ref_id).first()
+            db.query(OtpLog).filter(OtpLog.id == otp_ref_id,
+                                OtpLog.status == 1).first()
         )
 
         if not get_otp_log:
@@ -855,7 +859,7 @@ async def resendotp(
             get_otp_log.status = 1
             db.commit()
 
-            otp = get_otp_log.otp
+            otp=generateOTP()
             mail_sub = ""
             mail_msg = ""
             if get_otp_log.otp_type == 1:  # if signup
@@ -866,7 +870,7 @@ async def resendotp(
                 mail_sub = "Rawcaster - Password Reset"
                 mail_msg = "Your OTP for Rawcaster account password reset is "
 
-            if otp_flag == "sms":
+            if otp_flag == "sms" or int(sms_type) == 2:
                 to = f"{get_otp_log.user.country_code if get_otp_log.user.country_code else ''}{get_otp_log.user.mobile_no}"
                 sms = f"{otp} is your OTP from Rawcaster. PLEASE DO NOT SHARE THE OTP WITH ANYONE. 0FfsYZmYTkk"
                 if to:
@@ -1106,7 +1110,7 @@ async def forgotpassword(
 
                 get_otp = (
                     db.query(OtpLog)
-                    .filter_by(user_id=get_user.id, otp_type=3)
+                    .filter_by(user_id=get_user.id, otp_type=3,status = 1)
                     .order_by(OtpLog.id.desc())
                     .first()
                 )
@@ -1136,7 +1140,10 @@ async def forgotpassword(
                 if otp_time.timestamp() < target_time:
                     remaining_seconds = target_time - otp_time.timestamp()
                 msg = ""
+                sms_type=None
                 if username.isnumeric():
+                    sms_type=2 # Mobile Number
+
                     to = (
                         f"{get_user.country_code}{get_user.mobile_no}"
                         if get_user.mobile_no
@@ -1152,6 +1159,8 @@ async def forgotpassword(
                             pass
 
                 elif check_mail(username) == True:
+                    sms_type= 1 # Email
+
                     to = get_user.email_id
                     subject = "Rawcaster - Reset Password"
                     content = ""
@@ -1173,7 +1182,8 @@ async def forgotpassword(
                     "status": 1,
                     "msg": msg,
                     "otp_ref_id": otp_ref_id,
-                    "remaining_seconds": 90,
+                    "remaining_seconds": 10,
+                    "sms_type":sms_type
                 }  # remaining_seconds
 
 
