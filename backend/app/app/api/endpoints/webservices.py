@@ -7005,6 +7005,8 @@ async def editnugget(
                                                 #     share_type,
                                                 #     share_with,
                                                 # )
+                                                os.remove(uploaded_file_path)
+
                                                 return {
                                                     "status": 0,
                                                     "msg": "Edited nugget can only contain a video of a minimum of 5 minutes."
@@ -16232,6 +16234,9 @@ async def getUrlMetaData(
             for site_url in metaDataUrl:
                 try:
                     # Send a GET request to the URL
+                    if not site_url.startswith('http://') and not site_url.startswith('https://'):
+                        site_url = 'https://' + site_url
+
                     response = requests.get(site_url)
 
                     # Parse the HTML content of the page using BeautifulSoup
@@ -16250,7 +16255,7 @@ async def getUrlMetaData(
                             "open_graph_title": metadata['og_title'],
                             "open_graph_description": metadata['og_description'],
                             "open_graph_image":metadata['og_image']})
-                    
+                        
                     
                 except Exception as e:
                     print(f"Error: {e}")
