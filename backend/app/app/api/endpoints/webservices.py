@@ -7007,7 +7007,7 @@ async def editnugget(
                                                 # )
                                                 return {
                                                     "status": 0,
-                                                    "msg": "Duration must be below five minutes"
+                                                    "msg": "Edited nugget can only contain a video of a minimum of 5 minutes."
                                                 }
 
                                         elif type == "audio":
