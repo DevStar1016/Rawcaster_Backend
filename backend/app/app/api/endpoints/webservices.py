@@ -7009,7 +7009,7 @@ async def editnugget(
 
                                                 return {
                                                     "status": 0,
-                                                    "msg": "Edited nugget can only contain a video of a minimum of 5 minutes."
+                                                    "msg": "Edited nugget can only contain a video of a maximum duration of 5 minutes."
                                                 }
 
                                         elif type == "audio":
@@ -8177,6 +8177,7 @@ async def listevents(
                     event_list = event_list.filter(
                         Events.created_by == user_id, Events.event_type_id == 1
                     )
+                    print("ss")
 
             else:
                 my_followers = []  # Selected Connections id's
@@ -8405,6 +8406,9 @@ async def listevents(
                 event_list = event_list.filter(
                     Events.start_date_time < datetime.datetime.utcnow()
                 )
+                if user_id:
+                    event_list=event_list.filter(Events.created_by == user_id)
+
 
             elif event_type == 5:
                 event_list = event_list
