@@ -1455,6 +1455,14 @@ def user_profile(db, id):
                                                               AccountVerifyWebhook.verify_seen_status == 0)
                                         
         unseenWebhookCallstatus=getWebhookCalls.order_by(AccountVerifyWebhook.id.desc()).first()
+        
+        verify_reason=json.loads(unseenWebhookCallstatus.response) if unseenWebhookCallstatus else None
+        mismatch_reason=verify_reason['status']['mismatchTags'] if verify_reason else None
+        mismatch_data=""
+        if mismatch_reason:
+            for reason in mismatch_reason:
+                mismatch_data += f"{reason} ,"
+        
         updateSeenStatus=getWebhookCalls.update({"verify_seen_status":1}) # Update Seen Status
         db.commit()
         
@@ -1572,6 +1580,7 @@ def user_profile(db, id):
                 else "",
                 "account_verify_type":(2 if get_account_status.verify_status == 1 else 1) if get_account_status else 0,# 0 -Request not send , 1- Pending ,2 - Verified
                 "last_verify_status":unseenWebhookCallstatus.verify_status if unseenWebhookCallstatus else None, # Idenfy Last verify status
+                "verification_reason":f"{mismatch_data} Data Mismatch Tags" if mismatch_data else None,
                 "saved_nugget_count": get_saved_nuggets,
                 "nugget_content_length": get_user.user_status_master.max_nugget_char
                 if get_user.user_status_master.max_nugget_char
