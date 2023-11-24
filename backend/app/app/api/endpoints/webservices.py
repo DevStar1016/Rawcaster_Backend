@@ -854,12 +854,13 @@ async def resendotp(
             return {"status": 0, "msg": "Invalid request!"}
         else:
             otp_time = datetime.datetime.utcnow()
+            otp=generateOTP()
 
+            get_otp_log.otp = otp
             get_otp_log.created_date = otp_time
             get_otp_log.status = 1
             db.commit()
 
-            otp=generateOTP()
             mail_sub = ""
             mail_msg = ""
             if get_otp_log.otp_type == 1:  # if signup
@@ -1231,6 +1232,7 @@ async def verifyotpandresetpassword(
             get_otp_log = (
                 db.query(OtpLog)
                 .filter(OtpLog.id == otp_ref_id, OtpLog.otp == otp)
+                .order_by(OtpLog.id.desc())
                 .first()
             )
 
