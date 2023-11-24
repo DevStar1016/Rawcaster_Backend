@@ -1456,7 +1456,7 @@ def user_profile(db, id):
                                         
         unseenWebhookCallstatus=getWebhookCalls.order_by(AccountVerifyWebhook.id.desc()).first()
         
-        verify_reason=json.loads(unseenWebhookCallstatus.response) if unseenWebhookCallstatus else None
+        verify_reason=json.loads(unseenWebhookCallstatus.response) if unseenWebhookCallstatus and unseenWebhookCallstatus.response else None
         mismatch_reason=verify_reason['status']['mismatchTags'] if verify_reason else None
         mismatch_data=""
         if mismatch_reason:
