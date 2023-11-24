@@ -13198,7 +13198,7 @@ async def followandunfollow(
                                     "ChimeAppInstanceUserArn"
                                 ]
                                 # Update User Chime ID
-                                get_user=db.query(User).filter(User.id == add_frnd_group.user_id).update({"chime_user_id":user_arn})
+                                update_chime_id=db.query(User).filter(User.id == add_frnd_group.user_id).update({"chime_user_id":user_arn})
                                 member_id=user_arn
                         else:
                             member_id = (
