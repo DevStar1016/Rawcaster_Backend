@@ -7638,9 +7638,9 @@ async def addevent(
 
     else:
         event_duration = datetime.datetime.strptime(event_duration, "%H:%M").time()
-        min_duration = datetime.datetime.strptime("10:00", "%H:%M").time()
-        if event_duration > min_duration:
-            return {"status": 0, "msg": "Event duration Max Allowed hours is 10"}
+        # min_duration = datetime.datetime.strptime("10:00", "%H:%M").time()
+        # if event_duration > min_duration:
+        #     return {"status": 0, "msg": "Event duration Max Allowed hours is 10"}
 
         event_participants = int(event_participants)
         if event_participants < 2:
@@ -8099,7 +8099,7 @@ async def listevents(
             )
 
             login_user_id = get_token_details.user_id
-
+            
             get_user_setting = (
                 db.query(UserSettings)
                 .filter(UserSettings.user_id == login_user_id)
@@ -8177,7 +8177,7 @@ async def listevents(
                     event_list = event_list.filter(
                         Events.created_by == user_id, Events.event_type_id == 1
                     )
-                    print("ss")
+                    
 
             else:
                 my_followers = []  # Selected Connections id's
@@ -8798,9 +8798,9 @@ async def editevent(
         return {"status": 0, "msg": "Invalid Time format"}
     else:
         event_duration = datetime.datetime.strptime(event_duration, "%H:%M").time()
-        min_duration = datetime.datetime.strptime("10:00", "%H:%M").time()
-        if event_duration > min_duration:
-            return {"status": 0, "msg": "Event duration Max Allowed hours is 10"}
+        # min_duration = datetime.datetime.strptime("10:00", "%H:%M").time()
+        # if event_duration > min_duration:
+        #     return {"status": 0, "msg": "Event duration Max Allowed hours is 10"}
 
         event_type = int(event_type) if event_type else None
         access_token = checkToken(db, token)
