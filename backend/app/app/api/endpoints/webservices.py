@@ -6094,7 +6094,10 @@ async def nuggetcommentlist(
                                     ).first()
                                     if user_like:
                                         ilike = True
-                                        
+                                
+                                get_account_status=db.query(VerifyAccounts).filter(VerifyAccounts.user_id == reply.user_id,
+                                                    VerifyAccounts.verify_status != -1).first()
+        
                                 total_likes_count = likes.count()
                                 replyarray.append(
                                     {
@@ -6109,12 +6112,19 @@ async def nuggetcommentlist(
                                         "commented_date": reply.created_date,
                                         "liked": ilike,
                                         "like_count": total_likes_count,
+                                        "account_verify_status":1 if get_account_status and get_account_status.verify_status == 1 else 0,# 0 -Request not send , 1- Pending ,2 - Verified
+
                                     }
                                 )
+
+                        get_account_status=db.query(VerifyAccounts).filter(VerifyAccounts.user_id == comment["NuggetsComments"].user_id,
+                                                    VerifyAccounts.verify_status != -1).first()
+        
                         result_list.append(
                             {
                                 "comment_id": comment["NuggetsComments"].id,
                                 "user_id": comment["NuggetsComments"].user_id,
+                                "account_verify_status":1 if get_account_status and get_account_status.verify_status == 1 else 0,# 0 -Request not send , 1- Pending ,2 - Verified
                                 "editable": True
                                 if comment["NuggetsComments"].user_id == login_user_id
                                 else False,
