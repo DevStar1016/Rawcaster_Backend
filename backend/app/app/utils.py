@@ -2134,7 +2134,7 @@ async def logins(
                 getattr(User, "mobile_no").like(username),
             ),
             or_(getattr(User, "email_id") != None, getattr(User, "mobile_no") != None),
-        )
+        ).order_by(User.id.desc())
         .first()
     )
 

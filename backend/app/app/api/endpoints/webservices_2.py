@@ -141,8 +141,9 @@ def upgradeMember(db,user_id):
                 .first()
             )
             if user_status_master:
-                usr.user_status_id = user_status_master.id
-                db.commit()
+                if usr.user_status_id < user_status_master.id:
+                    usr.user_status_id = user_status_master.id
+                    db.commit()
 
     return {"status":1,"msg":"Success"}
 

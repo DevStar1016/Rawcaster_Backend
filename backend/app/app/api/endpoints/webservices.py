@@ -128,8 +128,7 @@ async def signup(
                     or_(
                         and_(User.email_id == email_id, User.email_id != None),
                         and_(User.mobile_no == mobile_no, User.mobile_no != None),
-                    ),
-                    User.status != 4,
+                    )
                 )
                 .first()
             )
