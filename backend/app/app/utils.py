@@ -1094,9 +1094,12 @@ def nuggetNotifcationEmail(db, nugget_id):
 
 
 def get_ip():
-    # response=request.client.host
-    response = requests.get("https://api64.ipify.org?format=json").json()
-    return response
+    response = requests.get('https://ipinfo.io')
+    data = response.json()
+    userIP = data.get('ip')
+    # # response=request.client.host
+    # response = requests.get("https://api64.ipify.org?format=json").json()
+    return userIP
 
 
 def FindLocationbyIP(userIP):
