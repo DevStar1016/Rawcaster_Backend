@@ -150,7 +150,9 @@ async def signup(
                     exptime = int(dt) + int(dt)
 
                     # token = jwt.encode(paylod, st.SECRET_KEY)
-                    userIP = request.client.host
+                    userIP=get_ip()
+
+                    # userIP = request.client.host
 
                     add_token = ApiTokens(
                         user_id=user_id,
@@ -195,7 +197,8 @@ async def signup(
 
             else:
                 # New User Register
-                userIP = request.client.host
+                # userIP = request.client.host
+                userIP=get_ip()
                 location = geo_location
                 if geo_location == None or geo_location == "" or len(geo_location) < 4:
                     location_details = FindLocationbyIP(userIP)
@@ -210,6 +213,7 @@ async def signup(
                         longitude = location_details["longitude"]
 
                 if mobile_no:
+                    
                     mobile_check = CheckMobileNumber(db, mobile_no, location)
 
                     if not mobile_check:
@@ -573,7 +577,9 @@ async def signup(
                     salt = st.SALT_KEY
                     exptime = int(dt) + int(dt)
 
-                    userIP = request.client.host
+                    # userIP = request.client.host
+                    userIP=get_ip()
+
 
                     add_token = ApiTokens(
                         user_id=user_id,
@@ -1084,10 +1090,11 @@ async def forgotpassword(
         else:
             get_user = (
                 db.query(User.id,User.status,User.country_code,User.mobile_no,User.email_id)
-                .filter(or_(User.email_id == username, User.mobile_no.like(username)))
+                .filter(or_(User.email_id == username, or_(User.mobile_no.like(username),
+                        (func.concat(User.country_code,User.mobile_no).like("%"+username+"%")))))
                 .first()
             )
-
+       
             if not get_user:
                 return {
                     "status": 0,
@@ -14917,7 +14924,9 @@ async def socialmedialogin(
                 return reply
 
             else:
-                userIP = request.client.host
+                # userIP = request.client.host
+                userIP=get_ip()
+
                 
                 display_name = (
                     f"{first_name.strip()} {last_name.strip()}"
@@ -15789,7 +15798,6 @@ async def pollvote(
 
 
 # 83.Tags List
-
 
 @router.post("/tagslist")
 async def tagslist(
