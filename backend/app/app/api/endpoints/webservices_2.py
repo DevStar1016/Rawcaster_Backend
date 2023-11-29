@@ -114,12 +114,16 @@ async def add_event_abuse_report(
 
 
 def upgradeMember(db,user_id):
+    get_user_details=db.query(User).join(
+                    UserStatusMaster,
+                    User.user_status_id == UserStatusMaster.id,
+                    isouter=True)
     if user_id:
         get_user_details = (
-            db.query(User).filter(User.id == user_id, User.status == 1).all()
+            get_user_details.filter(User.id == user_id, User.status == 1).all()
         )
     else:
-        get_user_details = db.query(User).filter(User.status == 1).all()
+        get_user_details = get_user_details.filter(User.status == 1).all()
 
     for usr in get_user_details:
         get_follow_user = (
@@ -127,7 +131,7 @@ def upgradeMember(db,user_id):
             .filter(FollowUser.following_userid == usr.id,FollowUser.status == 1)
             .count()
         )
-        
+    
         if get_follow_user:
             user_status_master = (
                 db.query(UserStatusMaster)
@@ -140,8 +144,15 @@ def upgradeMember(db,user_id):
                 )
                 .first()
             )
+            
             if user_status_master:
-                if usr.user_status_id < user_status_master.id:
+                # if usr.user_status_id < user_status_master.id:
+                if usr.created_by == 1 and usr.user_status_master.type == 2:
+                    if 5 <= user_status_master.id:
+                        usr.user_status_id = user_status_master.id
+                        db.commit()
+                    
+                else:
                     usr.user_status_id = user_status_master.id
                     db.commit()
 
@@ -166,6 +177,7 @@ async def add_claim_account(
     influencer_id: str = Form(None),
     first_name: str = Form(None),
     last_name: str = Form(None),
+    country_id:str=Form(None),
     telephone: str = Form(None),
     email_id: str = Form(None),
     dob: str = Form(None),
@@ -188,6 +200,9 @@ async def add_claim_account(
 
     elif dob and is_date(dob) == False:
         return {"status": 0, "msg": "Invalid Date"}
+    elif telephone and not country_id:
+        return {"status": 0, "msg": "Select country"}
+
 
     else:
         access_token = checkToken(db, token)
@@ -213,6 +228,11 @@ async def add_claim_account(
                 .first()
             )
             if not check_requests:
+                checkCountry=db.query(Country).filter(Country.id == country_id).first()
+                if not checkCountry:
+                    return {"status":0,"msg":"Invalid Country"}
+                
+                phone_number=f"{checkCountry.country_code}{telephone}" if telephone else None
 
                 add_clain = ClaimAccounts(
                     user_id=login_user_id,
@@ -221,7 +241,7 @@ async def add_claim_account(
                     dob=dob,
                     last_name=last_name,
                     location=location,
-                    telephone=telephone,
+                    telephone=phone_number,
                     email_id=email_id,
                     claim_date=datetime.utcnow(),
                     created_at=datetime.utcnow(),
@@ -512,6 +532,7 @@ async def add_verify_account(
     first_name: str = Form(None),
     last_name: str = Form(None),
     gender:str=Form(None,description="1- male, 2- female"),
+    country_id:str=Form(None),
     telephone: str = Form(None),
     email_id: str = Form(None),
     dob: str = Form(None),
@@ -535,6 +556,8 @@ async def add_verify_account(
         return {"status": 0, "msg": "Mobile number can't be Blank"}
     # elif not gender:
     #     return {"status": 0, "msg": "Gender can't be Blank"}
+    elif telephone and not country_id:
+        return {"status": 0, "msg": "Select country"}
     
     elif gender and not gender.isnumeric():
         return {"status": 0, "msg": "Invalid gender type"}
@@ -565,6 +588,11 @@ async def add_verify_account(
                 .first()
             )
             if not get_accounts:
+                checkCountry=db.query(Country).filter(Country.id == country_id).first()
+                if not checkCountry:
+                    return {"status":0,"msg":"Invalid Country"}
+                
+                phone_number=f"{checkCountry.country_code}{telephone}" if telephone else None
 
                 # update profile
                 getUser=db.query(User).filter(User.id == login_user_id).first()
@@ -572,6 +600,8 @@ async def add_verify_account(
                     getUser.first_name= first_name
                     getUser.last_name= last_name
                     getUser.gender= gender if gender else getUser.gender
+                    getUser.country_id = country_id if country_id else getUser.country_id
+                    getUser.mobile_no=telephone if telephone else getUser.mobile_no
                     getUser.dob= dob
                     db.commit()
 
@@ -583,7 +613,7 @@ async def add_verify_account(
                     dob=dob,
                     last_name=last_name,
                     location=location,
-                    telephone=telephone,
+                    telephone=phone_number,
                     email_id=email_id,
                     verify_date=datetime.utcnow(),
                     created_at=datetime.utcnow(),
