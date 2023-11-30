@@ -48,8 +48,9 @@ base_upload_folder = "local_uploads"
 # data_base =credentials['db_connection']
 
 # Production Database
+data_base="mysql+pymysql://Admin:RAWCASTERAURORADB@rawcasterprodrds-mysqlauroradb-pjt8ng5cdklx.cluster-c3xecvdvxfvf.us-east-1.rds.amazonaws.com/rawcaster_production"
 
-data_base ='mysql+pymysql://mdbuser:%s@rawcasterprodrds-mysqlauroradb-pjt8ng5cdklx.cluster-c3xecvdvxfvf.us-east-1.rds.amazonaws.com/rawcaster_production' % quote('M@estr0123!')
+# data_base ='mysql+pymysql://mdbuser:%s@rawcasterprodrds-mysqlauroradb-pjt8ng5cdklx.cluster-c3xecvdvxfvf.us-east-1.rds.amazonaws.com/rawcaster_production' % quote('M@estr0123!')
 
 
 api_doc_path = "/docs"
