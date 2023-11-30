@@ -49,7 +49,8 @@ base_upload_folder = "local_uploads"
 
 # Production Database
 
-data_base = "mysql+pymysql://mdbuser:M@estr0123!@44.239.190.244/rawcaster_production"
+data_base ='mysql+pymysql://mdbuser:%s@44.239.190.244/rawcaster_production' % quote('M@estr0123!')
+
 
 api_doc_path = "/docs"
 
