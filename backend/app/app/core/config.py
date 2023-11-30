@@ -45,7 +45,10 @@ base_url_segment = "/rawcaster"
 base_upload_folder = "local_uploads"
 
 # Dev DB Connection Details
-data_base =credentials['db_connection']
+# data_base =credentials['db_connection']
+
+# Production Database
+data_base = "rawcasterprodrds-mysqlauroradb-pjt8ng5cdklx.cluster-c3xecvdvxfvf.us-east-1.rds.amazonaws.com"
 
 api_doc_path = "/docs"
 
