@@ -8,7 +8,7 @@ from app.api import deps
 import datetime
 from sqlalchemy.orm import Session,aliased,joinedload
 from datetime import datetime, date
-from sqlalchemy import func, case, text, extract,select,exists,cast,Date
+from sqlalchemy import func, case, text, extract,select,exists,cast,Date,desc
 import re
 import base64
 import json
@@ -38,7 +38,6 @@ bucket_name = config.bucket_name
 @router.post("/signup")
 async def signup(
     *,
-    request:Request,
     db: Session = Depends(deps.get_db),
     signup_type: str = Form(1, description="1-Email,2-Phone Number"),
     first_name: str = Form(None, max_length=100),
@@ -88,6 +87,9 @@ async def signup(
 
     elif dob and is_date(dob) == False:
         return {"status": 0, "msg": "Invalid Date"}
+    
+    elif mobile_no and not country_id:
+        return {"status": 0, "msg": "Country id is missing"}
 
     else:
         mobile_no = None
@@ -224,13 +226,20 @@ async def signup(
                     else:
                         if mobile_check["status"] and mobile_check["status"] == 1:
                             country_code = mobile_check["country_code"]
-                            country_id = mobile_check["country_id"]
+                            # country_id = mobile_check["country_id"]
                             mobile_no = mobile_check["mobile_no"]
                         else:
                             return mobile_check
 
                 result = hashlib.sha1(password.encode())
                 hashed_password = result.hexdigest()
+
+                # Check Country Code
+                if country_id:
+                    checkCountryCode=db.query(Country).filter(Country.id == country_id).first()
+                    if not checkCountryCode:
+                        return {"status":0,"msg":"Invalid country code"}
+
 
                 add_user = User(
                     email_id=email_id,
@@ -1091,7 +1100,7 @@ async def forgotpassword(
             get_user = (
                 db.query(User.id,User.status,User.country_code,User.mobile_no,User.email_id)
                 .filter(or_(User.email_id == username, or_(User.mobile_no.like(username),
-                        (func.concat(User.country_code,User.mobile_no).like("%"+username+"%")))))
+                        (func.concat(User.country_code,User.mobile_no).like("%"+username)))))
                 .first()
             )
        
@@ -1968,6 +1977,7 @@ async def searchrawcasterusers(
                     User.profile_img,
                     User.geo_location,
                     User.bio_data,
+                    User.created_by,
                     MyFriends.request_status.label('friend_request_status'),
                     FollowUser.id.label('follow_id')
                 ).select_from(User).outerjoin(MyFriends,
@@ -2054,9 +2064,9 @@ async def searchrawcasterusers(
                                 "profile_img": user.profile_img
                                 if user.profile_img
                                 else "",
-                                "friend_request_status": user.friend_request_status
+                                "friend_request_status": (user.friend_request_status
                                 if user.friend_request_status != None
-                                else 2,
+                                else 2) if not user.created_by == 1 else 1,
                                 "follow": True if get_follow_user else False,
                                 "follow_count": follow_count,
                                 "location": user.geo_location
@@ -14771,6 +14781,7 @@ async def socialmedialogin(
     password: str = Form(None),
     login_from: str = Form(None),
     signup_social_ref_id: str = Form(None),
+    country_id:str=Form(None)
 ):
     if auth_code.strip() == "" or auth_code.strip() == None:
         return {"status": 0, "msg": "Auth Code is missing"}
@@ -14944,7 +14955,7 @@ async def socialmedialogin(
                         latitude = Location_details["latitude"]
                         longitude = Location_details["longitude"]
 
-                country_id = None
+                # country_id = None
                 if mobile_no:
                     mobile_check = CheckMobileNumber(db, mobile_no, geo_location)
                     if not mobile_check:
@@ -14955,7 +14966,7 @@ async def socialmedialogin(
                     else:
                         if mobile_check["status"] and mobile_check["status"] == 1:
                             country_code = mobile_check["country_code"]
-                            country_id = mobile_check["country_id"]
+                            # country_id = mobile_check["country_id"]
                             mobile_no = mobile_check["mobile_no"]
                         else:
                             return mobile_check
@@ -15700,7 +15711,7 @@ async def influencerfollow(
                             failed = failed + 1
 
                 if total == success:
-                    return {"status": 1, "msg": "Success"}
+                    return {"status": 1, "msg": "Followed Successfully"}
                 else:
                     return {"status": 0, "msg": reason}
 
@@ -15841,7 +15852,10 @@ async def tagslist(
                         NuggetHashTags.hash_tag,
                         NuggetHashTags.country_id,
                         func.count(Nuggets.id).label("total_nuggets"),
-                    )
+                        Country.name.label("country_name")
+                    ).join(NuggetsMaster,NuggetsMaster.id == NuggetHashTags.nugget_master_id,isouter=True)\
+                    .join(Nuggets,NuggetHashTags.nugget_id == Nuggets.id,isouter=True)\
+                    .join(Country,Country.id == NuggetHashTags.country_id,isouter=True)\
                     .filter(
                         NuggetHashTags.nugget_master_id == NuggetsMaster.id,
                         NuggetHashTags.nugget_id == Nuggets.id,
@@ -15872,7 +15886,7 @@ async def tagslist(
                     limit, offset, total_pages = get_pagination(
                         get_nuggets_count, current_page_no, default_page_size
                     )
-                    get_nuggets = get_nuggets.order_by(NuggetHashTags.hash_tag.asc())
+                    get_nuggets = get_nuggets.order_by(desc('total_nuggets'))
                     get_nuggets = get_nuggets.limit(limit).offset(offset)
 
                     result_list = []
@@ -15901,6 +15915,7 @@ async def tagslist(
                         )
 
                         trends = []
+                       
                         for i in range(25):
                             if nuggettrend:
                                 for trend in nuggettrend:
@@ -15920,7 +15935,9 @@ async def tagslist(
                             {
                                 "tag": nug.hash_tag,
                                 "nugget_count": nug.total_nuggets,
-                                "country": nug.country_id,
+                                "country": ((nug.country_name if nug.country_name else None) 
+                                            if nug.country_id else None),
+                                "country_id":nug.country_id,
                                 "trends": trends,
                             }
                         )
@@ -16354,14 +16371,3 @@ async def chatEnableDisable(
                 
             else:
                 return {"status": 0, "msg": "Invalid Group Id"}
-
-
-            
-
-# GEt Country
-@router.post("/getCountry")
-async def getcountry(
-    db: Session = Depends(deps.get_db),
-):
-    s=CheckMobileNumber(db,"8903257051","Coimbatore, Tamil Nadu, India.")
-    return s
