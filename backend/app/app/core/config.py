@@ -45,10 +45,10 @@ base_url_segment = "/rawcaster"
 base_upload_folder = "local_uploads"
 
 # Dev DB Connection Details
-data_base =credentials['db_connection']
+# data_base =credentials['db_connection']
 
 # Production Database
-# data_base="mysql+pymysql://admin:RAWCASTERAURORADB@rawcasterprodrds-mysqlauroradb-pjt8ng5cdklx.cluster-c3xecvdvxfvf.us-east-1.rds.amazonaws.com/rawcasterproddb"
+data_base="mysql+pymysql://admin:Rawcaster1234@rawcasterprodrds-mysqlauroradb-pjt8ng5cdklx.cluster-c3xecvdvxfvf.us-east-1.rds.amazonaws.com/rawcasterproddb"
 
 # data_base ='mysql+pymysql://mdbuser:%s@rawcasterprodrds-mysqlauroradb-pjt8ng5cdklx.cluster-c3xecvdvxfvf.us-east-1.rds.amazonaws.com/rawcaster_production' % quote('M@estr0123!')
 
