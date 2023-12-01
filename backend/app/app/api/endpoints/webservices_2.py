@@ -348,7 +348,7 @@ async def listunclaimaccount(
                 )
             if gender:
                 get_unclaimed_account = get_unclaimed_account.filter(
-                    User.geo_location == gender
+                    User.gender == gender
                 )
             if age:
                 if not age.isnumeric():
