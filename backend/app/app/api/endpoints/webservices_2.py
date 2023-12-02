@@ -1693,8 +1693,12 @@ def split_nugget_attachment(
 
             success=download_video_from_url(video_url, local_path)
             if success == 1:
-                video_clip = VideoFileClip("video.mp4")
-                duration = video_clip.duration
+                duration=0
+                try:
+                    video_clip = VideoFileClip("video.mp4")
+                    duration = video_clip.duration
+                except:
+                    pass
                 
                 if duration > 300:
                     input_file = local_path
