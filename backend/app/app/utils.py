@@ -156,7 +156,7 @@ def sendSMS(mobile_no, message):
         aws_secret_access_key=sms_access_secret,
         region_name="us-west-2",
     )  # Replace 'us-west-2' with your desired AWS region
-
+    mobile_no=mobile_no.replace('+', '')
     # Send the SMS
     response = sns.publish(PhoneNumber=mobile_no, Message=message)
     # Check if the SMS was sent successfully
@@ -2114,6 +2114,14 @@ def GetRawcasterUserID(db, type):
         return 0
 
 
+# Update Default Langugae
+def updateDefaultLangugae(db,user_id):
+    getUserSettings=db.query(UserSettings).filter(UserSettings.user_id == user_id,UserSettings.read_out_language_id == None).first()
+    if getUserSettings:
+        getUserSettings.read_out_language_id = 27
+        getUserSettings.read_out_accent_id= 1
+        db.commit()
+
 async def logins(
     db,
     username,
@@ -2403,6 +2411,8 @@ async def logins(
                 get_user.is_email_id_verified = 1
                 get_user.status= 1
                 db.commit()
+
+            updateUserLanguage=updateDefaultLangugae(db,get_user.id)
 
             return {
                 "status": 1,

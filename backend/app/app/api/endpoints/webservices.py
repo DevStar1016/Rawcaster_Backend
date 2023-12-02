@@ -1166,12 +1166,14 @@ async def forgotpassword(
                         if get_user.mobile_no
                         else None
                     )
+                    mobile_number=to
+
                     sms = f"{otp} is your OTP from Rawcaster. PLEASE DO NOT SHARE THE OTP WITH ANYONE. 0FfsYZmYTkk"
                     msg = "A one time passcode (OTP) has been sent to the phone number you provided"
                     # Send SMS
-                    if to:
+                    if mobile_number:
                         try:
-                            send_sms = sendSMS(to, sms)
+                            send_sms = sendSMS(mobile_number, sms)
                         except:
                             pass
 
@@ -1365,7 +1367,7 @@ async def changepassword(
                         
                         return {
                             "status": 1,
-                            "msg": "Successfully updated new password",
+                            "msg": "New password updated successfully.",
                         }
                         
 
@@ -1471,7 +1473,7 @@ def user_profile(db, id):
                                         
         unseenWebhookCallstatus=getWebhookCalls.order_by(AccountVerifyWebhook.id.desc()).first()
         
-        verify_reason=json.loads(unseenWebhookCallstatus.response) if unseenWebhookCallstatus and unseenWebhookCallstatus.response else None
+        verify_reason=json.loads(unseenWebhookCallstatus.request) if unseenWebhookCallstatus and unseenWebhookCallstatus.request else None
         mismatch_reason=verify_reason['status']['mismatchTags'] if verify_reason else None
         mismatch_data=""
         if mismatch_reason:
@@ -2351,14 +2353,14 @@ async def sendfriendrequests(
                         if friend_request_ids:
                             return {
                                 "status": 1,
-                                "msg": "Connection request sent successfully",
+                                "msg": "Connection request has been sent.",
                                 "friend_request_ids": friend_request_ids,
                             }
 
                         else:
                             return {
                                 "status": 0,
-                                "msg": "Failed to send Connection request",
+                                "msg": "Failed to send Connection Request.",
                                 "friend_request_ids": friend_request_ids,
                             }
 
@@ -2874,7 +2876,7 @@ async def listallfriendgroups(
                     elif groupname == "My Fans" and res.created_by != login_user_id:
                         grouptype = 1
                         group_category = 2
-                        groupname = f"Influencer: {(get_user.display_name if get_user.display_name else '') if res.created_by else ''}"
+                        groupname = f"Influencer: {(get_user.display_name if get_user else '') if res.created_by else ''}"
                         my_group=0
 
                     elif groupname != "My Fans":
@@ -3569,6 +3571,12 @@ async def addfriendgroup(
             "status": -1,
             "msg": "Sorry! your login session expired. please login again.",
         }
+    elif not group_name:
+        return {"status":0,"msg":"Group name is missing"}
+    
+    elif group_name.strip() == "":
+        return {"status":0,"msg":"Group Name can't be empty"}
+
     
     else:
         access_token = checkToken(db, token)
@@ -3594,7 +3602,7 @@ async def addfriendgroup(
                 .first()
             )
             if get_row_count:
-                return {"status": 0, "msg": "Group name already exists"}
+                return {"status": 0, "msg": "Group Name Already Exists."}
 
             else:
                 # Add Friend Group
@@ -3728,7 +3736,7 @@ async def addfriendgroup(
 
                     return {
                         "status": 1,
-                        "msg": "Successfully created group",
+                        "msg": "Group Created Successfully.",
                         "group_details": group_details,
                     }
                 else:
@@ -4056,7 +4064,7 @@ async def addfriendstogroup(
 
                     return {
                         "status": 1,
-                        "msg": "Successfully Added",
+                        "msg": "Successfully Added.",
                         "memberdetails": memberdetails,
                     }
 
@@ -4150,7 +4158,7 @@ async def removefriendsfromgroup(
                         delete_member=get_members.delete()
                         db.commit()
 
-                return {"status": 1, "msg": "Successfully updated"}
+                return {"status": 1, "msg": "Successfully Removed."}
 
 
 # 24. Delete Friend Group
@@ -4225,7 +4233,7 @@ async def deletefriendgroup(
                         delete_channel(channel_arn, chime_bearer)
                     except Exception as e:
                         print(e)
-                    return {"status": 1, "msg": "Successfully deleted"}
+                    return {"status": 1, "msg": "Successfully Deleted."}
 
                 else:
                     return {"status": 0, "msg": "Failed to delete. please try again"}
@@ -5987,9 +5995,9 @@ async def deletenugget(
                         )
                         db.commit()
 
-                        return {"status": 1, "msg": "Nugget Deleted"}
+                        return {"status": 1, "msg": "Successfully Deleted."}
                     else:
-                        return {"status": 1, "msg": "Nugget Deleted"}
+                        return {"status": 1, "msg": "Successfully Deleted."}
 
                 else:
                     return {"status": 0, "msg": "Unable to delete"}
@@ -7223,7 +7231,7 @@ async def editnugget(
                             )
                             return {
                                 "status": 1,
-                                "msg": "Nugget updated",
+                                "msg": "Nugget Updated Successfully.",
                                 "nugget_detail": nugget_detail,
                             }
                         else:
@@ -10627,6 +10635,8 @@ async def blockunblockuser(
                         db.query(FriendGroupMembers).filter_by(id=frnds.id).delete()
                     )
                     db.commit()
+                
+                return {"status":1,"msg":"Successfully blocked."}
 
             else:
                 get_friend_requests = (
@@ -10648,7 +10658,7 @@ async def blockunblockuser(
                     )
                     db.commit()
 
-            return {"status": 1, "msg": "Success"}
+                return {"status": 1, "msg": "Successfully unblocked."}
 
 
 # 54. Get User Settings
