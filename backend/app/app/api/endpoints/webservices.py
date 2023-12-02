@@ -1465,6 +1465,24 @@ def user_profile(db, id):
     get_user = db.query(User).filter(User.id == user_id).first()
 
     if get_user:
+        # Chime Chat User Create
+        check_chat_id = get_user.chime_user_id if get_user.chime_user_id else None
+        if not check_chat_id:
+            try:
+                create_chat_user = chime_chat.createchimeuser(get_user.email_id)
+            except Exception as e:
+                print(f'Chime User:{e}')
+                
+            if create_chat_user["status"] == 1:
+                check_chat_id = create_chat_user["data"]["ChimeAppInstanceUserArn"]
+                # Update User Chime ID
+                update_user = (
+                    db.query(User)
+                    .filter(User.id == get_user.id)
+                    .update({"chime_user_id": check_chat_id})
+                )
+                db.commit()
+
         get_account_status=db.query(VerifyAccounts).filter(VerifyAccounts.user_id == get_user.id,
                                                               VerifyAccounts.verify_status != -1).first()
         
@@ -1597,7 +1615,7 @@ def user_profile(db, id):
                 else "",
                 "account_verify_type":(2 if get_account_status.verify_status == 1 else 1) if get_account_status else 0,# 0 -Request not send , 1- Pending ,2 - Verified
                 "last_verify_status":unseenWebhookCallstatus.verify_status if unseenWebhookCallstatus else None, # Idenfy Last verify status
-                "verification_reason":f"{mismatch_data} Data Mismatch Tags" if mismatch_data else None,
+                "verification_reason":f"{mismatch_data} Data Mismatching" if mismatch_data else None,
                 "saved_nugget_count": get_saved_nuggets,
                 "nugget_content_length": get_user.user_status_master.max_nugget_char
                 if get_user.user_status_master.max_nugget_char
