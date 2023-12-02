@@ -10655,6 +10655,17 @@ async def blockunblockuser(
                     )
                     db.commit()
                 
+                # Unfolow User
+                del_follow_user = (
+                        db.query(FollowUser)
+                        .filter(
+                            FollowUser.follower_userid == login_user_id,
+                            FollowUser.following_userid == user_id,
+                        )
+                        .delete()
+                    )
+                db.commit()
+                
                 return {"status":1,"msg":"Successfully blocked."}
 
             else:
@@ -14755,7 +14766,7 @@ async def getinfluencercategory(
                         FollowUser.follower_userid == login_user_id
                     ).all()
                     user_ids=set([follower.following_userid for follower in get_followers])
-                    
+                
                     # Get Category
                     get_category=db.query(User.influencer_category).filter(User.id != login_user_id,User.id.in_(user_ids),User.status == 1,User.influencer_category != None).all()
                     category_ids=set([category.influencer_category for category in get_category])
@@ -14971,7 +14982,7 @@ async def socialmedialogin(
                 display_name = (
                     f'{first_name.strip() if first_name else ""} {last_name.strip() if last_name else ""}'
                     if last_name
-                    else (first_name.strip() if first_name.strip() else "")
+                    else (first_name.strip() if first_name else "")
                 )
                 last_name = last_name.strip() if last_name else None
                 
