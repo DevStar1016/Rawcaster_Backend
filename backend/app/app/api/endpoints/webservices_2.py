@@ -1655,6 +1655,185 @@ def script_add_nugget(
 
 
 
+import boto3
+from moviepy.editor import VideoFileClip
+import requests
+
+def download_video_from_url(url, download_path):
+    response = requests.get(url)
+    with open(download_path, 'wb') as file:
+        file.write(response.content)
+
+    return 1
+
+
+import subprocess
+
+
+@router.post("/script_split_nugget_attachment")
+def split_nugget_attachment(
+    db: Session = Depends(deps.get_db)
+):
+    getNuggetAttachment=db.query(NuggetsAttachment).filter(NuggetsAttachment.media_type == "video",NuggetsAttachment.id == 2375,
+                                                           NuggetsAttachment.status == 1).order_by(NuggetsAttachment.id.desc()).all()
+    
+    for nug_att in getNuggetAttachment:
+        print("Attachment",nug_att.id)
+        nug_att.status = -1
+        db.commit()
+
+
+        getNuggetMaster=db.query(Nuggets).filter(Nuggets.nuggets_id == nug_att.nugget_id,
+                                                 Nuggets.status == 1).first()
+        if getNuggetMaster:
+
+            # Replace 'video_url' and 'local_path' with the actual video URL and local path
+            video_url = nug_att.path
+            local_path = 'video.mp4'
+
+            success=download_video_from_url(video_url, local_path)
+            if success == 1:
+                video_clip = VideoFileClip("video.mp4")
+                duration = video_clip.duration
+                
+                if duration > 300:
+                    input_file = local_path
+                    output_prefix = f"rawcaster_uploads/output_part_{int(datetime.utcnow().timestamp())}"  # Prefix for the output video parts
+                    duration = 299  # Duration of each video part in seconds
+
+                    frame_size='640x480'
+                    command = [
+                        'ffmpeg',
+                        '-i', input_file,
+                        '-c', 'copy',
+                        '-map', '0',
+                        '-map', '-0:s',  # Exclude subtitle streams from copying
+                        '-reset_timestamps', '1',
+                        '-avoid_negative_ts', '1',
+                        '-s', frame_size,
+                        '-segment_time', str(duration),
+                        '-f', 'segment',
+                        f'{output_prefix}%03d.mp4'
+                    ]
+
+                    # Run the command using subprocess
+                    subprocess.run(command,capture_output=True, text=True)
+
+                    # Generate the output file paths
+                    splited_file_path = []
+                    for i in range(0, 1000):  # Assuming up to 999 output parts
+                        file_path = output_prefix + f"{i:03d}.mp4"
+
+                        if not os.path.exists(file_path):
+                            break
+                        splited_file_path.append(file_path)
+                    
+                    #remove local file path
+                    os.remove(local_path)
+                    
+                    # Connect to S3
+                    client_s3 = boto3.client(
+                        "s3", aws_access_key_id=access_key, aws_secret_access_key=access_secret
+                    )  
+
+                    # Reverse File Path
+                    tot_length=len(splited_file_path)
+                    content_location=1
+                    row = 0
+                    for local_file_pth in splited_file_path[::-1]:
+                        getContent=db.query(NuggetsMaster).filter(NuggetsMaster.id == getNuggetMaster.nuggets_id).first()
+                       
+                        if row == 0:
+                            pass
+                        else:
+                           
+                            add_nuggets_master = NuggetsMaster(
+                                user_id=getNuggetMaster.user_id,
+                                content=getContent.content if tot_length == content_location else None,
+                                created_date = getNuggetMaster.created_date-timedelta(seconds=2),
+                                status=1
+                            )
+                            db.add(add_nuggets_master)
+                            db.commit()
+
+                        getNuggetMaster.nuggets_master.content = None if tot_length == content_location else getContent.content
+                        
+                        content_location = content_location + 1
+                        
+                        s3_file_path = f"nuggets/video_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp4"
+
+                        with open(local_file_pth, "rb") as data:  # Upload File To S3
+                            upload = client_s3.upload_fileobj(
+                                data, bucket_name, s3_file_path, ExtraArgs={"ACL": "public-read"}
+                            )
+
+                        # Get File Size
+                        file_stat = os.stat(local_file_pth)
+                        file_size = file_stat.st_size
+                        os.remove(local_file_pth)
+
+                        # Update Data
+                        url_location = client_s3.get_bucket_location(Bucket=bucket_name)[
+                            "LocationConstraint"
+                        ]
+                        url = f"https://{bucket_name}.s3.{url_location}.amazonaws.com/{s3_file_path}"
+                        if url:
+                            add_nugget_attachment = NuggetsAttachment(
+                                user_id=getNuggetMaster.user_id,
+                                nugget_id=getNuggetMaster.nuggets_id if row == 0 else add_nuggets_master.id,
+                                media_type="video",
+                                media_file_type="mp4",
+                                file_size=file_size,
+                                path=url,
+                                created_date=getNuggetMaster.created_date,
+                                status=1,
+                            )
+                            db.add(add_nugget_attachment)
+                            db.commit()
+                            db.refresh(add_nugget_attachment)
+                        
+                        else:
+                            return {"status": 0, "msg": "Failed to Upload"}
+                    
+                    # Add Nuggets
+                        if not row == 0:
+                            add_nuggets = Nuggets(
+                                nuggets_id=getNuggetMaster.nuggets_id if row == 0 else add_nuggets_master.id,
+                                user_id=getNuggetMaster.user_id,
+                                type=1,
+                                share_type=getNuggetMaster.share_type,
+                                created_date=getNuggetMaster.created_date,
+                            )
+                            db.add(add_nuggets)
+                            db.commit()
+                            db.refresh(add_nuggets)
+                        
+                            #  Share With
+                            nuggetShareWith=db.query(NuggetsShareWith).filter(
+                                NuggetsShareWith.nuggets_id ==  getNuggetMaster.id,
+                            ).all()
+                            
+                            for share_to in nuggetShareWith:
+                                add_NuggetsShareWith = NuggetsShareWith(
+                                    nuggets_id=add_nuggets.id,
+                                    type=share_to.type,
+                                    share_with=share_to.share_with,
+                                )
+                                db.add(add_NuggetsShareWith)
+                                db.commit()
+
+                        row = row + 1                        
+
+
+
+
+
+
+
+
+
+
+
 
 
 # def update_poll_count(
