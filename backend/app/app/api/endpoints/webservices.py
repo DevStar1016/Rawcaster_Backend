@@ -9885,10 +9885,11 @@ async def listnotifications(
                                 else None,
                             }
                         )
-
+                # Event Notification
+                event_type=[9,10,13,14]
                 total_unread_count = (
                     db.query(Notification)
-                    .filter_by(status=1, is_read=0, user_id=login_user_id)
+                    .filter_by(status=1, is_read=0, user_id=login_user_id).filter(Notification.notification_type.not_in(event_type))
                     .count()
                 )
 
