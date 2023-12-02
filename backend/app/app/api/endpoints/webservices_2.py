@@ -1674,7 +1674,7 @@ import subprocess
 def split_nugget_attachment(
     db: Session = Depends(deps.get_db)
 ):
-    getNuggetAttachment=db.query(NuggetsAttachment).filter(NuggetsAttachment.media_type == "video",NuggetsAttachment.id == 2375,
+    getNuggetAttachment=db.query(NuggetsAttachment).filter(NuggetsAttachment.media_type == "video",NuggetsAttachment.id == 2657,
                                                            NuggetsAttachment.status == 1).order_by(NuggetsAttachment.id.desc()).all()
     
     for nug_att in getNuggetAttachment:
@@ -1824,8 +1824,7 @@ def split_nugget_attachment(
 
                         row = row + 1                        
 
-
-
+    return "Success"
 
 
 
