@@ -1097,13 +1097,13 @@ async def forgotpassword(
         if checkAuthCode(auth_code, auth_text) == False:
             return {"status": 0, "msg": "Authentication failed!"}
         else:
+           
             get_user = (
                 db.query(User.id,User.status,User.country_code,User.mobile_no,User.email_id)
-                .filter(or_(User.email_id == username, or_(User.mobile_no.like(username),
-                        (func.concat(User.country_code,User.mobile_no).like("%"+username)))))
+                .filter(or_(User.email_id == username,func.concat(User.country_code,User.mobile_no).like("%"+username)))
                 .first()
             )
-       
+
             if not get_user:
                 return {
                     "status": 0,
@@ -1158,6 +1158,7 @@ async def forgotpassword(
                     remaining_seconds = target_time - otp_time.timestamp()
                 msg = ""
                 sms_type=None
+                username = username.replace("+",'')
                 if username.isnumeric():
                     sms_type=2 # Mobile Number
 
@@ -14968,9 +14969,9 @@ async def socialmedialogin(
 
                 
                 display_name = (
-                    f"{first_name.strip()} {last_name.strip()}"
+                    f'{first_name.strip() if first_name else ""} {last_name.strip() if last_name else ""}'
                     if last_name
-                    else first_name.strip()
+                    else (first_name.strip() if first_name.strip() else "")
                 )
                 last_name = last_name.strip() if last_name else None
                 
