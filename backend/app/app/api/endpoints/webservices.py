@@ -1457,12 +1457,32 @@ def checkComplementary(db,id):
         updateSetting=db.query(UserSettings).filter(UserSettings.user_id == id).update({"complementary_enable_date":None,
                                                                                         "complementary_expire_date":None})
         db.commit()
-        
+
+
+def checkAccountValidation(db,user_id):
+    getAccountVerify=db.query(VerifyAccounts).filter(VerifyAccounts.user_id == user_id,
+                                                    VerifyAccounts.verify_status == 0).first()
+    
+    if getAccountVerify and getAccountVerify.created_at:
+        checkHourValidate = (
+                    datetime.datetime.utcnow().replace(tzinfo=None)
+                    - getAccountVerify.created_at
+                ).total_seconds()
+       
+        if int(checkHourValidate) if checkHourValidate else 0 > 3600:
+            checkVerifyWebhook=db.query(AccountVerifyWebhook).filter(AccountVerifyWebhook.client_id == getAccountVerify.user.user_ref_id,
+                                                                AccountVerifyWebhook.created_at > getAccountVerify.created_at).first()
+            if not checkVerifyWebhook:
+                getAccountVerify.verify_status = -1
+                db.commit()
+
 
 def user_profile(db, id):
     user_id=id
     # Update Membership
     validateMembership=checkComplementary(db,user_id)
+    verifyAccountValidate=checkAccountValidation(db,user_id)
+
     get_user = db.query(User).filter(User.id == user_id).first()
 
     if get_user:
@@ -5402,12 +5422,12 @@ async def listnuggets(
                                 and_(Nuggets.user_id == login_user_id)
                         ))
                 
-                    elif user_public_nugget_display_setting == 0:  # Rawcaster
+                    if user_public_nugget_display_setting == 0:  # Rawcaster
                         get_nuggets = get_nuggets.filter(
                             or_(Nuggets.user_id == login_user_id, Nuggets.user_id == raw_id)
                         )
                         
-                    elif user_public_nugget_display_setting == 1:  # Public
+                    if user_public_nugget_display_setting == 1:  # Public
                         
                         get_nuggets = get_nuggets.filter(
                             or_(
@@ -5437,7 +5457,7 @@ async def listnuggets(
                                 and_(Nuggets.user_id == raw_id),
                             )
                         )    
-                    elif user_public_nugget_display_setting == 2:  # All Connections
+                    if user_public_nugget_display_setting == 2:  # All Connections
                         get_nuggets = get_nuggets.filter(
                             or_(
                                 and_(Nuggets.user_id == login_user_id),
@@ -5447,7 +5467,7 @@ async def listnuggets(
                             )
                         )
 
-                    elif user_public_nugget_display_setting == 3:  # Specific Connections
+                    if user_public_nugget_display_setting == 3:  # Specific Connections
                     
                         my_friends = []  # Selected Connections id's
 
@@ -5478,7 +5498,7 @@ async def listnuggets(
                                 )
                             )
 
-                    elif user_public_nugget_display_setting == 4:  # All Groups
+                    if user_public_nugget_display_setting == 4:  # All Groups
                         get_nuggets = get_nuggets.join(
                             FriendGroupMembers,
                             Nuggets.user_id == FriendGroupMembers.user_id,
@@ -5497,7 +5517,7 @@ async def listnuggets(
                             )
                         )
 
-                    elif user_public_nugget_display_setting == 5:  # Specific Groups
+                    if user_public_nugget_display_setting == 5:  # Specific Groups
                         my_friends = []
                         online_group_list = (
                             db.query(UserProfileDisplayGroup)
@@ -5529,7 +5549,7 @@ async def listnuggets(
                             )
                         )
 
-                    elif user_public_nugget_display_setting == 6:  # My influencers
+                    if user_public_nugget_display_setting == 6:  # My influencers
                         my_followers = []  # Selected Connections id's
                         follow_user = (
                             db.query(FollowUser)
