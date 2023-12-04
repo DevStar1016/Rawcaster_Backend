@@ -5417,17 +5417,15 @@ async def listnuggets(
                                 my_followers.append(group_list.following_userid)
                     
                         get_nuggets = get_nuggets.filter(
-                                or_(
-                                and_(Nuggets.user_id.in_(my_followers),Nuggets.share_type != 2),
-                                and_(Nuggets.user_id == login_user_id)
-                        ))
+                                and_(Nuggets.user_id.in_(my_followers),Nuggets.share_type != 2)     
+                        )
                 
                     if user_public_nugget_display_setting == 0:  # Rawcaster
                         get_nuggets = get_nuggets.filter(
                             or_(Nuggets.user_id == login_user_id, Nuggets.user_id == raw_id)
                         )
                         
-                    if user_public_nugget_display_setting == 1:  # Public
+                    elif user_public_nugget_display_setting == 1:  # Public
                         
                         get_nuggets = get_nuggets.filter(
                             or_(
@@ -5457,7 +5455,7 @@ async def listnuggets(
                                 and_(Nuggets.user_id == raw_id),
                             )
                         )    
-                    if user_public_nugget_display_setting == 2:  # All Connections
+                    elif user_public_nugget_display_setting == 2:  # All Connections
                         get_nuggets = get_nuggets.filter(
                             or_(
                                 and_(Nuggets.user_id == login_user_id),
@@ -5467,7 +5465,7 @@ async def listnuggets(
                             )
                         )
 
-                    if user_public_nugget_display_setting == 3:  # Specific Connections
+                    elif user_public_nugget_display_setting == 3:  # Specific Connections
                     
                         my_friends = []  # Selected Connections id's
 
@@ -5498,7 +5496,7 @@ async def listnuggets(
                                 )
                             )
 
-                    if user_public_nugget_display_setting == 4:  # All Groups
+                    elif user_public_nugget_display_setting == 4:  # All Groups
                         get_nuggets = get_nuggets.join(
                             FriendGroupMembers,
                             Nuggets.user_id == FriendGroupMembers.user_id,
@@ -5517,7 +5515,7 @@ async def listnuggets(
                             )
                         )
 
-                    if user_public_nugget_display_setting == 5:  # Specific Groups
+                    elif user_public_nugget_display_setting == 5:  # Specific Groups
                         my_friends = []
                         online_group_list = (
                             db.query(UserProfileDisplayGroup)
@@ -5549,7 +5547,7 @@ async def listnuggets(
                             )
                         )
 
-                    if user_public_nugget_display_setting == 6:  # My influencers
+                    elif user_public_nugget_display_setting == 6:  # My influencers
                         my_followers = []  # Selected Connections id's
                         follow_user = (
                             db.query(FollowUser)
