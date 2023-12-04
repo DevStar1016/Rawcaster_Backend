@@ -1539,13 +1539,18 @@ def complementary_membership(
                             "complementary_expire_date":expireDate})
                 db.commit()
                 if updateComplDate:
-                    getUser=db.query(User).filter(User.id == login_user_id,User.user_status_id == 1).update({"user_status_id":3})
+                    updateUserStatus=db.query(User).filter(User.id == login_user_id,User.user_status_id == 1).update({"user_status_id":3})
                     db.commit()
+                    # GetUser
+                    getUser=db.query(User).filter(User.id == login_user_id).first()
+
                     return {'status':1,"msg":f"You have been granted a complementary upgrade for {getComplementoryDays.settings_value} days",
                             "user_status": get_token_details.user.user_status_master.name
                                 if get_token_details.user.user_status_id
                             else "",  # -----
-                            "user_status_id": get_token_details.user.user_status_id}
+                            "user_status_id": get_token_details.user.user_status_id,
+                            "complementary_status":1 if getSettings.settings_value == 1 and getUser.user_status_id == 1 else 0
+                            }
         else:
             return {"status":0,"msg":"Unable to use"}
 
@@ -1754,7 +1759,7 @@ def split_nugget_attachment(
                             add_nuggets_master = NuggetsMaster(
                                 user_id=getNuggetMaster.user_id,
                                 content=getContent.content if tot_length == content_location else None,
-                                created_date = getNuggetMaster.created_date-timedelta(seconds=2),
+                                created_date = getNuggetMaster.created_date-timedelta(seconds=5 + row),
                                 status=1
                             )
                             db.add(add_nuggets_master)
