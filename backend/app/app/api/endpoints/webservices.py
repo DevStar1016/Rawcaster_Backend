@@ -3611,6 +3611,10 @@ async def addfriendgroup(
             )
             login_user_id = get_token_details.user_id
 
+            group_name=detect_and_remove_offensive(group_name) if group_name else None
+            if '*' in group_name:
+                return {"status":0,"msg":"Please enter valid group name"}
+
             get_row_count = (
                 db.query(FriendGroups)
                 .filter(
@@ -6335,7 +6339,7 @@ async def editnuggetcomment(
             "status": -1,
             "msg": "Sorry! your login session expired. please login again.",
         }
-    elif comment == None or comment.strip() == "":
+    elif not comment or comment.strip() == "":
         return {"status": 0, "msg": "Comment is missing"}
     elif comment_id == None or not comment_id.isnumeric():
         return {"status": 0, "msg": "Comment_id is missing"}
@@ -6348,8 +6352,7 @@ async def editnuggetcomment(
                 "msg": "Sorry! your login session expired. please login again.",
             }
         else:
-            status = 0
-            msg = "Invalid nugget id"
+            
             get_token_details = (
                 db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
             )
@@ -6370,16 +6373,19 @@ async def editnuggetcomment(
                 .first()
             )
             if check_nugget_comment:
-                check_nugget_comment.content = detect_and_remove_offensive(comment) if comment else None
+                content=detect_and_remove_offensive(comment) if comment else None
+                
+                check_nugget_comment.content = content
                 check_nugget_comment.modified_date = datetime.datetime.utcnow()
                 db.commit()
                 if check_nugget_comment:
-                    status = 1
-                    msg = "Success"
+                    return {"status":1,"msg":"Success","edited_comment":{"comment_id":comment_id,
+                                                                        "comment":content}}
                 else:
-                    msg = "failed to add comment"
+                    return {"status": 0, "msg": "Failed to add comment"}
+            else:
+                return {"status": 0, "msg": "Invalid nugget id"}
 
-            return {"status": status, "msg": msg}
 
 
 # 32. Delete Nuggets Comments
