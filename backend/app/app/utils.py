@@ -2504,6 +2504,10 @@ def checkToken(db, access_token):
                 get_token_details.status = -1
                 db.commit()
                 return False
+            
+            elif get_token_details.user.status == 2:
+                return False
+
             else:
                 get_token_details.renewed_at = datetime.datetime.utcnow()
                 db.commit()

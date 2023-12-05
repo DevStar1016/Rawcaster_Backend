@@ -3248,7 +3248,7 @@ async def listallfriends(
                 request_frnds = []
 
                 for friend_requests in get_my_friends:
-                    print(friend_requests.user2.gender)
+                    
                     get_follow_user_id = (
                         db.query(FollowUser)
                         .filter(
@@ -3468,37 +3468,6 @@ async def listallfriends(
                                 else None,
                             }
                         )
-
-                    if friendid != 0:
-                        chat = (
-                            db.query(FriendsChat)
-                            .filter(
-                                FriendsChat.sender_id == friendid,
-                                FriendsChat.receiver_id == login_user_id,
-                                FriendsChat.is_read == 0,
-                                FriendsChat.type == 1,
-                                FriendsChat.sender_delete == None,
-                                FriendsChat.receiver_delete == None,
-                            )
-                            .count()
-                        )
-                        if login_from == 1:
-                            chat = (
-                                db.query(FriendsChat)
-                                .filter(
-                                    FriendsChat.sender_id == friendid,
-                                    FriendsChat.receiver_id == login_user_id,
-                                    FriendsChat.is_read == 0,
-                                    FriendsChat.type == 1,
-                                    FriendsChat.msg_from == 1,
-                                    FriendsChat.sender_delete == None,
-                                    FriendsChat.receiver_delete == None,
-                                )
-                                .count()
-                            )
-
-                        if chat > 0:
-                            request_frnds.append({"unreadmsg": chat})
 
                 return {
                     "status": 1,
@@ -14798,9 +14767,11 @@ async def getinfluencercategory(
                     user_ids=set([follower.following_userid for follower in get_followers])
                 
                     # Get Category
-                    get_category=db.query(User.influencer_category).filter(User.id != login_user_id,User.id.in_(user_ids),User.status == 1,User.influencer_category != None).all()
-                    category_ids=set([category.influencer_category for category in get_category])
-                    influencer_category_ids= [int(item) for sublist in category_ids for item in sublist.split(',')]
+                    get_category=db.query(User.influencer_category).filter(User.id != login_user_id,User.id.in_(user_ids),User.status == 1,and_(User.influencer_category != None,User.influencer_category != "")).all()
+                   
+                    category_ids=set([category.influencer_category for category in get_category]) if get_category else None
+                    
+                    influencer_category_ids= ([int(item) for sublist in category_ids for item in sublist.split(',')]) if category_ids else []
 
                     for category in GetInfluencerCategory:
                         result_list.append(
