@@ -1683,7 +1683,6 @@ def split_nugget_attachment(
                                                            NuggetsAttachment.status == 1).order_by(NuggetsAttachment.id.desc()).all()
     
     for nug_att in getNuggetAttachment:
-        print("Attachment",nug_att.id)
 
         getNuggetMaster=db.query(Nuggets).filter(Nuggets.nuggets_id == nug_att.nugget_id,
                                                  Nuggets.status == 1).first()
@@ -1703,6 +1702,7 @@ def split_nugget_attachment(
                     pass
                 
                 if duration > 300:
+                    print("Attachment",nug_att.id)
                     nug_att.status = -1
                     db.commit()
 
@@ -1759,7 +1759,7 @@ def split_nugget_attachment(
                             add_nuggets_master = NuggetsMaster(
                                 user_id=getNuggetMaster.user_id,
                                 content=getContent.content if tot_length == content_location else None,
-                                created_date = getNuggetMaster.created_date-timedelta(seconds=5 + row),
+                                created_date = getNuggetMaster.created_date-timedelta(seconds=5),
                                 status=1
                             )
                             db.add(add_nuggets_master)
@@ -1833,43 +1833,6 @@ def split_nugget_attachment(
 
                         row = row + 1    
 
-    return "Success"
-
-
-
-
-@router.post("/script_split_nugget_attachment_remove")
-def split_nugget_attachment_remove(
-    db: Session = Depends(deps.get_db)
-):
-    getNuggetAttachment=db.query(NuggetsAttachment).filter(NuggetsAttachment.media_type == "video",
-                                                           NuggetsAttachment.status == -1).order_by(NuggetsAttachment.id.desc()).all()
-    
-    for nug_att in getNuggetAttachment:
-        print("Attachment",nug_att.id)
-
-        getNuggetMaster=db.query(Nuggets).filter(Nuggets.nuggets_id == nug_att.nugget_id,
-                                                 Nuggets.status == 1).first()
-        if getNuggetMaster:
-
-            # Replace 'video_url' and 'local_path' with the actual video URL and local path
-            video_url = nug_att.path
-            local_path = 'video.mp4'
-
-            success=download_video_from_url(video_url, local_path)
-            if success == 1:
-                duration=0
-                try:
-                    video_clip = VideoFileClip("video.mp4")
-                    duration = video_clip.duration
-                except:
-                    pass
-                
-                if duration < 300:
-                    nug_att.status = 1
-                    db.commit()
-
-            os.remove(local_path)
     return "Success"
 
 

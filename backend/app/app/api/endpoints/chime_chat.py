@@ -129,28 +129,30 @@ async def send_channel_message(
                 db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
             )
             chime_user_id=get_token_details.user.chime_user_id if get_token_details.user_id else None
-          
-            # Send a channel message
-            response = chime.send_channel_message(
-                ChannelArn=channel_id,
-                Content=message,
-                Type="STANDARD",
-                Persistence="PERSISTENT",
-                ChimeBearer=chime_user_id,
-                Metadata=meta_data if meta_data else ""
-            )
+            try:
+                # Send a channel message
+                response = chime.send_channel_message(
+                    ChannelArn=channel_id,
+                    Content=message,
+                    Type="STANDARD",
+                    Persistence="PERSISTENT",
+                    ChimeBearer=chime_user_id,
+                    Metadata=meta_data if meta_data else ""
+                )
 
-                # arn:aws:chime:us-east-1:562114208112:app-instance/6ea8908f-999b-4b3d-9fae-fa1153129087/user/anon_b71c2ee9-b38b-45c1-b1f7-9d69c132444c
+                    # arn:aws:chime:us-east-1:562114208112:app-instance/6ea8908f-999b-4b3d-9fae-fa1153129087/user/anon_b71c2ee9-b38b-45c1-b1f7-9d69c132444c
 
 
-            # Check the response
-            if response["ResponseMetadata"]["HTTPStatusCode"] == 201:
-                return {
-                    "status": 1,
-                    "msg": "Channel message sent successfully.",
-                }
-            else:
-                return {"status": 0, "msg": "Failed to send channel message"}
+                # Check the response
+                if response["ResponseMetadata"]["HTTPStatusCode"] == 201:
+                    return {
+                        "status": 1,
+                        "msg": "Channel message sent successfully.",
+                    }
+                else:
+                    return {"status": 0, "msg": "Failed to send channel message"}
+            except Exception as e:
+                return {"status":0,"msg":e}
 
             
 
@@ -556,6 +558,42 @@ async def list_channel_membership():
         print("No administrator found for the channel.")
     
     return response
+
+
+import json
+
+@router.post("/send_message")
+async def send_message(
+    db: Session = Depends(deps.get_db),
+    channel_id:str=Form(None),
+    message: str = Form(None),
+    chime_user_id:str=Form(None)
+    ):
+   
+    try:
+        # Send a channel message
+        response = chime.send_channel_message(
+            ChannelArn=channel_id,
+            Content=message,
+            Type="STANDARD",
+            Persistence="PERSISTENT",
+            ChimeBearer=chime_user_id,
+        )
+
+            # arn:aws:chime:us-east-1:562114208112:app-instance/6ea8908f-999b-4b3d-9fae-fa1153129087/user/anon_b71c2ee9-b38b-45c1-b1f7-9d69c132444c
+
+
+        # Check the response
+        if response["ResponseMetadata"]["HTTPStatusCode"] == 201:
+            return {
+                "status": 1,
+                "msg": "Channel message sent successfully.",
+            }
+        else:
+            return {"status": 0, "msg": "Failed to send channel message"}
+    except Exception as e:
+        print(e)
+        return {"status":0,"msg":"Something went wrong"}
 
 
 # @router.post("/delete")  # Working
