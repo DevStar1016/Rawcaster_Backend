@@ -3219,15 +3219,17 @@ async def listallfriends(
                 if not gender.isnumeric():
                     return {"status": 0, "msg": "Invalid Gender type"}
                 else:
-                    get_user_gender = db.query(User.id).filter(User.gender == gender).all()
-                    get_user_ids = [usr.id for usr in get_user_gender]
+                    get_my_friends=get_my_friends.filter(User.gender == gender)
 
-                    get_my_friends = get_my_friends.filter(
-                        or_(
-                            MyFriends.sender_id.in_(get_user_ids),
-                            MyFriends.receiver_id.in_(get_user_ids),
-                        )
-                    )
+                    # get_user_gender = db.query(User.id).filter(User.gender == gender).all()
+                    # get_user_ids = [usr.id for usr in get_user_gender]
+
+                    # get_my_friends = get_my_friends.filter(
+                    #     or_(
+                    #         MyFriends.sender_id.in_(get_user_ids),
+                    #         MyFriends.receiver_id.in_(get_user_ids),
+                    #     )
+                    # )
 
             get_my_friends_count = get_my_friends.count()
 
@@ -3246,6 +3248,7 @@ async def listallfriends(
                 request_frnds = []
 
                 for friend_requests in get_my_friends:
+                    print(friend_requests.user2.gender)
                     get_follow_user_id = (
                         db.query(FollowUser)
                         .filter(
