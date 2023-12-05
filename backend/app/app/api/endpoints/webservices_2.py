@@ -1684,9 +1684,6 @@ def split_nugget_attachment(
     
     for nug_att in getNuggetAttachment:
         print("Attachment",nug_att.id)
-        nug_att.status = -1
-        db.commit()
-
 
         getNuggetMaster=db.query(Nuggets).filter(Nuggets.nuggets_id == nug_att.nugget_id,
                                                  Nuggets.status == 1).first()
@@ -1706,6 +1703,9 @@ def split_nugget_attachment(
                     pass
                 
                 if duration > 300:
+                    nug_att.status = -1
+                    db.commit()
+
                     input_file = local_path
                     output_prefix = f"rawcaster_uploads/output_part_{int(datetime.utcnow().timestamp())}"  # Prefix for the output video parts
                     duration = 299  # Duration of each video part in seconds
@@ -1831,9 +1831,48 @@ def split_nugget_attachment(
                                 db.add(add_NuggetsShareWith)
                                 db.commit()
 
-                        row = row + 1                        
+                        row = row + 1    
 
     return "Success"
+
+
+
+
+@router.post("/script_split_nugget_attachment_remove")
+def split_nugget_attachment_remove(
+    db: Session = Depends(deps.get_db)
+):
+    getNuggetAttachment=db.query(NuggetsAttachment).filter(NuggetsAttachment.media_type == "video",
+                                                           NuggetsAttachment.status == -1).order_by(NuggetsAttachment.id.desc()).all()
+    
+    for nug_att in getNuggetAttachment:
+        print("Attachment",nug_att.id)
+
+        getNuggetMaster=db.query(Nuggets).filter(Nuggets.nuggets_id == nug_att.nugget_id,
+                                                 Nuggets.status == 1).first()
+        if getNuggetMaster:
+
+            # Replace 'video_url' and 'local_path' with the actual video URL and local path
+            video_url = nug_att.path
+            local_path = 'video.mp4'
+
+            success=download_video_from_url(video_url, local_path)
+            if success == 1:
+                duration=0
+                try:
+                    video_clip = VideoFileClip("video.mp4")
+                    duration = video_clip.duration
+                except:
+                    pass
+                
+                if duration < 300:
+                    nug_att.status = 1
+                    db.commit()
+
+            os.remove(local_path)
+    return "Success"
+
+
 
 
 
