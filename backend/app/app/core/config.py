@@ -45,7 +45,13 @@ base_url_segment = "/rawcaster"
 base_upload_folder = "local_uploads"
 
 # Dev DB Connection Details
-data_base =credentials['db_connection']
+# data_base =credentials['db_connection']
+
+# Production Database
+data_base="mysql+pymysql://admin:Rawcaster1234@rawcasterprodrds-mysqlauroradb-pjt8ng5cdklx.cluster-c3xecvdvxfvf.us-east-1.rds.amazonaws.com/rawcasterproddb"
+
+# data_base ='mysql+pymysql://mdbuser:%s@rawcasterprodrds-mysqlauroradb-pjt8ng5cdklx.cluster-c3xecvdvxfvf.us-east-1.rds.amazonaws.com/rawcaster_production' % quote('M@estr0123!')
+
 
 api_doc_path = "/docs"
 
@@ -60,8 +66,12 @@ email_username=credentials['email_username']
 email_password=credentials['email_password']
 
 # ID Verification 
-idenfy_api_key="bpCwxSYDCuo"
-idenfy_secret_key='s7eXCWA0dOEqLuiaeqvu'
+# idenfy_api_key="bpCwxSYDCuo"
+# idenfy_secret_key='s7eXCWA0dOEqLuiaeqvu'
+
+#  Production
+idenfy_api_key="VZKR14voA2J"
+idenfy_secret_key="2j0Aps2XTgmgr6Olvznh"
 
 
 class Settings(BaseSettings):

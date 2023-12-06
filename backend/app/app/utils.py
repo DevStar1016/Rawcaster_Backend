@@ -18,7 +18,6 @@ from PIL import Image
 import os, boto3
 import sys
 import time
-import subprocess
 from mail_templates.mail_template import *
 from cryptography.fernet import Fernet
 from app.core import config
@@ -29,6 +28,7 @@ from profanityfilter import ProfanityFilter
 from gtts import gTTS
 from urllib.parse import urlparse
 from fastapi import Request
+import re
 
 access_key = config.access_key
 access_secret = config.access_secret
@@ -72,103 +72,26 @@ def EncryptandDecrypt(otp, flag=1):
         decrypted = f.decrypt(message)
         return decrypted
 
-# def upload_file_using_ffmpeg(input_file,ext):
-#     base_dir = f"rawcaster_uploads/uploadfile_{random.randint(1111,9999)}{ext}"
-
-#     try:
-#         os.makedirs(base_dir, mode=0o777, exist_ok=True)
-#     except OSError as e:
-#         sys.exit("Can't create {dir}: {err}".format(dir=base_dir, err=e))
-
-    
-#     save_full_path = base_dir
-    
-#     ffmpeg_command = ['ffmpeg', '-i', input_file, '-f', 'ftp', save_full_path]
-#     subprocess.run(ffmpeg_command)
-#     os.remove(input_file)
-#     return save_full_path
-
-
 async def file_upload(file_name, ext, compress):
+    base_dir = "rawcaster_uploads"
+    try:
+        os.makedirs(base_dir, mode=0o777, exist_ok=True)
+    except OSError as e:
+        sys.exit("Can't create {dir}: {err}".format(dir=base_dir, err=e))
+
+    output_dir = base_dir + "/"
+
+    characters = string.ascii_letters + string.digits
+    # Generate the random string
+    random_string = "".join(random.choice(characters) for i in range(18))
+
+    filename = f"uploadfile_{random_string}{ext}"
+    save_full_path = f"{output_dir}{filename}"
     
-    base_dir = "rawcaster_uploads"
-
-    try:
-        os.makedirs(base_dir, mode=0o777, exist_ok=True)
-    except OSError as e:
-        sys.exit("Can't create {dir}: {err}".format(dir=base_dir, err=e))
-
-    output_dir = base_dir + "/"
-
-    characters = string.ascii_letters + string.digits
-    # Generate the random string
-    random_string = "".join(random.choice(characters) for i in range(18))
-
-    filename = f"uploadfile_{random_string}{ext}"
-
-    save_full_path = f"{output_dir}{filename}"
-    if ext in ["jpg", "jpeg", "png", "gif"]:
-        img = Image.open(file_name)
-        img.save(save_full_path, quality=80)
-
-    else:
-        
-        with open(save_full_path, "wb") as buffer:
-            shutil.copyfileobj(file_name.file, buffer)
-
-    return save_full_path
-
-
-async def read_file_upload(file_name, ext, compress):
-    # base_dir = f"{st.BASE_DIR}rawcaster_uploads"
-    base_dir = "rawcaster_uploads"
-
-    try:
-        os.makedirs(base_dir, mode=0o777, exist_ok=True)
-    except OSError as e:
-        sys.exit("Can't create {dir}: {err}".format(dir=base_dir, err=e))
-
-    output_dir = base_dir + "/"
-
-    characters = string.ascii_letters + string.digits
-    # Generate the random string
-    random_string = "".join(random.choice(characters) for i in range(18))
-
-    filename = f"uploadfile_{random_string}{ext}"
-
-    save_full_path = f"{output_dir}{filename}"
     with open(save_full_path, "wb") as buffer:
-        buffer.write(file_name)
-
+        shutil.copyfileobj(file_name.file, buffer)
+    
     return save_full_path
-
-
-# def video_file_upload(upload_file, compress, file_ext):
-#     # base_dir = f"{st.BASE_DIR}rawcaster_uploads"
-#     base_dir = "rawcaster_uploads"
-
-#     try:
-#         os.makedirs(base_dir, mode=0o777, exist_ok=True)
-#     except OSError as e:
-#         sys.exit("Can't create {dir}: {err}".format(dir=base_dir, err=e))
-
-#     output_dir = base_dir + "/"
-
-#     characters = string.ascii_letters + string.digits
-#     # Generate the random string
-#     random_string = "".join(random.choice(characters) for i in range(18))
-#     filename = f"video_{random_string}{file_ext}"
-
-#     save_full_path = f"{output_dir}{filename}"
-
-#     with open(save_full_path, "wb") as buffer:
-#         buffer.write(upload_file.file)
-
-#     if compress:
-#         command = f"ffmpeg -i {save_full_path} -vcodec libx265 -crf 50 {save_full_path}"
-#         subprocess.run(command, shell=True, check=True)
-
-#     return save_full_path
 
 
 def upload_to_s3(local_file_pth, s3_bucket_path):
@@ -231,9 +154,9 @@ def sendSMS(mobile_no, message):
         "sns",
         aws_access_key_id=sms_access_key,
         aws_secret_access_key=sms_access_secret,
-        region_name="us-west-2",
+        region_name="us-east-1",
     )  # Replace 'us-west-2' with your desired AWS region
-
+    mobile_no=mobile_no.replace('+', '')
     # Send the SMS
     response = sns.publish(PhoneNumber=mobile_no, Message=message)
     # Check if the SMS was sent successfully
@@ -241,6 +164,7 @@ def sendSMS(mobile_no, message):
         print(
             f'SMS sent successfully to {mobile_no} with message ID: {response["MessageId"]}'
         )
+        return True
     else:
         print("Failed to send SMS")
 
@@ -1026,9 +950,9 @@ def getFollowings(db, user_id):
             db.query(FollowUser).filter_by(status=1, follower_userid=user_id).all()
         )
         if following_users_list:
-            following_ids = [
-                follow_usr.following_userid for follow_usr in following_users_list
-            ]
+            for follow_usr in following_users_list:
+                following_ids.append(follow_usr.following_userid)
+          
     return following_ids
 
 
@@ -1170,9 +1094,12 @@ def nuggetNotifcationEmail(db, nugget_id):
 
 
 def get_ip():
-    # response=request.client.host
-    response = requests.get("https://api64.ipify.org?format=json").json()
-    return response
+    response = requests.get('https://ipinfo.io')
+    data = response.json()
+    userIP = data.get('ip')
+    # # response=request.client.host
+    # response = requests.get("https://api64.ipify.org?format=json").json()
+    return userIP
 
 
 def FindLocationbyIP(userIP):
@@ -1257,6 +1184,12 @@ def inviteBaseurl():
     return "https://dev.rawcaster.com/"
     # return 'https://rawcaster.com/'
 
+
+def generateLink(text:str):
+    user_ref_id = text.encode("ascii")
+    hashed_user_ref_id = (base64.b64encode(user_ref_id)).decode("ascii")
+    
+    return hashed_user_ref_id
 
 def OTPverificationtype(db, get_user):
     type = 0
@@ -1665,7 +1598,7 @@ def eventPostNotifcationEmail(db, event_id):
             )
             return sms_message, body
     else:
-        print("Invalid Event Id")
+       
         exit()
 
 
@@ -1729,9 +1662,13 @@ def get_event_detail(db, event_id, login_user_id):
                 if event_details.no_of_participants
                 else "",
                 "duration": event_details.duration if event_details.duration else "",
-                "start_date_time": common_date(event_details.start_date_time)
-                if event_details.start_date_time
-                else "",
+                "start_date_time": (
+                        event_details.start_date_time
+                        if event_details.start_date_time
+                        else ""
+                    )
+                    if event_details.created_at
+                    else "",
                 "start_date": common_date(
                     ((event_details.start_date_time).date()), without_time=1
                 )
@@ -1943,6 +1880,14 @@ def GetGroupDetails(db, user_id, id):  # Id -Group ID
                         "typing": 0,
                     }
                 )
+         # Generate URl
+        token_text=f"{friendGroup.user.user_ref_id}//{datetime.datetime.utcnow().replace(tzinfo=None)}//{friendGroup.id}"
+        user_ref_id = token_text.encode("ascii")
+        
+        hashed_user_ref_id = (base64.b64encode(user_ref_id)).decode("ascii")
+        
+        invite_url = inviteBaseurl()
+        join_link = f"{invite_url}signup?ref={hashed_user_ref_id}"
        
         group_details = {
             "group_id": friendGroup.id,
@@ -1957,7 +1902,8 @@ def GetGroupDetails(db, user_id, id):  # Id -Group ID
             "group_member_ids": members,
             "group_members_list": memberlist,
             "typing": 0,
-            "my_group":my_group
+            "my_group":my_group,
+            "referral_link":join_link
         }
         return group_details
 
@@ -2168,6 +2114,14 @@ def GetRawcasterUserID(db, type):
         return 0
 
 
+# Update Default Langugae
+def updateDefaultLangugae(db,user_id):
+    getUserSettings=db.query(UserSettings).filter(UserSettings.user_id == user_id,UserSettings.read_out_language_id == None).first()
+    if getUserSettings:
+        getUserSettings.read_out_language_id = 27
+        getUserSettings.read_out_accent_id= 1
+        db.commit()
+
 async def logins(
     db,
     username,
@@ -2191,7 +2145,7 @@ async def logins(
                 getattr(User, "mobile_no").like(username),
             ),
             or_(getattr(User, "email_id") != None, getattr(User, "mobile_no") != None),
-        )
+        ).order_by(User.id.desc())
         .first()
     )
 
@@ -2451,6 +2405,14 @@ async def logins(
                         .update({"chime_user_id": check_chat_id})
                     )
                     db.commit()
+            
+            # Verify Account
+            if social == 1:
+                get_user.is_email_id_verified = 1
+                get_user.status= 1
+                db.commit()
+
+            updateUserLanguage=updateDefaultLangugae(db,get_user.id)
 
             return {
                 "status": 1,
@@ -2542,6 +2504,10 @@ def checkToken(db, access_token):
                 get_token_details.status = -1
                 db.commit()
                 return False
+            
+            elif get_token_details.user.status == 2:
+                return False
+
             else:
                 get_token_details.renewed_at = datetime.datetime.utcnow()
                 db.commit()

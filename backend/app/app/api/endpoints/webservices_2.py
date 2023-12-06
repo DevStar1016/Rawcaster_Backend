@@ -22,9 +22,8 @@ access_secret = config.access_secret
 bucket_name = config.bucket_name
 
 
+
 # 85 Event Abuse Report
-
-
 @router.post("/addeventabusereport")
 async def add_event_abuse_report(
     db: Session = Depends(deps.get_db),
@@ -86,7 +85,7 @@ async def add_event_abuse_report(
                     if file_ext in file_extensions:
                         try:
                             s3_path = f"events/image_{random.randint(11111,99999)}{int(datetime.utcnow().timestamp())}{file_ext}"
-                            uploaded_file_path = file_upload(attachment, compress=None)
+                            uploaded_file_path = file_upload(attachment, file_ext,compress=None)
 
                             result = upload_to_s3(uploaded_file_path, s3_path)
                             # Upload to S3
@@ -114,25 +113,25 @@ async def add_event_abuse_report(
                 return {"status": 0, "msg": "Invalid Event ID"}
 
 
-# CRON
-@router.post("/croninfluencemember")
-async def croninfluencemember(
-    db: Session = Depends(deps.get_db), user_id: int = Form(None)
-):
+def upgradeMember(db,user_id):
+    get_user_details=db.query(User).join(
+                    UserStatusMaster,
+                    User.user_status_id == UserStatusMaster.id,
+                    isouter=True)
     if user_id:
         get_user_details = (
-            db.query(User).filter(User.id == user_id, User.status == 1).all()
+            get_user_details.filter(User.id == user_id, User.status == 1).all()
         )
     else:
-        get_user_details = db.query(User).filter(User.status == 1).all()
+        get_user_details = get_user_details.filter(User.status == 1).all()
 
     for usr in get_user_details:
         get_follow_user = (
             db.query(FollowUser)
-            .filter(FollowUser.follower_userid == usr.id, FollowUser.status == 1)
+            .filter(FollowUser.following_userid == usr.id,FollowUser.status == 1)
             .count()
         )
-
+    
         if get_follow_user:
             user_status_master = (
                 db.query(UserStatusMaster)
@@ -145,11 +144,29 @@ async def croninfluencemember(
                 )
                 .first()
             )
-
+            
             if user_status_master:
-                usr.user_status_id = user_status_master.id
-                db.commit()
-                return "Done"
+                # if usr.user_status_id < user_status_master.id:
+                if usr.created_by == 1 and usr.user_status_master.type == 2:
+                    if 5 <= user_status_master.id:
+                        usr.user_status_id = user_status_master.id
+                        db.commit()
+                    
+                else:
+                    usr.user_status_id = user_status_master.id
+                    db.commit()
+
+    return {"status":1,"msg":"Success"}
+
+# CRON
+@router.post("/croninfluencemember")
+async def croninfluencemember(
+    db: Session = Depends(deps.get_db), user_id:str=Form(None)
+):
+    
+    respons=upgradeMember(db,user_id)
+    return respons
+   
 
 
 # 86  Add Claim Account
@@ -160,6 +177,7 @@ async def add_claim_account(
     influencer_id: str = Form(None),
     first_name: str = Form(None),
     last_name: str = Form(None),
+    country_id:str=Form(None),
     telephone: str = Form(None),
     email_id: str = Form(None),
     dob: str = Form(None),
@@ -182,6 +200,9 @@ async def add_claim_account(
 
     elif dob and is_date(dob) == False:
         return {"status": 0, "msg": "Invalid Date"}
+    elif telephone and not country_id:
+        return {"status": 0, "msg": "Select country"}
+
 
     else:
         access_token = checkToken(db, token)
@@ -196,7 +217,7 @@ async def add_claim_account(
                 db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
             )
             login_user_id = get_token_details.user_id if get_token_details else None
-            # Check requests
+            # # Check requests
             check_requests = (
                 db.query(ClaimAccounts)
                 .filter(
@@ -207,6 +228,12 @@ async def add_claim_account(
                 .first()
             )
             if not check_requests:
+                checkCountry=db.query(Country).filter(Country.id == country_id).first()
+                if not checkCountry:
+                    return {"status":0,"msg":"Invalid Country"}
+                
+                phone_number=f"{checkCountry.country_code}{telephone}" if telephone else None
+
                 add_clain = ClaimAccounts(
                     user_id=login_user_id,
                     influencer_id=influencer_id,
@@ -214,7 +241,7 @@ async def add_claim_account(
                     dob=dob,
                     last_name=last_name,
                     location=location,
-                    telephone=telephone,
+                    telephone=phone_number,
                     email_id=email_id,
                     claim_date=datetime.utcnow(),
                     created_at=datetime.utcnow(),
@@ -223,10 +250,40 @@ async def add_claim_account(
                 )
                 db.add(add_clain)
                 db.commit()
+                db.refresh(add_clain)
+
+                # Send SMS and Mail 
+                getUsers=db.query(Admin).filter(Admin.status == 1).all()
+                emailIds=[usr.username for usr in getUsers]
+                mobileNos=[usr.contact_no for usr in getUsers]
+                subject="Your Influencer page claim request is received"
+                
+                try:
+                    for mail in emailIds:  # Mail
+                        getUserName=db.query(Admin.first_name).filter(Admin.username.like(mail)).first()
+                        name=getUserName.first_name if getUserName else ""
+                        influencer_name=check_requests.user2.display_name
+                        body=f'''
+                                <p>Dear {name},</p>
+                                <p>We have received your request to claim the pre-uploaded profile page and content created in the name of {influencer_name}. Your request is being evaluated and you will be notified when the process is complete.</p>
+                                <p>We value your membership of the Rawcaster community. When the claim process is complete, the content and fans will be merged to your existing profile, and you will be able to manage them as one profile page under the account you created.</p>
+                                <p>If you have any questions, please contact us at <a href="mailto:info@rawcatser.com">info@rawcaster.com</a>.</p>
+                                <p>Sincerely,<br>Rawcaster.com LLC</p>
+                                '''
+
+                        send_mail = await send_email(db, mail, subject, body) 
+
+                    for mobile_no in mobileNos:  # Send SMS
+                        message=f'''Your Influencer page claim request has been received. You will be notified by email after processing.\n
+                                    Rawcaster.com LLC'''
+                        send_sms = await sendSMS(mobile_no, message)
+                except:
+                    pass
+
                 return {
                     "status": 1,
                     "msg": "You have placed a claim on a predefined influencer profile, We will contact you to validate your claim. Please contact us at info@rawcaster.com if you have any questions.",
-                }
+                    }
             else:
                 return {"status": 0, "msg": "Already sent"}
 
@@ -282,7 +339,8 @@ async def listunclaimaccount(
                     User.user_status_id == UserStatusMaster.id,
                     isouter=True,
                 )
-                .filter(User.created_by == 1, UserStatusMaster.type == 2)
+                .filter(User.created_by == 1, UserStatusMaster.type == 2,
+                        User.status != 2)
             )
             if location:
                 get_unclaimed_account = get_unclaimed_account.filter(
@@ -290,7 +348,7 @@ async def listunclaimaccount(
                 )
             if gender:
                 get_unclaimed_account = get_unclaimed_account.filter(
-                    User.geo_location == gender
+                    User.gender == gender
                 )
             if age:
                 if not age.isnumeric():
@@ -473,6 +531,8 @@ async def add_verify_account(
     token: str = Form(None),
     first_name: str = Form(None),
     last_name: str = Form(None),
+    gender:str=Form(None,description="1- male, 2- female"),
+    country_id:str=Form(None),
     telephone: str = Form(None),
     email_id: str = Form(None),
     dob: str = Form(None),
@@ -494,8 +554,18 @@ async def add_verify_account(
         return {"status": 0, "msg": "Invalid Date"}
     elif not telephone:
         return {"status": 0, "msg": "Mobile number can't be Blank"}
+    # elif not gender:
+    #     return {"status": 0, "msg": "Gender can't be Blank"}
+    elif telephone and not country_id:
+        return {"status": 0, "msg": "Select country"}
+    
+    elif gender and not gender.isnumeric():
+        return {"status": 0, "msg": "Invalid gender type"}
+
+
 
     else:
+       
         access_token = checkToken(db, token)
         
         if access_token == False:
@@ -504,6 +574,7 @@ async def add_verify_account(
                 "msg": "Sorry! your login session expired. please login again.",
             }
         else:
+            gender=gender
             get_token_details = (
                 db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
             )
@@ -511,10 +582,30 @@ async def add_verify_account(
             # Check Already requested
             get_accounts = (
                 db.query(VerifyAccounts)
-                .filter(VerifyAccounts.user_id == login_user_id)
+                .filter(VerifyAccounts.user_id == login_user_id,
+                        VerifyAccounts.status == 1,
+                        VerifyAccounts.verify_status != -1)
                 .first()
             )
             if not get_accounts:
+                checkCountry=db.query(Country).filter(Country.id == country_id).first()
+                if not checkCountry:
+                    return {"status":0,"msg":"Invalid Country"}
+                
+                phone_number=f"{checkCountry.country_code}{telephone}" if telephone else None
+
+                # update profile
+                getUser=db.query(User).filter(User.id == login_user_id).first()
+                if getUser:
+                    getUser.first_name= first_name
+                    getUser.last_name= last_name
+                    getUser.gender= gender if gender else getUser.gender
+                    getUser.country_id = country_id if country_id else getUser.country_id
+                    getUser.mobile_no=telephone if telephone else getUser.mobile_no
+                    getUser.dob= dob
+                    db.commit()
+
+                    gender=getUser.gender
 
                 add_clain = VerifyAccounts(
                     user_id=login_user_id,
@@ -522,7 +613,7 @@ async def add_verify_account(
                     dob=dob,
                     last_name=last_name,
                     location=location,
-                    telephone=telephone,
+                    telephone=phone_number,
                     email_id=email_id,
                     verify_date=datetime.utcnow(),
                     created_at=datetime.utcnow(),
@@ -537,10 +628,28 @@ async def add_verify_account(
                 username=config.idenfy_api_key
                 password=config.idenfy_secret_key
 
-                url = 'https://ivs.idenfy.com/api/v2/token'
+                # Generate Profile URL
+                token_text=f"{login_user_id}rawcaster@!@#$QWERTxcvbn"
+                user_ref_id = token_text.encode("ascii")
+                
+                hashed_user_ref_id = (base64.b64encode(user_ref_id)).decode("ascii")
+                
+                invite_url = inviteBaseurl()
+                join_link = f"{invite_url}viewprofile/{hashed_user_ref_id}"
+               
 
-                data={'clientId':get_token_details.user.user_ref_id}
-                # "callbackUrl":"https://devapi.rawcaster.com/rawcaster/webhook_account_verify"
+                url = 'https://ivs.idenfy.com/api/v2/token'
+                
+                data={'clientId':get_token_details.user.user_ref_id,
+                      'firstName':first_name,
+                      'lastName':last_name,
+                      'sex':'M' if gender and int(gender) == 1 else 'F',
+                      'dateOfBirth':dob,
+                      "successUrl":join_link,
+                      "errorUrl":join_link,
+                      "unverifiedUrl":join_link,
+                      
+                      }
 
                 response = requests.post(url, json=data, auth=HTTPBasicAuth(username, password))
                
@@ -552,7 +661,7 @@ async def add_verify_account(
                     
                     # Update Idenfy Token
                     add_clain.verification_token= id_verify_token
-                    add_clain.verification_response = verifyResponse
+                    add_clain.verification_response = response.content
                     db.commit()
                     
                     return {
@@ -570,26 +679,53 @@ async def add_verify_account(
 
 
 
-
 #Add Webhook call history for Account Verifcation
-@router.post("/webhook_account_verify")
+@router.api_route("/webhook_account_verify",methods=["GET","POST"])
 async def webhookAccountVerify(*,db:Session=Depends(deps.get_db),request: Request):
-    api= str(request.url)
-    call_method=request.method
-    if call_method=="GET":
-        data=request.query_params
-    else:
-        data=await request.form()
-    
+    request_data=await request.body()
+
+    response=json.loads(request_data)
+    # Verify status
+    verify_status=response['status']["overall"]
+    scan_ref=response['scanRef']
+    clientId=response['clientId']
     # Add Webhook Call History
-    addWebHookHistory=AccountVerifyWebhook(request=data,
+    addWebHookHistory=AccountVerifyWebhook(request=request_data,
+                                           client_id=clientId,
+                                           scan_ref=scan_ref,
+                                           verify_status=verify_status,
                                            created_at=datetime.utcnow(),
                                            status =1)
     db.add(addWebHookHistory)
     db.commit()
-    db.refresh(addWebHookHistory) 
+    db.refresh(addWebHookHistory)
 
-    return {'status':1,'msg':"Success"}
+    # Update Account Verify
+    getVerifyAccount=db.query(VerifyAccounts).join(User,User.id == VerifyAccounts.user_id,isouter=True)\
+                .filter(User.user_ref_id == clientId,VerifyAccounts.verify_status == 0).first()
+    
+    if getVerifyAccount:
+        if verify_status == "APPROVED":
+            getVerifyAccount.verify_status = 1
+            db.commit()
+            return {"status":1,"msg":"APPROVED"}
+
+        if verify_status == "DENIED":
+            getVerifyAccount.verify_status = -1
+            db.commit()
+            return {"status":0,"msg":"DENIED"}
+        
+        if verify_status == "SUSPECTED":
+            getVerifyAccount.verify_status = -1
+            db.commit()
+            return {"status":0,"msg":"SUSPECTED"}
+        
+        if verify_status == "EXPIRED":
+            getVerifyAccount.verify_status = -1
+            db.commit()
+            return {"status":0,"msg":"EXPIRED"}
+
+    
     
     
     
@@ -1348,7 +1484,7 @@ def nuggetcontentaudio(
                         if get_user_readout_language and get_user_readout_language.audio_support:
                             text=translated.text
                             target_language=target_language
-                            print(target_language,accent)
+                            
                             audioResponse=textTOAudio(text,target_language,accent)
                             return audioResponse
                         else:
@@ -1361,6 +1497,374 @@ def nuggetcontentaudio(
 
 
 
+
+# 64  Complementory Membership Update
+@router.post("/complementary_membership")
+def complementary_membership(
+    db: Session = Depends(deps.get_db),
+    token: str = Form(None)
+):
+    if token == None or token.strip() == "":
+        return {
+            "status": -1,
+            "msg": "Sorry! your login session expired. please login again.",
+        }
+    
+    # Check token
+    access_token = checkToken(db, token)
+
+    if access_token == False:
+        return {
+            "status": -1,
+            "msg": "Sorry! your login session expired. please login again.",
+        }
+    else:       
+        get_token_details = (
+            db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
+        )
+        login_user_id = get_token_details.user_id if get_token_details else None
+        # Check Complementary Enable Disable status
+        getSettings=db.query(Settings).filter(Settings.settings_topic == "complementary_enable_disable",
+                                              Settings.settings_value == 1).first()
+        if getSettings: # if Enable
+            getComplementoryDays=db.query(Settings).filter(Settings.settings_topic == "complementary_period").first()
+            if getComplementoryDays:
+               
+                currentDate = datetime.utcnow()
+                expireDate=currentDate + timedelta(days=int(getComplementoryDays.settings_value) if getComplementoryDays.settings_value else 0) 
+
+                updateComplDate=db.query(UserSettings).filter(
+                    UserSettings.user_id == login_user_id
+                ).update({"complementary_enable_date":currentDate,
+                            "complementary_expire_date":expireDate})
+                db.commit()
+                if updateComplDate:
+                    updateUserStatus=db.query(User).filter(User.id == login_user_id,User.user_status_id == 1).update({"user_status_id":3})
+                    db.commit()
+                    # GetUser
+                    getUser=db.query(User).filter(User.id == login_user_id).first()
+
+                    return {'status':1,"msg":f"You have been granted a complementary upgrade for {getComplementoryDays.settings_value} days",
+                            "user_status": get_token_details.user.user_status_master.name
+                                if get_token_details.user.user_status_id
+                            else "",  # -----
+                            "user_status_id": get_token_details.user.user_status_id,
+                            "complementary_status":1 if getSettings.settings_value == 1 and getUser.user_status_id == 1 else 0
+                            }
+        else:
+            return {"status":0,"msg":"Unable to use"}
+
+
+@router.post("/update_nugget_totals")
+def update_nugget_totals(
+    db: Session = Depends(deps.get_db)
+):
+    getNuggets=db.query(Nuggets).filter(Nuggets.status == 1).all()
+    
+    for nugget in getNuggets:
+        getLikes=db.query(NuggetsLikes).filter(NuggetsLikes.nugget_id == nugget.id,NuggetsLikes.status ==1).count()
+        getNuggetsComments=db.query(NuggetsComments).filter(NuggetsComments.nugget_id == nugget.id,NuggetsComments.status ==1).count()
+        
+        nugget.total_like_count = getLikes
+        nugget.total_comment_count=getNuggetsComments
+        db.commit()
+
+    return {"status":1,"msg":"Success"}
+    
+
+
+
+# Nugget Script
+
+@router.post("/script_add_nugget")
+def script_add_nugget(
+    db: Session = Depends(deps.get_db)
+):
+    getNuggets=db.query(Nuggets).join(NuggetsMaster,NuggetsMaster.id == Nuggets.nuggets_id).filter(Nuggets.status == 1).all()
+    for nugget in getNuggets:
+        getNuggetAttachment=db.query(NuggetsAttachment).filter(NuggetsAttachment.nugget_id == nugget.nuggets_id)
+        getNuggetAttachmentCount=getNuggetAttachment.count()
+        
+        if getNuggetAttachmentCount > 1 :
+            # print(getNuggetAttachmentCount)
+            getNuggetAttachment=getNuggetAttachment.all()
+            getAttachIds=[nug_att.id for nug_att in getNuggetAttachment]
+            removedNugget=getAttachIds.pop(0) # Remove First Index
+            # print(nugget.id)
+            # return getAttachIds
+            # Get Attach Nuggets
+            getNuggets=db.query(Nuggets).filter(Nuggets.nuggets_id == nugget.nuggets_id).first()
+           
+            if getNuggets:
+                for nug_attc in getAttachIds:
+                    # Add NuggetMaster
+                    addNuggetMaster=NuggetsMaster(
+                                                user_id=getNuggets.nuggets_master.user_id,
+                                                poll_duration=getNuggets.nuggets_master.poll_duration,
+                                                modified_date=getNuggets.nuggets_master.modified_date,
+                                                _metadata=getNuggets.nuggets_master._metadata,
+                                                content=None,
+                                                created_date=getNuggets.nuggets_master.created_date,
+                                                status=getNuggets.nuggets_master.status
+                                                )
+                    db.add(addNuggetMaster)
+                    db.commit()
+                    db.refresh(addNuggetMaster)
+                    
+                    # Add Nugget
+                    addNugget=Nuggets(share_type=getNuggets.share_type,
+                                    warning_mail_count=getNuggets.warning_mail_count,
+                                    created_date=getNuggets.created_date,
+                                    warning_mail_status=getNuggets.warning_mail_status,
+                                    modified_date=getNuggets.modified_date,
+                                    warning_mail_sent_date=getNuggets.warning_mail_sent_date,
+                                    total_view_count=getNuggets.total_view_count,
+                                    nugget_status=getNuggets.nugget_status,
+                                    nuggets_id=addNuggetMaster.id,
+                                    total_like_count=getNuggets.total_like_count,
+                                    status=getNuggets.status,
+                                    total_comment_count=getNuggets.total_comment_count,
+                                    user_id=getNuggets.user_id,
+                                    total_poll_count=getNuggets.total_poll_count,
+                                    type=getNuggets.type
+                                )
+                    db.add(addNugget)
+                    db.commit()
+                    db.refresh(addNugget)
+
+                    # Update NuggetMaster Id in Attachment
+                    getAttachment=db.query(NuggetsAttachment).filter(NuggetsAttachment.id == nug_attc).update({"nugget_id":addNuggetMaster.id})
+                    db.commit()   
+
+        # Share With  ----------------------------------
+                    share_type= getNuggets.share_type
+
+                    # if (share_type == 3 or share_type == 4 or share_type == 5):
+                    getShareWithNuggets=db.query(NuggetsShareWith).filter(
+                        NuggetsShareWith.nuggets_id == getNuggets.id
+                    ).all()
+
+                    for shareNugg in getShareWithNuggets:
+                        add_NuggetsShareWith = (
+                                NuggetsShareWith(
+                                    nuggets_id=addNugget.id,
+                                    type=shareNugg.type,
+                                    share_with=shareNugg.share_with,
+                                )
+                            )
+                        db.add(add_NuggetsShareWith)
+                        db.commit()
+    return {"status":1,"msg":"Success"}
+
+
+
+
+
+import boto3
+from moviepy.editor import VideoFileClip
+import requests
+
+def download_video_from_url(url, download_path):
+    response = requests.get(url)
+    with open(download_path, 'wb') as file:
+        file.write(response.content)
+
+    return 1
+
+
+import subprocess
+
+
+@router.post("/script_split_nugget_attachment")
+def split_nugget_attachment(
+    db: Session = Depends(deps.get_db)
+):
+    getNuggetAttachment=db.query(NuggetsAttachment).filter(NuggetsAttachment.media_type == "video",
+                                                           NuggetsAttachment.status == 1).order_by(NuggetsAttachment.id.desc()).all()
+    
+    for nug_att in getNuggetAttachment:
+
+        getNuggetMaster=db.query(Nuggets).filter(Nuggets.nuggets_id == nug_att.nugget_id,
+                                                 Nuggets.status == 1).first()
+        if getNuggetMaster:
+
+            # Replace 'video_url' and 'local_path' with the actual video URL and local path
+            video_url = nug_att.path
+            local_path = 'video.mp4'
+
+            success=download_video_from_url(video_url, local_path)
+            if success == 1:
+                duration=0
+                try:
+                    video_clip = VideoFileClip("video.mp4")
+                    duration = video_clip.duration
+                except:
+                    pass
+                
+                if duration > 300:
+                    print("Attachment",nug_att.id)
+                    nug_att.status = -1
+                    db.commit()
+
+                    input_file = local_path
+                    output_prefix = f"rawcaster_uploads/output_part_{int(datetime.utcnow().timestamp())}"  # Prefix for the output video parts
+                    duration = 299  # Duration of each video part in seconds
+
+                    frame_size='640x480'
+                    command = [
+                        'ffmpeg',
+                        '-i', input_file,
+                        '-c', 'copy',
+                        '-map', '0',
+                        '-map', '-0:s',  # Exclude subtitle streams from copying
+                        '-reset_timestamps', '1',
+                        '-avoid_negative_ts', '1',
+                        '-s', frame_size,
+                        '-segment_time', str(duration),
+                        '-f', 'segment',
+                        f'{output_prefix}%03d.mp4'
+                    ]
+
+                    # Run the command using subprocess
+                    subprocess.run(command,capture_output=True, text=True)
+
+                    # Generate the output file paths
+                    splited_file_path = []
+                    for i in range(0, 1000):  # Assuming up to 999 output parts
+                        file_path = output_prefix + f"{i:03d}.mp4"
+
+                        if not os.path.exists(file_path):
+                            break
+                        splited_file_path.append(file_path)
+                    
+                    #remove local file path
+                    os.remove(local_path)
+                    
+                    # Connect to S3
+                    client_s3 = boto3.client(
+                        "s3", aws_access_key_id=access_key, aws_secret_access_key=access_secret
+                    )  
+
+                    # Reverse File Path
+                    tot_length=len(splited_file_path)
+                    content_location=1
+                    row = 0
+                    for local_file_pth in splited_file_path[::-1]:
+                        getContent=db.query(NuggetsMaster).filter(NuggetsMaster.id == getNuggetMaster.nuggets_id).first()
+                       
+                        if row == 0:
+                            pass
+                        else:
+                           
+                            add_nuggets_master = NuggetsMaster(
+                                user_id=getNuggetMaster.user_id,
+                                content=getContent.content if tot_length == content_location else None,
+                                created_date = getNuggetMaster.created_date-timedelta(seconds=5),
+                                status=1
+                            )
+                            db.add(add_nuggets_master)
+                            db.commit()
+
+                        getNuggetMaster.nuggets_master.content = None if tot_length == content_location else getContent.content
+                        
+                        content_location = content_location + 1
+                        
+                        s3_file_path = f"nuggets/video_{random.randint(1111,9999)}{int(datetime.utcnow().timestamp())}.mp4"
+
+                        with open(local_file_pth, "rb") as data:  # Upload File To S3
+                            upload = client_s3.upload_fileobj(
+                                data, bucket_name, s3_file_path, ExtraArgs={"ACL": "public-read"}
+                            )
+
+                        # Get File Size
+                        file_stat = os.stat(local_file_pth)
+                        file_size = file_stat.st_size
+                        os.remove(local_file_pth)
+
+                        # Update Data
+                        url_location = client_s3.get_bucket_location(Bucket=bucket_name)[
+                            "LocationConstraint"
+                        ]
+                        url = f"https://{bucket_name}.s3.{url_location}.amazonaws.com/{s3_file_path}"
+                        if url:
+                            add_nugget_attachment = NuggetsAttachment(
+                                user_id=getNuggetMaster.user_id,
+                                nugget_id=getNuggetMaster.nuggets_id if row == 0 else add_nuggets_master.id,
+                                media_type="video",
+                                media_file_type="mp4",
+                                file_size=file_size,
+                                path=url,
+                                created_date=getNuggetMaster.created_date,
+                                status=1,
+                            )
+                            db.add(add_nugget_attachment)
+                            db.commit()
+                            db.refresh(add_nugget_attachment)
+                        
+                        else:
+                            return {"status": 0, "msg": "Failed to Upload"}
+                    
+                    # Add Nuggets
+                        if not row == 0:
+                            add_nuggets = Nuggets(
+                                nuggets_id=getNuggetMaster.nuggets_id if row == 0 else add_nuggets_master.id,
+                                user_id=getNuggetMaster.user_id,
+                                type=1,
+                                share_type=getNuggetMaster.share_type,
+                                created_date=getNuggetMaster.created_date,
+                            )
+                            db.add(add_nuggets)
+                            db.commit()
+                            db.refresh(add_nuggets)
+                        
+                            #  Share With
+                            nuggetShareWith=db.query(NuggetsShareWith).filter(
+                                NuggetsShareWith.nuggets_id ==  getNuggetMaster.id,
+                            ).all()
+                            
+                            for share_to in nuggetShareWith:
+                                add_NuggetsShareWith = NuggetsShareWith(
+                                    nuggets_id=add_nuggets.id,
+                                    type=share_to.type,
+                                    share_with=share_to.share_with,
+                                )
+                                db.add(add_NuggetsShareWith)
+                                db.commit()
+
+                        row = row + 1    
+
+    return "Success"
+
+
+
+
+
+
+
+
+
+
+
+
+# def update_poll_count(
+#     db: Session = Depends(deps.get_db)
+# ):
+#     getNuggets=db.query(Nuggets).join(NuggetsMaster,NuggetsMaster.id == Nuggets.nuggets_id).join(NuggetPollOption,NuggetPollOption.nuggets_master_id == Nuggets.nuggets_id,isouter=True).filter(NuggetsMaster.poll_duration != None).all()
+    
+#     for nugget in getNuggets:
+        
+#         if nugget.nuggets_master.poll_duration:
+            
+#             getPollCount=db.query(NuggetPollOption).filter(NuggetPollOption.nuggets_master_id == nugget.nuggets_id).all()
+#             poll_vote=0
+            
+#             for poll in getPollCount:
+#                 poll_vote += poll.votes if poll.votes else 0
+            
+#             nugget.total_poll_count = poll_vote
+#             db.commit()
+
+#     return "Success"
 
 
 
@@ -1406,27 +1910,3 @@ def nuggetcontentaudio(
 #                   if get_user_readout_language 
 #                   else "en-US")
 # )
-
-
-
-# @router.post("/update_poll_count")
-# def update_poll_count(
-#     db: Session = Depends(deps.get_db)
-# ):
-#     getNuggets=db.query(Nuggets).join(NuggetsMaster,NuggetsMaster.id == Nuggets.nuggets_id).join(NuggetPollOption,NuggetPollOption.nuggets_master_id == Nuggets.nuggets_id,isouter=True).filter(NuggetsMaster.poll_duration != None).all()
-    
-#     for nugget in getNuggets:
-
-#         if nugget.nuggets_master.poll_duration:
-            
-#             getPollCount=db.query(NuggetPollOption).filter(NuggetPollOption.nuggets_master_id == nugget.nuggets_id).all()
-#             poll_vote=0
-            
-#             for poll in getPollCount:
-#                 poll_vote += poll.votes if poll.votes else 0
-            
-#             nugget.total_poll_count = poll_vote
-#             db.commit()
-
-
-#     return "Success"

@@ -8,14 +8,14 @@ from app.api import deps
 import datetime
 from sqlalchemy.orm import Session,aliased,joinedload
 from datetime import datetime, date
-from sqlalchemy import func, case, text, extract,select,exists
+from sqlalchemy import func, case, text, extract,select,exists,cast,Date,desc
 import re
 import base64
 import json
 import pytz
 import boto3
 from urllib.parse import urlparse
-from .webservices_2 import croninfluencemember
+from .webservices_2 import upgradeMember
 import ast
 from mail_templates.mail_template import *
 import subprocess
@@ -23,6 +23,7 @@ from .chime_chat import *
 import requests
 from bs4 import BeautifulSoup
 import cv2
+
 
 router = APIRouter()
 
@@ -37,7 +38,6 @@ bucket_name = config.bucket_name
 @router.post("/signup")
 async def signup(
     *,
-    request:Request,
     db: Session = Depends(deps.get_db),
     signup_type: str = Form(1, description="1-Email,2-Phone Number"),
     first_name: str = Form(None, max_length=100),
@@ -87,6 +87,9 @@ async def signup(
 
     elif dob and is_date(dob) == False:
         return {"status": 0, "msg": "Invalid Date"}
+    
+    elif mobile_no and not country_id:
+        return {"status": 0, "msg": "Country id is missing"}
 
     else:
         mobile_no = None
@@ -127,8 +130,7 @@ async def signup(
                     or_(
                         and_(User.email_id == email_id, User.email_id != None),
                         and_(User.mobile_no == mobile_no, User.mobile_no != None),
-                    ),
-                    User.status != 4,
+                    )
                 )
                 .first()
             )
@@ -146,21 +148,13 @@ async def signup(
 
                     salt_token = token_text + str(user_id) + str(characters) + str(dt)
 
-                    salt = st.SALT_KEY
-                    hash_code = str(token_text) + str(salt)
-
                     user_id = check_user.id
                     exptime = int(dt) + int(dt)
 
-                    paylod = {
-                        "iat": dt,
-                        "iss": "localhost",
-                        "exp": exptime,
-                        "token": token_text,
-                    }
-
                     # token = jwt.encode(paylod, st.SECRET_KEY)
-                    userIP = request.client.host
+                    userIP=get_ip()
+
+                    # userIP = request.client.host
 
                     add_token = ApiTokens(
                         user_id=user_id,
@@ -205,7 +199,8 @@ async def signup(
 
             else:
                 # New User Register
-                userIP = request.client.host
+                # userIP = request.client.host
+                userIP=get_ip()
                 location = geo_location
                 if geo_location == None or geo_location == "" or len(geo_location) < 4:
                     location_details = FindLocationbyIP(userIP)
@@ -220,6 +215,7 @@ async def signup(
                         longitude = location_details["longitude"]
 
                 if mobile_no:
+                    
                     mobile_check = CheckMobileNumber(db, mobile_no, location)
 
                     if not mobile_check:
@@ -230,13 +226,20 @@ async def signup(
                     else:
                         if mobile_check["status"] and mobile_check["status"] == 1:
                             country_code = mobile_check["country_code"]
-                            country_id = mobile_check["country_id"]
+                            # country_id = mobile_check["country_id"]
                             mobile_no = mobile_check["mobile_no"]
                         else:
                             return mobile_check
 
                 result = hashlib.sha1(password.encode())
                 hashed_password = result.hexdigest()
+
+                # Check Country Code
+                if country_id:
+                    checkCountryCode=db.query(Country).filter(Country.id == country_id).first()
+                    if not checkCountryCode:
+                        return {"status":0,"msg":"Invalid country code"}
+
 
                 add_user = User(
                     email_id=email_id,
@@ -267,6 +270,11 @@ async def signup(
                 db.commit()
                 db.refresh(add_user)
                 if add_user:
+                    # Group Link Via Join
+                    group_login=0
+                    group_name=None
+                    group_id=None
+
                     user_ref_id = GenerateUserRegID(add_user.id)
 
                     # update ref id
@@ -437,6 +445,103 @@ async def signup(
                                         except Exception as e:
                                             print(f"Referrer:{e}")
 
+                        if len(referrer_ref_id) == 3:
+                            group_login=1
+                            referred_user = (
+                                db.query(User)
+                                .filter(
+                                    User.user_ref_id == referrer_ref_id[0],
+                                    User.status == 1,
+                                )
+                                .first()
+                            )
+                            if referred_user:
+                                referred_id = referred_user.id
+                                # update referrer id
+                                update_referrer = (
+                                    db.query(User)
+                                    .filter(User.id == add_user.id)
+                                    .update(
+                                        {
+                                            "referrer_id": referred_user.id,
+                                            "invited_date": referrer_ref_id[1],
+                                        }
+                                    )
+                                )
+                                db.commit()
+
+                                ref_friend = MyFriends(
+                                    sender_id=referred_user.id,
+                                    receiver_id=add_user.id,
+                                    request_date=datetime.datetime.utcnow(),
+                                    request_status=1,
+                                    status_date=None,
+                                    status=1,
+                                )
+                                db.add(ref_friend)
+                                db.commit()
+                                # Add Friend Group
+                                group_id=referrer_ref_id[2]
+
+                                get_friend_group = (
+                                    db.query(FriendGroups)
+                                    .filter(
+                                        FriendGroups.id == group_id
+                                    )
+                                    .first()
+                                )
+
+                                if get_friend_group:
+                                    group_name=get_friend_group.group_name
+
+                                    add_follow_user = FollowUser(
+                                        follower_userid=add_user.id,
+                                        following_userid=referred_user.id,
+                                        created_date=datetime.datetime.utcnow(),
+                                    )
+                                    db.add(add_follow_user)
+                                    db.commit()
+
+                                    # Check FriendGroupMembers
+                                    friend_group_member = (
+                                        db.query(FriendGroupMembers)
+                                        .filter(
+                                            FriendGroupMembers.group_id
+                                            == get_friend_group.id,
+                                            FriendGroupMembers.user_id
+                                            == referred_user.id,
+                                        )
+                                        .all()
+                                    )
+
+                                    if not friend_group_member:
+                                        add_friend_group_member = FriendGroupMembers(
+                                            group_id=get_friend_group.id,
+                                            user_id=add_user.id,
+                                            added_date=datetime.datetime.utcnow(),
+                                            added_by=referred_user.id,
+                                            is_admin=0,
+                                            disable_notification=1,
+                                            status=1,
+                                        )
+                                        db.add(add_friend_group_member)
+                                        db.commit()
+
+                                        # Add Members in Channel
+                                        channel_arn = channel_arn
+                                        chime_bearer = user_arn
+                                        member_id = (
+                                            list(referred_user.chime_user_id)
+                                            if referred_user.chime_user_id
+                                            else None
+                                        )
+                                        try:
+                                            addmembers(
+                                                channel_arn, chime_bearer, member_id
+                                            )
+                                        except Exception as e:
+                                            print(f"Referrer:{e}")
+
                     # Referral Auto Add Friend Ends
                     type = 2
                     rawcaster_support_id = GetRawcasterUserID(db, type)
@@ -481,7 +586,9 @@ async def signup(
                     salt = st.SALT_KEY
                     exptime = int(dt) + int(dt)
 
-                    userIP = request.client.host
+                    # userIP = request.client.host
+                    userIP=get_ip()
+
 
                     add_token = ApiTokens(
                         user_id=user_id,
@@ -501,7 +608,7 @@ async def signup(
                     db.commit()
                     db.refresh(add_token)
 
-                    return {
+                    data={
                         "status": 1,
                         "msg": "Success",
                         "email_id": email_id,
@@ -511,8 +618,13 @@ async def signup(
                         "acc_verify_status": 0,
                         "first_time": 1,
                         "remaining_seconds": 90,
-                        "signup_type": int(signup_type),
+                        "signup_type": int(signup_type)
                     }  # First Time (1 - New to rawcaster, 0 - existing user)
+                    if group_login == 1:
+                        data.update({"group_id":group_id})
+
+
+                    return data
 
                 else:
                     return {"status": 0, "msg": "Failed to add User"}
@@ -526,6 +638,7 @@ async def signupverify(
     db: Session = Depends(deps.get_db),
     auth_code: str = Form(None, description="SALT + otp_ref_id"),
     otp_ref_id: str = Form(None, description="From service no. 1"),
+    group_id:str=Form(None,description="refer by group"),
     otp: str = Form(None),
     otp_flag: str = Form(None),
     alt_token_id: str = Form(None),
@@ -540,6 +653,9 @@ async def signupverify(
     
     elif opt_in and not opt_in.isnumeric():
         return {"status":0,"msg":"Invalid opt type"}
+    
+    elif group_id and not group_id.isnumeric():
+        return {"status":0,"msg":"Invalid Group Id"}
 
     else:
         otp_ref_id = otp_ref_id.strip()
@@ -645,7 +761,20 @@ async def signupverify(
                                     request.client.host
 
                                 )
-                                return generate_access_token
+                                data=generate_access_token
+
+                                get_friend_group = (
+                                    db.query(FriendGroups.group_name,FriendGroups.id)
+                                    .filter(
+                                        FriendGroups.id == group_id
+                                    )
+                                    .first()
+                                )
+                                if get_friend_group:
+                                    data.update({"group_id":get_friend_group.id,
+                                                    "group_name":get_friend_group.group_name})
+                                
+                                return data
 
                     return {
                         "status": 1,
@@ -667,11 +796,17 @@ async def resendotp(
     db: Session = Depends(deps.get_db),
     auth_code: str = Form(None, description="SALT + otp_ref_id"),
     otp_ref_id: str = Form(None),
+    group_id:str=Form(None),
     token: str = Form(None),
     otp_flag: str = Form(None),
+    sms_type:str=Form(default=0,description="1-email,2-sms")
 ):
     if otp_flag and otp_flag.strip() == "" or otp_flag == None:
         otp_flag = "email"
+    if group_id and not group_id.isnumeric():
+        return {"status":0,"msg":"Group id is invalid"}
+    if sms_type and not sms_type.isnumeric():
+        return {"status":0,"msg":"SMS type is invalid"}
 
     auth_text = otp_ref_id if otp_ref_id != None else "Rawcaster"
     if auth_code == None or auth_code.strip() == "":
@@ -686,7 +821,7 @@ async def resendotp(
         if not otp_ref_id:
             if not token and token.strip() == "":
                 return {
-                    "status": 0,
+                    "status": -1,
                     "msg": "Sorry! your login session expired. please login again.",
                 }
 
@@ -725,19 +860,21 @@ async def resendotp(
                 # return {"status":1,"otp_ref_id":otp_ref_id,"msg":"Success"}
 
         get_otp_log = (
-            db.query(OtpLog).filter(OtpLog.id == otp_ref_id).first()
+            db.query(OtpLog).filter(OtpLog.id == otp_ref_id,
+                                OtpLog.status == 1).first()
         )
 
         if not get_otp_log:
             return {"status": 0, "msg": "Invalid request!"}
         else:
             otp_time = datetime.datetime.utcnow()
+            otp=generateOTP()
 
+            get_otp_log.otp = otp
             get_otp_log.created_date = otp_time
             get_otp_log.status = 1
             db.commit()
 
-            otp = get_otp_log.otp
             mail_sub = ""
             mail_msg = ""
             if get_otp_log.otp_type == 1:  # if signup
@@ -748,7 +885,7 @@ async def resendotp(
                 mail_sub = "Rawcaster - Password Reset"
                 mail_msg = "Your OTP for Rawcaster account password reset is "
 
-            if otp_flag == "sms":
+            if otp_flag == "sms" or int(sms_type) == 2:
                 to = f"{get_otp_log.user.country_code if get_otp_log.user.country_code else ''}{get_otp_log.user.mobile_no}"
                 sms = f"{otp} is your OTP from Rawcaster. PLEASE DO NOT SHARE THE OTP WITH ANYONE. 0FfsYZmYTkk"
                 if to:
@@ -793,92 +930,30 @@ async def resendotp(
 
             if current_time < target_time:
                 remaining_seconds = int(target_time - current_time)
+            
+            get_friend_group = (
+                db.query(FriendGroups.group_name,FriendGroups.id)
+                .filter(
+                    FriendGroups.id == group_id
+                )
+                .first()
+            )
 
             reply_msg = f"Please enter the One Time Password (OTP) sent to {to}"
-            return {
+            data= {
                 "status": 1,
                 "msg": reply_msg,
                 "email_id": to,
                 "otp_ref_id": int(otp_ref_id),
-                "remaining_seconds": remaining_seconds,
-            }
+                "remaining_seconds": 90, # remaining_seconds
+                "sms_type":sms_type
+                }
+            
+            if get_friend_group:
+                data.update({"group_id":get_friend_group.id,
+                                "group_name":get_friend_group.group_name})
 
-
-# # 3 - Resend OTP  (PHP Code)
-
-# @router.post("/resendotp")
-# async def resendotp(db:Session=Depends(deps.get_db),auth_code:str=Form(...,description="SALT + otp_ref_id"),otp_ref_id:str=Form(None),token:str=Form(None),otp_flag:str=Form(None)):
-#     if otp_flag and otp_flag.strip() == "" or otp_flag== None:
-#         otp_flag='email'
-
-#     auth_text = otp_ref_id if otp_ref_id is not None else "Rawcaster"
-#     if checkAuthCode(auth_code,auth_text) == False:
-#         return {"status":0,"msg": "Authentication failed!"}
-#     else:
-
-#         if otp_ref_id == None:
-#             if token.strip():
-#                 return {"status":0,"msg":"Sorry! your login session expired. please login again."}
-#             else:
-#                 login_user_id=0
-#                 access_token=checkToken(token)
-
-#                 if access_token == False:
-#                     return {"status":-1,"msg":"Sorry! your login session expired. please login again."}
-#                 else:
-#                     get_token_details=db.query(ApiTokens).filter(ApiTokens.token ==access_token).all()
-#                     for token in get_token_details:
-#                         login_user_id=token.user_id
-
-#                 otp=generateOTP()
-#                 otp_time=datetime.datetime.utcnow()
-#                 otp_model=OtpLog(user_id=login_user_id,otp=otp,otp_type=1,created_at=otp_time,status=1)
-#                 db.add(otp_model)
-#                 db.commit()
-
-#                 if otp_model:
-#                     otp_ref_id=otp_model.id
-#         else:
-#             get_otp_log=db.query(OtpLog).filter(OtpLog.id == otp_ref_id,OtpLog.status == 1).first()
-
-#             if not get_otp_log:
-#                 return {"status":0,"msg":"Invalid request!"}
-#             else:
-
-#                 otp_time=datetime.datetime.utcnow()
-#                 otp_model.created_at=otp_time
-#                 db.commit()
-
-#                 otp=get_otp_log.otp
-
-#                 if otp_model.otp_type == 1:  # if signup
-#                     mail_sub="Rawcaster - Account Verification"
-#                     mail_msg="Your OTP for Rawcaster account verification is : "
-
-#                 elif  otp_model.otp_type == 3 : # if forgot password
-#                     mail_sub="Rawcaster - Password Reset"
-#                     mail_msg="Your OTP for Rawcaster account password reset is"
-
-#                 if otp_flag == "sms":
-#                     to=otp_model.user.mobile_no
-#                     print("SMS")
-#                 else:
-#                     to=otp_model.user.email_id
-
-#                     print("MAIL")
-
-#                 remaining_seconds=0
-#                 target_time= int(round(otp_time.timestamp())) + 300
-#                 current_time=datetime.datetime.utcnow()
-#                 if current_time < target_time:
-#                     remaining_seconds=target_time - current_time
-
-#                 reply_msg=f'Please enter the One Time Password (OTP) sent to {to}'
-#                 return {"status":1,"msg":reply_msg,"email":to,"otp_ref_id":otp_ref_id,"remaining_seconds":remaining_seconds}
-
-#             # else:
-#             #     return {"status" :0, "msg" :"Failed to resend otp, please try again"}
-
+            return data
 
 # 4 - Login
 @router.post("/login")
@@ -1022,9 +1097,10 @@ async def forgotpassword(
         if checkAuthCode(auth_code, auth_text) == False:
             return {"status": 0, "msg": "Authentication failed!"}
         else:
+           
             get_user = (
                 db.query(User.id,User.status,User.country_code,User.mobile_no,User.email_id)
-                .filter(or_(User.email_id == username, User.mobile_no.like(username)))
+                .filter(or_(User.email_id == username,func.concat(User.country_code,User.mobile_no).like("%"+username)))
                 .first()
             )
 
@@ -1051,7 +1127,7 @@ async def forgotpassword(
 
                 get_otp = (
                     db.query(OtpLog)
-                    .filter_by(user_id=get_user.id, otp_type=3)
+                    .filter_by(user_id=get_user.id, otp_type=3,status = 1)
                     .order_by(OtpLog.id.desc())
                     .first()
                 )
@@ -1081,22 +1157,30 @@ async def forgotpassword(
                 if otp_time.timestamp() < target_time:
                     remaining_seconds = target_time - otp_time.timestamp()
                 msg = ""
+                sms_type=None
+                username = username.replace("+",'')
                 if username.isnumeric():
+                    sms_type=2 # Mobile Number
+
                     to = (
                         f"{get_user.country_code}{get_user.mobile_no}"
                         if get_user.mobile_no
                         else None
                     )
+                    mobile_number=to
+
                     sms = f"{otp} is your OTP from Rawcaster. PLEASE DO NOT SHARE THE OTP WITH ANYONE. 0FfsYZmYTkk"
                     msg = "A one time passcode (OTP) has been sent to the phone number you provided"
                     # Send SMS
-                    if to:
+                    if mobile_number:
                         try:
-                            send_sms = sendSMS(to, sms)
+                            send_sms = sendSMS(mobile_number, sms)
                         except:
                             pass
 
                 elif check_mail(username) == True:
+                    sms_type= 1 # Email
+
                     to = get_user.email_id
                     subject = "Rawcaster - Reset Password"
                     content = ""
@@ -1119,6 +1203,7 @@ async def forgotpassword(
                     "msg": msg,
                     "otp_ref_id": otp_ref_id,
                     "remaining_seconds": 90,
+                    "sms_type":sms_type
                 }  # remaining_seconds
 
 
@@ -1165,6 +1250,7 @@ async def verifyotpandresetpassword(
             get_otp_log = (
                 db.query(OtpLog)
                 .filter(OtpLog.id == otp_ref_id, OtpLog.otp == otp)
+                .order_by(OtpLog.id.desc())
                 .first()
             )
 
@@ -1282,7 +1368,7 @@ async def changepassword(
                         
                         return {
                             "status": 1,
-                            "msg": "Successfully updated new password",
+                            "msg": "New password updated successfully.",
                         }
                         
 
@@ -1359,20 +1445,91 @@ async def contactus(
             }
 
 
+def checkComplementary(db,id):
+    # Get Complementary Expire Date
+    getUserSetting=db.query(UserSettings).join(User,User.id == UserSettings.user_id,isouter=True).filter(
+        UserSettings.user_id == id,User.user_status_id == 3,
+        cast(UserSettings.complementary_expire_date,Date) < datetime.datetime.utcnow().date()).first()
+    
+    if getUserSetting:
+        # Update member
+        update_member=db.query(User).filter(User.id == id).update({"user_status_id":1}) 
+        updateSetting=db.query(UserSettings).filter(UserSettings.user_id == id).update({"complementary_enable_date":None,
+                                                                                        "complementary_expire_date":None})
+        db.commit()
+
+
+def checkAccountValidation(db,user_id):
+    getAccountVerify=db.query(VerifyAccounts).filter(VerifyAccounts.user_id == user_id,
+                                                    VerifyAccounts.verify_status == 0).first()
+    
+    if getAccountVerify and getAccountVerify.created_at:
+        checkHourValidate = (
+                    datetime.datetime.utcnow().replace(tzinfo=None)
+                    - getAccountVerify.created_at
+                ).total_seconds()
+       
+        if int(checkHourValidate) if checkHourValidate else 0 > 3600:
+            checkVerifyWebhook=db.query(AccountVerifyWebhook).filter(AccountVerifyWebhook.client_id == getAccountVerify.user.user_ref_id,
+                                                                AccountVerifyWebhook.created_at > getAccountVerify.created_at).first()
+            if not checkVerifyWebhook:
+                getAccountVerify.verify_status = -1
+                db.commit()
+
+
 def user_profile(db, id):
-    get_user = db.query(User).filter(User.id == id).first()
+    user_id=id
+    # Update Membership
+    validateMembership=checkComplementary(db,user_id)
+    verifyAccountValidate=checkAccountValidation(db,user_id)
+
+    get_user = db.query(User).filter(User.id == user_id).first()
 
     if get_user:
-        get_account_status=db.query(VerifyAccounts).filter(VerifyAccounts.user_id == get_user.id).first()
+        # Chime Chat User Create
+        check_chat_id = get_user.chime_user_id if get_user.chime_user_id else None
+        if not check_chat_id:
+            try:
+                create_chat_user = chime_chat.createchimeuser(get_user.email_id)
+            except Exception as e:
+                print(f'Chime User:{e}')
+                
+            if create_chat_user["status"] == 1:
+                check_chat_id = create_chat_user["data"]["ChimeAppInstanceUserArn"]
+                # Update User Chime ID
+                update_user = (
+                    db.query(User)
+                    .filter(User.id == get_user.id)
+                    .update({"chime_user_id": check_chat_id})
+                )
+                db.commit()
+
+        get_account_status=db.query(VerifyAccounts).filter(VerifyAccounts.user_id == get_user.id,
+                                                              VerifyAccounts.verify_status != -1).first()
         
-        followers_count = db.query(FollowUser.id).filter_by(following_userid=id).count()
-        following_count = db.query(FollowUser.id).filter_by(follower_userid=id).count()
+        getWebhookCalls=db.query(AccountVerifyWebhook).filter(AccountVerifyWebhook.client_id == get_user.user_ref_id,
+                                                              AccountVerifyWebhook.verify_seen_status == 0)
+                                        
+        unseenWebhookCallstatus=getWebhookCalls.order_by(AccountVerifyWebhook.id.desc()).first()
+        
+        verify_reason=json.loads(unseenWebhookCallstatus.request) if unseenWebhookCallstatus and unseenWebhookCallstatus.request else None
+        mismatch_reason=verify_reason['status']['mismatchTags'] if verify_reason else None
+        mismatch_data=""
+        if mismatch_reason:
+            for reason in mismatch_reason:
+                mismatch_data += f"{reason} ,"
+        
+        updateSeenStatus=getWebhookCalls.update({"verify_seen_status":1}) # Update Seen Status
+        db.commit()
+        
+        followers_count = db.query(FollowUser.id).filter_by(following_userid=user_id).count()
+        following_count = db.query(FollowUser.id).filter_by(follower_userid=user_id).count()
 
         nugget_count = (
             db.query(Nuggets)
             .join(NuggetsMaster, Nuggets.nuggets_id == NuggetsMaster.id)
             .filter(
-                Nuggets.user_id == id,
+                Nuggets.user_id == user_id,
                 Nuggets.status == 1,
                 NuggetsMaster.status == 1,
                 Nuggets.nugget_status != 2,
@@ -1398,13 +1555,26 @@ def user_profile(db, id):
         )   
         # Get Save Nuggets Count
         get_saved_nuggets = (
-            db.query(NuggetsSave)
-            .filter(NuggetsSave.user_id == get_user.id, NuggetsSave.status == 1)
+            db.query(NuggetsSave).join(Nuggets,Nuggets.id == NuggetsSave.nugget_id)
+            .join(NuggetsMaster,Nuggets.nuggets_id == NuggetsMaster.id,isouter=True)
+            .filter(NuggetsSave.user_id == get_user.id, NuggetsSave.status == 1,
+                    Nuggets.nugget_status == 1,NuggetsMaster.status == 1)
             .count()
         )
         user_details = {}
+
+        # Get Complementary Status Enable / Disable
+        getSettings=db.query(Settings).filter(Settings.settings_topic == "complementary_enable_disable",
+                                              Settings.settings_value == 1).first()
+        getComplementaryValue=db.query(Settings).filter(Settings.settings_topic == "complementary_period").first()
         
-        
+        # Generate Profile URL
+        token_text=f"{get_user.id}rawcaster@!@#$QWERTxcvbn"
+        hashed_user_ref_id=generateLink(token_text)
+                
+        invite_url = inviteBaseurl()
+        join_link = f"{invite_url}viewprofile/{hashed_user_ref_id}"
+
         user_details.update(
             {
                 "user_id": get_user.id,
@@ -1465,6 +1635,8 @@ def user_profile(db, id):
                 if get_user.influencer_category
                 else "",
                 "account_verify_type":(2 if get_account_status.verify_status == 1 else 1) if get_account_status else 0,# 0 -Request not send , 1- Pending ,2 - Verified
+                "last_verify_status":unseenWebhookCallstatus.verify_status if unseenWebhookCallstatus else None, # Idenfy Last verify status
+                "verification_reason":f"{mismatch_data} Data Mismatching" if mismatch_data else None,
                 "saved_nugget_count": get_saved_nuggets,
                 "nugget_content_length": get_user.user_status_master.max_nugget_char
                 if get_user.user_status_master.max_nugget_char
@@ -1472,18 +1644,19 @@ def user_profile(db, id):
                 "chime_user_id": get_user.chime_user_id
                 if get_user.chime_user_id
                 else None,
-                "ai_content_length": 100
+                "ai_content_length": 100,
+                "complementary_status": 1 if getSettings and get_user.user_status_id == 1 else 0, # Only valued to premium member
+                "complementary_days":(getComplementaryValue.settings_value if getComplementaryValue else 0) if getSettings else 0,
+                "profile_url":join_link
             }
         )
         token_text=f"{get_user.user_ref_id}//{datetime.datetime.utcnow().replace(tzinfo=None)}"
-        user_ref_id = token_text.encode("ascii")
-        
-        hashed_user_ref_id = (base64.b64encode(user_ref_id)).decode("ascii")
+        hashed_user_ref_id=generateLink(token_text)
         
         invite_url = inviteBaseurl()
-        join_link = f"{invite_url}signup?ref={hashed_user_ref_id}"
+        signup_link = f"{invite_url}signup?ref={hashed_user_ref_id}"
 
-        user_details.update({"referral_link": join_link})
+        user_details.update({"referral_link": signup_link})
 
         settings = (
             db.query(UserSettings).filter(UserSettings.user_id == get_user.id).first()
@@ -1555,131 +1728,6 @@ async def getmyprofile(
 
 
 
-# # 11 - Get My Profile
-# @router.post("/getmyprofile")
-# async def getmyprofile(
-#     db: Session = Depends(deps.get_db),
-#     token: str = Form(None),
-#     auth_code: str = Form(None, description="SALT + token"),
-# ):
-#     if token == None or token.strip() == "":
-#         return {
-#             "status": -1,
-#             "msg": "Sorry! your login session expired. please login again.",
-#         }
-
-#     elif auth_code == None or auth_code.strip() == "":
-#         return {"status": -1, "msg": "Auth Code is missing"}
-
-#     else:
-#         access_token = checkToken(db, token.strip())
-#         auth_text = token.strip()
-
-#         if checkAuthCode(auth_code, auth_text) == False:
-#             return {"status": 0, "msg": "Authentication failed!"}
-
-#         else:
-#             if access_token == False:
-#                 return {
-#                     "status": -1,
-#                     "msg": "Sorry! your login session expired. please login again.",
-#                 }
-
-#             else:
-#                 get_token_details = (
-#                     db.query(ApiTokens.user_id).filter(ApiTokens.token == access_token).first()
-#                 )
-#                 login_user_id = get_token_details.user_id if get_token_details else None
-
-#                 get_user = db.query(User).filter(User.id == login_user_id).first()
-                
-#                 if get_user:
-#                     followers_count = db.query(FollowUser.id).filter(FollowUser.following_userid == login_user_id).count()
-#                     following_count = db.query(FollowUser.id).filter(FollowUser.follower_userid == login_user_id).count()
-#                     # nugget_count = db.query(NuggetsMaster.id).join(Nuggets,Nuggets.nuggets_id == NuggetsMaster.id).\
-#                     #     filter(NuggetsMaster.user_id == login_user_id,NuggetsMaster.status == 1).count()
-#                     event_count=db.query(Events.id).filter(Events.created_by == login_user_id, Events.status == 1).count()
-#                     # friends_count=db.query(MyFriends).filter(MyFriends.status == 1,MyFriends.request_status == 1,or_(MyFriends.sender_id == get_user.id,MyFriends.receiver_id == get_user.id)).count()
-#                     get_account_status=db.query(VerifyAccounts).filter(VerifyAccounts.user_id == get_user.id).first()
-#                     get_saved_nuggets = db.query(NuggetsSave)\
-#                         .filter(NuggetsSave.user_id == get_user.id, NuggetsSave.status == 1)\
-#                         .count()
-                    
-#                     user_details={}
-#                     user_details.update({"user_id":get_user.id,
-#                                         "user_ref_id":get_user.user_ref_id,
-#                                         'is_email_id_verified':get_user.is_email_id_verified,
-#                                         "is_mobile_no_verified":get_user.is_mobile_no_verified,
-#                                         "acc_verify_status":1 if get_user.is_email_id_verified == 1 or get_user.is_mobile_no_verified == 1 else 0,
-#                                         "is_profile_updated": 1 if get_user.dob != '' and get_user.gender != "" else 0,
-#                                         "name":get_user.display_name if get_user.display_name != '' and get_user.display_name != None else "",
-#                                         "email_id":get_user.email_id if get_user.email_id else "",
-#                                         "mobile":str(get_user.mobile_no) if get_user.mobile_no else "",
-#                                         "profile_image":get_user.profile_img if get_user.profile_img else defaultimage("profile_img"),
-#                                         "cover_image":get_user.cover_image if get_user.cover_image else defaultimage("cover_img"),
-#                                         "website":get_user.website if get_user.website else "",
-#                                         "first_name":get_user.first_name if get_user.first_name else "",
-#                                         "last_name":get_user.last_name if get_user.last_name else "",
-#                                         "gender":get_user.gender if get_user.gender else "",
-#                                         "dob":get_user.dob if get_user.dob else "",
-#                                         "country_code":get_user.country_code if get_user.country_code else "",
-#                                         "country_id":get_user.country_id if get_user.country_id else "",
-#                                         "user_code":get_user.user_code if get_user.user_code else "",
-#                                         "geo_location":get_user.geo_location if get_user.geo_location else "",
-#                                         "latitude":get_user.latitude if get_user.latitude else "",
-#                                         "longitude":get_user.longitude if get_user.longitude else "",
-#                                         "date_of_join":common_date(get_user.created_at) if get_user.created_at else "",
-#                                         "user_type":get_user.user_type_master.name if get_user.user_type_master else "",
-#                                         "user_status":get_user.user_status_master.name if get_user.user_status_master else "",
-#                                         "user_status_id":get_user.user_status_id,
-#                                         "bio_data":get_user.bio_data if get_user.bio_data else "",
-#                                         # "friends_count":friends_count,
-#                                         "followers_count":followers_count,
-#                                         "following_count":following_count,
-#                                         # "nugget_count":nugget_count,
-#                                         "event_count":event_count,  
-#                                         "work_at":get_user.work_at if get_user.work_at else "",
-#                                         'studied_at':get_user.studied_at if get_user.studied_at else "",
-#                                         'influencer_category':get_user.influencer_category if get_user.influencer_category else "",
-#                                         'account_verify_type':(2 if get_account_status.verify_status == 1 else 1) if get_account_status else 0,# 0 -Request not send , 1- Pending ,2 - Verified
-#                                         'saved_nugget_count':get_saved_nuggets,
-#                                         "nugget_content_length":get_user.user_status_master.max_nugget_char if get_user.user_status_master else 0,
-#                                         "chime_user_id":get_user.chime_user_id if get_user.chime_user_id else None,
-#                                         "ai_content_length":100
-#                                          })
-#                     token_text = (
-#                         str(get_user.user_ref_id) + str(datetime.datetime.utcnow().timestamp())
-#                         ).encode("ascii")
-#                     invite_url = inviteBaseurl()
-#                     join_link = f"{invite_url}signup?ref={token_text}"
-
-#                     user_details.update({"referral_link": join_link})
-
-#                     settings = (
-#                         db.query(UserSettings).filter(UserSettings.user_id == get_user.id).first()
-#                     )
-#                     if settings:
-#                         user_details.update(
-#                             {"language": settings.language.name if settings.language_id else ""}
-#                         )
-#                     else:
-#                         user_details.update({"language": "English"})
-
-#                     two_type_verification = OTPverificationtype(db, get_user)
-
-#                     user_details.update({"two_type_verification": two_type_verification})
-#                     # Get Notification
-#                     total_unread_count = (
-#                         db.query(Notification).filter_by(status=1, is_read=0, user_id=id).count()
-#                     )
-#                     user_details.update({"unread_notification_count": total_unread_count})
-
-#                     return {"status": 1, "msg": "Success", "profile": user_details}
-
-#                 else:
-#                     return {"status": 0, "msg": "No result found!"}
-
-
 # 12. Update My Profile
 @router.post("/updatemyprofile")
 async def updatemyprofile(
@@ -1743,6 +1791,11 @@ async def updatemyprofile(
                 get_user_profile = (
                     db.query(User).filter(User.id == login_user_id).first()
                 )
+                # Check Account Verification
+                accountVerify=db.query(VerifyAccounts)\
+                    .filter(VerifyAccounts.user_id==login_user_id,
+                            VerifyAccounts.verify_status == 1).first()
+
                 name = name
                 first_name = first_name if first_name else get_user_profile.first_name
                 last_name = last_name if last_name else get_user_profile.last_name
@@ -1807,16 +1860,19 @@ async def updatemyprofile(
                     )
                     get_user_profile.first_name = (
                         first_name.strip()
-                        if first_name
+                        if first_name and not accountVerify
                         else get_user_profile.first_name
                     )
                     get_user_profile.last_name = (
-                        last_name.strip() if last_name else get_user_profile.last_name
+                        last_name.strip() if last_name and not accountVerify
+                        else get_user_profile.last_name
                     )
                     get_user_profile.gender = (
-                        gender if gender != None else get_user_profile.gender
+                        gender if gender != None and not accountVerify
+                        else get_user_profile.gender
                     )
-                    get_user_profile.dob = dob if dob else get_user_profile.dob
+                    get_user_profile.dob = (dob if dob and not accountVerify
+                        else get_user_profile.dob)
                     get_user_profile.country_code = (
                         country_code if country_code else get_user_profile.country_code
                     )
@@ -1843,7 +1899,7 @@ async def updatemyprofile(
                     get_user_profile.work_at = work_at
                     get_user_profile.studied_at = studied_at
                     get_user_profile.influencer_category = (
-                        influencer_category.strip() if influencer_category else None
+                        influencer_category.strip() if influencer_category else get_user_profile.influencer_category
                     )
                     get_user_profile.other_gender=other_gender
                     db.commit()
@@ -1962,6 +2018,7 @@ async def searchrawcasterusers(
                     User.profile_img,
                     User.geo_location,
                     User.bio_data,
+                    User.created_by,
                     MyFriends.request_status.label('friend_request_status'),
                     FollowUser.id.label('follow_id')
                 ).select_from(User).outerjoin(MyFriends,
@@ -2048,9 +2105,9 @@ async def searchrawcasterusers(
                                 "profile_img": user.profile_img
                                 if user.profile_img
                                 else "",
-                                "friend_request_status": user.friend_request_status
+                                "friend_request_status": (user.friend_request_status
                                 if user.friend_request_status != None
-                                else 2,
+                                else 2) if not user.created_by == 1 else 1,
                                 "follow": True if get_follow_user else False,
                                 "follow_count": follow_count,
                                 "location": user.geo_location
@@ -2080,7 +2137,7 @@ async def searchrawcasterusers(
 async def invitetorawcaster(
     db: Session = Depends(deps.get_db),
     token: str = Form(None),
-    email_id: str = Form(None, description="email ids"),
+    email_id: str = Form(None, description="email ids,example=['abc@gmail.com','xyz@gmail.com]"),
     auth_code: str = Form(None, description="SALT + token"),
 ):
     if token == None or token.strip() == "":
@@ -2148,10 +2205,10 @@ async def invitetorawcaster(
                                     .filter(User.id == login_user_id)
                                     .first()
                                 )
+                                token_text=f"{get_user.user_ref_id}//{datetime.datetime.utcnow().replace(tzinfo=None)}"
 
-                                token_text = base64.b64encode(
-                                    f"{get_user.user_ref_id}//{datetime.datetime.utcnow()}".encode()
-                                ).decode()
+                                join_link=generateLink(token_text)
+                                 
                                 invite_link = inviteBaseurl()
                                 join_link = (
                                     f"{invite_link}signup?ref={token_text}&mail={mail}"
@@ -2177,7 +2234,7 @@ async def invitetorawcaster(
                     if total == failed:
                         return {"status": 0, "msg": "Failed to send invites"}
                     if success == total:
-                        return {"status": 1, "msg": "Invites sent"}
+                        return {"status": 1, "msg": "Invites sent."}
                     else:
                         return {"status": 1, "msg": "Invites sent"}
 
@@ -2335,14 +2392,14 @@ async def sendfriendrequests(
                         if friend_request_ids:
                             return {
                                 "status": 1,
-                                "msg": "Connection request sent successfully",
+                                "msg": "Connection request has been sent.",
                                 "friend_request_ids": friend_request_ids,
                             }
 
                         else:
                             return {
                                 "status": 0,
-                                "msg": "Failed to send Connection request",
+                                "msg": "Failed to send Connection Request.",
                                 "friend_request_ids": friend_request_ids,
                             }
 
@@ -2858,12 +2915,19 @@ async def listallfriendgroups(
                     elif groupname == "My Fans" and res.created_by != login_user_id:
                         grouptype = 1
                         group_category = 2
-                        groupname = f"Influencer: {(res.user.display_name if res.user.display_name else '') if res.created_by else ''}"
+                        groupname = f"Influencer: {(get_user.display_name if get_user else '') if res.created_by else ''}"
                         my_group=0
 
                     elif groupname != "My Fans":
                         grouptype = 2
                         group_category = 3
+
+                    # Generate URl
+                    token_text=f"{get_user.user_ref_id}//{datetime.datetime.utcnow().replace(tzinfo=None)}//{res.id}"
+                    hashed_user_ref_id=generateLink(token_text)
+                    
+                    invite_url = inviteBaseurl()
+                    join_link = f"{invite_url}signup?ref={hashed_user_ref_id}"
 
                     get_group_chat = (
                         db.query(GroupChat)
@@ -2996,7 +3060,8 @@ async def listallfriendgroups(
                                 "result_list": 3,
                                 "group_member_ids": members,
                                 "group_members_list": memberlist,
-                                "my_group": my_group
+                                "my_group": my_group,
+                                "referral_link":join_link
                             }
                         )
 
@@ -3042,7 +3107,7 @@ async def listallfriends(
         allfriends = int(allfriends) if allfriends else None
         nongrouped = int(nongrouped) if nongrouped else None
 
-        access_token = checkToken(db, token)
+        access_token = checkToken(db, token) if token != "RAWCAST" else True
         if access_token == False:
             return {
                 "status": -1,
@@ -3154,15 +3219,17 @@ async def listallfriends(
                 if not gender.isnumeric():
                     return {"status": 0, "msg": "Invalid Gender type"}
                 else:
-                    get_user_gender = db.query(User.id).filter(User.gender == gender).all()
-                    get_user_ids = [usr.id for usr in get_user_gender]
+                    get_my_friends=get_my_friends.filter(User.gender == gender)
 
-                    get_my_friends = get_my_friends.filter(
-                        or_(
-                            MyFriends.sender_id.in_(get_user_ids),
-                            MyFriends.receiver_id.in_(get_user_ids),
-                        )
-                    )
+                    # get_user_gender = db.query(User.id).filter(User.gender == gender).all()
+                    # get_user_ids = [usr.id for usr in get_user_gender]
+
+                    # get_my_friends = get_my_friends.filter(
+                    #     or_(
+                    #         MyFriends.sender_id.in_(get_user_ids),
+                    #         MyFriends.receiver_id.in_(get_user_ids),
+                    #     )
+                    # )
 
             get_my_friends_count = get_my_friends.count()
 
@@ -3181,6 +3248,7 @@ async def listallfriends(
                 request_frnds = []
 
                 for friend_requests in get_my_friends:
+                    
                     get_follow_user_id = (
                         db.query(FollowUser)
                         .filter(
@@ -3401,37 +3469,6 @@ async def listallfriends(
                             }
                         )
 
-                    if friendid != 0:
-                        chat = (
-                            db.query(FriendsChat)
-                            .filter(
-                                FriendsChat.sender_id == friendid,
-                                FriendsChat.receiver_id == login_user_id,
-                                FriendsChat.is_read == 0,
-                                FriendsChat.type == 1,
-                                FriendsChat.sender_delete == None,
-                                FriendsChat.receiver_delete == None,
-                            )
-                            .count()
-                        )
-                        if login_from == 1:
-                            chat = (
-                                db.query(FriendsChat)
-                                .filter(
-                                    FriendsChat.sender_id == friendid,
-                                    FriendsChat.receiver_id == login_user_id,
-                                    FriendsChat.is_read == 0,
-                                    FriendsChat.type == 1,
-                                    FriendsChat.msg_from == 1,
-                                    FriendsChat.sender_delete == None,
-                                    FriendsChat.receiver_delete == None,
-                                )
-                                .count()
-                            )
-
-                        if chat > 0:
-                            request_frnds.append({"unreadmsg": chat})
-
                 return {
                     "status": 1,
                     "msg": "Success",
@@ -3545,6 +3582,12 @@ async def addfriendgroup(
             "status": -1,
             "msg": "Sorry! your login session expired. please login again.",
         }
+    elif not group_name:
+        return {"status":0,"msg":"Group name is missing"}
+    
+    elif group_name.strip() == "":
+        return {"status":0,"msg":"Group Name can't be empty"}
+
     
     else:
         access_token = checkToken(db, token)
@@ -3560,6 +3603,10 @@ async def addfriendgroup(
             )
             login_user_id = get_token_details.user_id
 
+            group_name=detect_and_remove_offensive(group_name) if group_name else None
+            if '*' in group_name:
+                return {"status":0,"msg":"Please enter valid group name"}
+
             get_row_count = (
                 db.query(FriendGroups)
                 .filter(
@@ -3570,7 +3617,7 @@ async def addfriendgroup(
                 .first()
             )
             if get_row_count:
-                return {"status": 0, "msg": "Group name already exists"}
+                return {"status": 0, "msg": "Group Name Already Exists."}
 
             else:
                 # Add Friend Group
@@ -3704,7 +3751,7 @@ async def addfriendgroup(
 
                     return {
                         "status": 1,
-                        "msg": "Successfully created group",
+                        "msg": "Group Created Successfully.",
                         "group_details": group_details,
                     }
                 else:
@@ -4032,7 +4079,7 @@ async def addfriendstogroup(
 
                     return {
                         "status": 1,
-                        "msg": "Successfully Added",
+                        "msg": "Successfully Added.",
                         "memberdetails": memberdetails,
                     }
 
@@ -4126,7 +4173,7 @@ async def removefriendsfromgroup(
                         delete_member=get_members.delete()
                         db.commit()
 
-                return {"status": 1, "msg": "Successfully updated"}
+                return {"status": 1, "msg": "Successfully Removed."}
 
 
 # 24. Delete Friend Group
@@ -4201,7 +4248,7 @@ async def deletefriendgroup(
                         delete_channel(channel_arn, chime_bearer)
                     except Exception as e:
                         print(e)
-                    return {"status": 1, "msg": "Successfully deleted"}
+                    return {"status": 1, "msg": "Successfully Deleted."}
 
                 else:
                     return {"status": 0, "msg": "Failed to delete. please try again"}
@@ -4224,25 +4271,23 @@ def process_data(
     output_prefix = f"rawcaster_uploads/output_part_{int(datetime.datetime.utcnow().timestamp())}"  # Prefix for the output video parts
     duration = 299  # Duration of each video part in seconds
 
+    frame_size='640x480'
     command = [
-        "ffmpeg",
-        "-i",
-        input_file,
-        "-c",
-        "copy",
-        "-map",
-        "0",
-        "-segment_time",
-        str(duration),
-        "-f",
-        "segment",
-        "-reset_timestamps",
-        "1",
-        output_prefix + "%03d.mp4",
+        'ffmpeg',
+        '-i', input_file,
+        '-c', 'copy',
+        '-map', '0',
+        '-map', '-0:s',  # Exclude subtitle streams from copying
+        '-reset_timestamps', '1',
+        '-avoid_negative_ts', '1',
+        '-s', frame_size,
+        '-segment_time', str(duration),
+        '-f', 'segment',
+        f'{output_prefix}%03d.mp4'
     ]
 
     # Run the command using subprocess
-    subprocess.run(command)
+    subprocess.run(command,capture_output=True, text=True)
 
     # Generate the output file paths
     splited_file_path = []
@@ -4252,7 +4297,6 @@ def process_data(
         if not os.path.exists(file_path):
             break
         splited_file_path.append(file_path)
-
     
     #remove local file path
     os.remove(uploaded_file_path)
@@ -4454,6 +4498,15 @@ def process_data(
     # Insertnotification(db, login_user_id, None, notification_type, nugget_id)
     return nugget_ids
 
+def get_video_duration(file_path):
+    import moviepy.editor as moviepy
+
+    clip = moviepy.VideoFileClip(file_path)
+
+    clip.write_videofile("myvideo.mp4")
+    return 2
+
+
 
 # 25. Add Nuggets
 @router.post("/addnuggets")
@@ -4471,7 +4524,7 @@ async def addnuggets(
     if token == None or token.strip() == "":
         return {
             "status": -1,
-            "msg": "Sorry! your login session expired. please login again.",
+            "msg": "Sorry! your login session expaddnuggetsired. please login again.",
         }
     elif not content and not nuggets_media:
         return {"status": 0, "msg": "Sorry! Nuggets content or Media can not be empty."}
@@ -4650,27 +4703,25 @@ async def addnuggets(
                             master_id = add_nuggets_master.id
                             file_temp = nuggets_media[i - 1].content_type
                             
-                            type = "image"
+                            file_type = "image"
                             if "video" in file_temp:
-                                type = "video"
+                                file_type = "video"
                             elif "audio" in file_temp:
-                                type = "audio"
+                                file_type = "audio"
                             # File Upload
-                            ext = os.path.splitext(nuggets_media[i - 1].filename)[
-                                1
-                            ]
-                            file_ext=ext if type == 'image' else '.mp3' if type == 'audio' else '.mp4' if type == 'video' else None
+                            ext=os.path.splitext(nuggets_media[i - 1].filename)[1]
+                    
+                            file_ext=ext if file_type == 'image' else '.mp3' if file_type == 'audio' else '.mp4' if file_type == 'video' else None
                             
                             uploaded_file_path = await file_upload(
-                                nuggets_media[i - 1], file_ext, compress=1
+                                nuggets_media[i - 1], ext, compress=1
                             )
-                                        
+                           
                             file_stat = os.stat(uploaded_file_path)
                             file_size = file_stat.st_size
 
                             if (
-                                file_size > 1000000
-                                and type == "image"
+                                file_type == "image"
                                 and file_ext != ".gif"
                             ):
                                 s3_file_path = f"nuggets/Image_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
@@ -4680,7 +4731,7 @@ async def addnuggets(
                                     add_nugget_attachment = NuggetsAttachment(
                                         user_id=login_user_id,
                                         nugget_id=add_nuggets_master.id,
-                                        media_type=type,
+                                        media_type=file_type,
                                         media_file_type=file_ext,
                                         file_size=file_size,
                                         path=result["url"],
@@ -4696,7 +4747,8 @@ async def addnuggets(
                             else:
                                 s3_file_path = f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
 
-                                if type == "video":
+                                if file_type == "video":
+                                    
                                     # create video capture object
                                     data = cv2.VideoCapture(uploaded_file_path)
                                     
@@ -4704,9 +4756,9 @@ async def addnuggets(
                                     frames = data.get(cv2.CAP_PROP_FRAME_COUNT)
                                     fps = data.get(cv2.CAP_PROP_FPS)
                                     total_duration = round(frames / fps)
-                                   
+                                    
                                     if total_duration < 330:
-                                        s3_file_path = f"nuggets/audio_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}.mp4"
+                                        s3_file_path = f"nuggets/video_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
 
                                         result = upload_to_s3(
                                             uploaded_file_path, s3_file_path
@@ -4715,7 +4767,7 @@ async def addnuggets(
                                             add_nugget_attachment = NuggetsAttachment(
                                                 user_id=login_user_id,
                                                 nugget_id=add_nuggets_master.id,
-                                                media_type=type,
+                                                media_type=file_type,
                                                 media_file_type=file_ext,
                                                 file_size=file_size,
                                                 path=result["url"],
@@ -4728,7 +4780,7 @@ async def addnuggets(
                                         else:
                                             return result
                                     else:
-                                        
+                                    
                                         splites_flag=1
                                         splited_video_reposne=process_data(
                                             db,
@@ -4739,9 +4791,9 @@ async def addnuggets(
                                             share_with
                                         )
                                         nugget_ids += splited_video_reposne
-                                        
+                                                
                                     
-                                elif type == "audio":
+                                elif file_type == "audio":
                                     base_dir = "rawcaster_uploads"
                                     try:
                                         os.makedirs(base_dir, mode=0o777, exist_ok=True)
@@ -4774,7 +4826,7 @@ async def addnuggets(
                                         add_nugget_attachment = NuggetsAttachment(
                                             user_id=login_user_id,
                                             nugget_id=add_nuggets_master.id,
-                                            media_type=type,
+                                            media_type=file_type,
                                             media_file_type=file_ext,
                                             file_size=file_size,
                                             path=result["url"],
@@ -4797,7 +4849,7 @@ async def addnuggets(
                                         add_nugget_attachment = NuggetsAttachment(
                                             user_id=login_user_id,
                                             nugget_id=add_nuggets_master.id,
-                                            media_type=type,
+                                            media_type=file_type,
                                             media_file_type=file_ext,
                                             file_size=file_size,
                                             path=result["url"],
@@ -4862,11 +4914,11 @@ async def addnuggets(
                                             for key, val in share_with.items():
                                                 if val:
                                                     for shareid in val:
-                                                        type = 2 if key == "friends" else 1
+                                                        types = 2 if key == "friends" else 1
                                                         add_NuggetsShareWith = (
                                                             NuggetsShareWith(
                                                                 nuggets_id=add_nuggets.id,
-                                                                type=type,
+                                                                type=types,
                                                                 share_with=shareid,
                                                             )
                                                         )
@@ -5033,11 +5085,11 @@ async def addnuggets(
                                         for key, val in share_with.items():
                                             if val:
                                                 for shareid in val:
-                                                    type = 2 if key == "friends" else 1
+                                                    types = 2 if key == "friends" else 1
                                                     add_NuggetsShareWith = (
                                                         NuggetsShareWith(
                                                             nuggets_id=add_nuggets.id,
-                                                            type=type,
+                                                            type=types,
                                                             share_with=shareid,
                                                         )
                                                     )
@@ -5167,6 +5219,7 @@ async def listnuggets(
     search_key: str = Form(None),
     page_number: str = Form(default=1),
     nugget_type: str = Form(None, description="1-video,2-Other than video,0-all"),
+    global_search:str=Form(None,description="1")
     ):
     
     if token == None or token.strip() == "":
@@ -5181,6 +5234,9 @@ async def listnuggets(
         return {"status": 0, "msg": "Invalid Nugget Type"}
     elif not str(page_number).isnumeric():
         return {"status": 0, "msg": "Invalid page Number"}
+    elif global_search and not global_search.isnumeric():
+        return {"status": 0, "msg": "Invalid global search"}
+
     else:
         nugget_type = int(nugget_type) if nugget_type else None
         filter_type = int(filter_type) if filter_type else None
@@ -5241,15 +5297,35 @@ async def listnuggets(
                                 NuggetsMaster.status == 1)\
                         .group_by(Nuggets.id)
             
+            
             if search_key:
                 get_nuggets = get_nuggets.filter(
-                    or_(
+                        (Nuggets.share_type == 1)
+                        | (
+                            (Nuggets.share_type == 2)
+                            & (Nuggets.user_id == login_user_id)
+                        )
+                        | (
+                            (Nuggets.share_type == 3)
+                            & (NuggetsShareWith.type == 1)
+                            & (NuggetsShareWith.share_with.in_(group_ids))
+                        )
+                        | (
+                            (Nuggets.share_type == 4)
+                            & (NuggetsShareWith.type == 2)
+                            & (NuggetsShareWith.share_with.in_([login_user_id]))
+                        )
+                        | (
+                            (Nuggets.share_type == 6)
+                            & (Nuggets.user_id.in_(my_friends))
+                        )
+                    ,or_(
                         NuggetsMaster.content.ilike("%" + search_key + "%"),
                         User.display_name.ilike("%" + search_key + "%"),
                         User.first_name.ilike("%" + search_key + "%"),
                         User.last_name.ilike("%" + search_key + "%"),
                         User.email_id.ilike("%"+ search_key +"%")
-                    )
+                    ),
                 )
             if access_token == "RAWCAST":
                 get_nuggets = get_nuggets.join( NuggetsAttachment,
@@ -5270,199 +5346,206 @@ async def listnuggets(
                 get_nuggets = get_nuggets.filter(Nuggets.user_id == login_user_id)
             
             elif saved == 1:     # Saved Nuggets
-                get_nuggets = get_nuggets.filter(NuggetsSave.user_id == login_user_id)
+                get_nuggets = get_nuggets.filter(NuggetsSave.user_id == login_user_id,
+                                                    NuggetsSave.status == 1)
                 
             elif user_id:        # Other's Nuggets
+                get_nuggets = get_nuggets.filter(Nuggets.user_id == user_id)
+
                 if login_user_id != user_id:
                     get_nuggets = get_nuggets.filter(
                         Nuggets.user_id == user_id, Nuggets.share_type == 1
                     )
-                get_nuggets = get_nuggets.filter(Nuggets.user_id == user_id)
             
             else:
-                if nugget_type == 1:  # Video
-                    get_nuggets = get_nuggets.filter(
-                        Nuggets.nuggets_id == NuggetsAttachment.nugget_id,
-                        NuggetsAttachment.media_type == "video",
-                    )
-                
-                elif nugget_type == 2:  # Audio and Image
-                    get_nuggets = get_nuggets.outerjoin(
-                        NuggetsAttachment,
-                        Nuggets.nuggets_id == NuggetsAttachment.nugget_id,
-                    ).filter(
-                        or_(
-                            NuggetsAttachment.media_type == None,
-                            NuggetsAttachment.media_type == "image",
-                            NuggetsAttachment.media_type == "audio",
+                if not search_key and not global_search:
+                    if nugget_type == 1:  # Video
+                        get_nuggets = get_nuggets.filter(
+                            Nuggets.nuggets_id == NuggetsAttachment.nugget_id,
+                            NuggetsAttachment.media_type == "video",
                         )
-                    )
+                    
+                    elif nugget_type == 2:  # Audio and Image
+                        get_nuggets = get_nuggets.outerjoin(
+                            NuggetsAttachment,
+                            Nuggets.nuggets_id == NuggetsAttachment.nugget_id,
+                        ).filter(
+                            or_(
+                                NuggetsAttachment.media_type == None,
+                                NuggetsAttachment.media_type == "image",
+                                NuggetsAttachment.media_type == "audio",
+                            )
+                        )
+                    
+                    if filter_type == 1: # Influencer
+                        my_followers = []  # my_followers
+                        follow_user = (
+                            db.query(FollowUser.following_userid)
+                            .filter(FollowUser.follower_userid == login_user_id)
+                            .all()
+                        )
+                        if follow_user:
+                            for group_list in follow_user:
+                                my_followers.append(group_list.following_userid)
+                    
+                        get_nuggets = get_nuggets.filter(
+                                and_(Nuggets.user_id.in_(my_followers),Nuggets.share_type != 2)     
+                        )
                 
-                if filter_type == 1: # Influencer
-                    my_followers = []  # my_followers
-                    follow_user = (
-                        db.query(FollowUser.following_userid)
-                        .filter(FollowUser.follower_userid == login_user_id)
-                        .all()
-                    )
-                    if follow_user:
-                        for group_list in follow_user:
-                            my_followers.append(group_list.following_userid)
-                 
-                    get_nuggets = get_nuggets.filter(
-                            Nuggets.user_id.in_(my_followers),Nuggets.share_type != 2
-                    )
-             
-                elif user_public_nugget_display_setting == 0:  # Rawcaster
-                    get_nuggets = get_nuggets.filter(
-                        or_(Nuggets.user_id == login_user_id, Nuggets.user_id == raw_id)
-                    )
-                    
-                elif user_public_nugget_display_setting == 1:  # Public
-                    
-                    get_nuggets = get_nuggets.filter(
-                        or_(
-                            Nuggets.user_id == login_user_id,
-                            and_(Nuggets.share_type == 1),
-                            and_(
-                                Nuggets.share_type == 2,
+                    if user_public_nugget_display_setting == 0:  # Rawcaster
+                        get_nuggets = get_nuggets.filter(
+                            or_(Nuggets.user_id == login_user_id, Nuggets.user_id == raw_id)
+                        )
+                        
+                    elif user_public_nugget_display_setting == 1:  # Public
+                        
+                        get_nuggets = get_nuggets.filter(
+                            or_(
                                 Nuggets.user_id == login_user_id,
-                            ),
-                            and_(
-                                Nuggets.share_type == 3,
-                                NuggetsShareWith.type == 1,
-                                NuggetsShareWith.share_with.in_(group_ids),
-                            ),
-                            and_(
-                                Nuggets.share_type == 4,
-                                NuggetsShareWith.type == 2,
-                                NuggetsShareWith.share_with.in_([login_user_id]),
-                            ),
-                            and_(
-                                Nuggets.share_type == 6, Nuggets.user_id.in_(my_friends)
-                            ),
-                            and_(
-                                Nuggets.share_type == 7,
-                                Nuggets.user_id.in_(my_followings),
-                            ),
-                            and_(Nuggets.user_id == raw_id),
-                        )
-                    )    
-                elif user_public_nugget_display_setting == 2:  # All Connections
-                    get_nuggets = get_nuggets.filter(
-                        or_(
-                            and_(Nuggets.user_id == login_user_id),
-                            and_(
-                                Nuggets.user_id.in_(my_friends), Nuggets.share_type != 2
-                            ),
-                        )
-                    )
-
-                elif user_public_nugget_display_setting == 3:  # Specific Connections
-                   
-                    my_friends = []  # Selected Connections id's
-
-                    online_group_list = (
-                        db.query(UserProfileDisplayGroup)
-                        .filter(
-                            UserProfileDisplayGroup.user_id == login_user_id,
-                            UserProfileDisplayGroup.profile_id
-                            == "public_nugget_display",
-                        )
-                        .all()
-                    )
-
-                    if online_group_list:
-                        for group_list in online_group_list:
-                            my_friends.append(group_list.groupid)
-                    # Without specfic connetions
-                    
-                    statement=select([NuggetsShareWith]).where(NuggetsShareWith.nuggets_id == Nuggets.id).correlate_except(Nuggets)
-                    get_nuggets = get_nuggets.filter(
-                            
-                            or_(Nuggets.user_id == login_user_id,
+                                and_(Nuggets.share_type == 1),
                                 and_(
-                                    Nuggets.user_id.in_(my_friends),
-                                    Nuggets.share_type != 2,
-                                    ~exists(statement)
-                                )
+                                    Nuggets.share_type == 2,
+                                    Nuggets.user_id == login_user_id,
+                                ),
+                                and_(
+                                    Nuggets.share_type == 3,
+                                    NuggetsShareWith.type == 1,
+                                    NuggetsShareWith.share_with.in_(group_ids),
+                                ),
+                                and_(
+                                    Nuggets.share_type == 4,
+                                    NuggetsShareWith.type == 2,
+                                    NuggetsShareWith.share_with.in_([login_user_id]),
+                                ),
+                                and_(
+                                    Nuggets.share_type == 6, Nuggets.user_id.in_(my_friends)
+                                ),
+                                and_(
+                                    Nuggets.share_type == 7,
+                                    Nuggets.user_id.in_(my_followings),
+                                ),
+                                and_(Nuggets.user_id == raw_id),
+                            )
+                        )    
+                    elif user_public_nugget_display_setting == 2:  # All Connections
+                        get_nuggets = get_nuggets.filter(
+                            or_(
+                                and_(Nuggets.user_id == login_user_id),
+                                and_(
+                                    Nuggets.user_id.in_(my_friends), Nuggets.share_type != 2
+                                ),
                             )
                         )
 
-                elif user_public_nugget_display_setting == 4:  # All Groups
-                    get_nuggets = get_nuggets.join(
-                        FriendGroupMembers,
-                        Nuggets.user_id == FriendGroupMembers.user_id,
-                        isouter=True,
-                    )
-                    get_nuggets = get_nuggets.join(
-                        FriendGroups, FriendGroupMembers.group_id == FriendGroups.id,isouter=True
-                    ).filter(FriendGroups.status == 1)
-                    get_nuggets = get_nuggets.filter(
-                        or_(
-                            Nuggets.user_id == login_user_id,
-                            and_(
-                                FriendGroups.created_by == login_user_id,
-                                Nuggets.share_type != 2,
-                            ),
-                        )
-                    )
-
-                elif user_public_nugget_display_setting == 5:  # Specific Groups
-                    my_friends = []
-                    online_group_list = (
-                        db.query(UserProfileDisplayGroup)
-                        .filter(
-                            UserProfileDisplayGroup.user_id == login_user_id,
-                            UserProfileDisplayGroup.profile_id
-                            == "public_nugget_display",
-                        )
-                        .all()
-                    )
-                    if online_group_list:
-                        for group_list in online_group_list:
-                            my_friends.append(group_list.groupid)
-
-                    get_nuggets = get_nuggets.join(
-                        FriendGroupMembers,
-                        Nuggets.user_id == FriendGroupMembers.user_id,
-                    )
-                    get_nuggets = get_nuggets.join(
-                        FriendGroups, FriendGroupMembers.group_id == FriendGroups.id
-                    ).filter(FriendGroups.status == 1)
-
-                    get_nuggets = get_nuggets.filter(
-                        or_(
-                            Nuggets.user_id == login_user_id,
-                            and_(
-                                FriendGroups.id.in_(my_friends), Nuggets.share_type != 2
-                            ),
-                        )
-                    )
-
-                elif user_public_nugget_display_setting == 6:  # My influencers
-                    my_followers = []  # Selected Connections id's
-                    follow_user = (
-                        db.query(FollowUser)
-                        .filter(FollowUser.follower_userid == login_user_id)
-                        .all()
-                    )
-                    if follow_user:
-                        for group_list in follow_user:
-                            my_followers.append(group_list.following_userid)
+                    elif user_public_nugget_display_setting == 3:  # Specific Connections
                     
-                    get_nuggets = get_nuggets.filter(
-                        or_(
-                            Nuggets.user_id == login_user_id,
-                            Nuggets.user_id.in_(my_followers),
-                            Nuggets.share_type != 2,
+                        my_friends = []  # Selected Connections id's
+
+                        online_group_list = (
+                            db.query(UserProfileDisplayGroup)
+                            .filter(
+                                UserProfileDisplayGroup.user_id == login_user_id,
+                                UserProfileDisplayGroup.profile_id
+                                == "public_nugget_display",
+                            )
+                            .all()
                         )
-                    )  
-                else:
-                    get_nuggets=get_nuggets.filter(or_(Nuggets.user_id == login_user_id))
+
+                        if online_group_list:
+                            for group_list in online_group_list:
+                                my_friends.append(group_list.groupid)
+                        # Without specfic connetions
+                        
+                        statement=select([NuggetsShareWith]).where(NuggetsShareWith.nuggets_id == Nuggets.id).correlate_except(Nuggets)
+                        get_nuggets = get_nuggets.filter(
+                                
+                                or_(Nuggets.user_id == login_user_id,
+                                    and_(
+                                        Nuggets.user_id.in_(my_friends),
+                                        Nuggets.share_type != 2,
+                                        ~exists(statement)
+                                    )
+                                )
+                            )
+
+                    elif user_public_nugget_display_setting == 4:  # All Groups
+                        get_nuggets = get_nuggets.join(
+                            FriendGroupMembers,
+                            Nuggets.user_id == FriendGroupMembers.user_id,
+                            isouter=True,
+                        )
+                        get_nuggets = get_nuggets.join(
+                            FriendGroups, FriendGroupMembers.group_id == FriendGroups.id,isouter=True
+                        ).filter(FriendGroups.status == 1)
+                        get_nuggets = get_nuggets.filter(
+                            or_(
+                                Nuggets.user_id == login_user_id,
+                                and_(
+                                    FriendGroups.created_by == login_user_id,
+                                    Nuggets.share_type != 2,
+                                ),
+                            )
+                        )
+
+                    elif user_public_nugget_display_setting == 5:  # Specific Groups
+                        my_friends = []
+                        online_group_list = (
+                            db.query(UserProfileDisplayGroup)
+                            .filter(
+                                UserProfileDisplayGroup.user_id == login_user_id,
+                                UserProfileDisplayGroup.profile_id
+                                == "public_nugget_display",
+                            )
+                            .all()
+                        )
+                        if online_group_list:
+                            for group_list in online_group_list:
+                                my_friends.append(group_list.groupid)
+
+                        get_nuggets = get_nuggets.join(
+                            FriendGroupMembers,
+                            Nuggets.user_id == FriendGroupMembers.user_id,
+                        )
+                        get_nuggets = get_nuggets.join(
+                            FriendGroups, FriendGroupMembers.group_id == FriendGroups.id
+                        ).filter(FriendGroups.status == 1)
+
+                        get_nuggets = get_nuggets.filter(
+                            or_(
+                                Nuggets.user_id == login_user_id,
+                                and_(
+                                    FriendGroups.id.in_(my_friends), Nuggets.share_type != 2
+                                ),
+                            )
+                        )
+
+                    elif user_public_nugget_display_setting == 6:  # My influencers
+                        my_followers = []  # Selected Connections id's
+                        follow_user = (
+                            db.query(FollowUser)
+                            .filter(FollowUser.follower_userid == login_user_id)
+                            .all()
+                        )
+                        if follow_user:
+                            for group_list in follow_user:
+                                my_followers.append(group_list.following_userid)
+                        
+                        get_nuggets = get_nuggets.filter(
+                            or_(
+                                Nuggets.user_id == login_user_id,
+                                and_(Nuggets.user_id.in_(my_followers),
+                                Nuggets.share_type != 2)
+                            )
+                        )  
+                    else:
+                        get_nuggets=get_nuggets.filter(or_(Nuggets.user_id == login_user_id))
                 
             if category:
-                get_nuggets=get_nuggets.filter(User.influencer_category.like("%" + category + "%"),Nuggets.user_id != login_user_id)
+                get_follow_user = db.query(FollowUser).filter(FollowUser.follower_userid == login_user_id).all()
+                
+                followingUserIds=[followingUser.following_userid for  followingUser in get_follow_user]
+
+                get_nuggets=get_nuggets.filter(Nuggets.user_id.in_(followingUserIds),User.influencer_category.like("%" + category + "%"),Nuggets.user_id != login_user_id)
                  
             # Omit blocked users nuggets
             requested_by = None
@@ -5478,7 +5561,8 @@ async def listnuggets(
             if blocked_users:
                 get_nuggets = get_nuggets.filter(Nuggets.user_id.not_in(blocked_users))
 
-            get_nuggets = get_nuggets.order_by(Nuggets.id.desc())
+            get_nuggets = get_nuggets.order_by(Nuggets.created_date.desc())
+            # get_nuggets = get_nuggets.order_by(Nuggets.id.desc())
 
             get_nuggets_count = get_nuggets.count()
             
@@ -5673,6 +5757,16 @@ async def listnuggets(
                         )
                         .first()
                     )
+
+                # Generate Share Nugget URL
+
+                    # token_text=f"{nuggets.id}rawcaster@!@#$QWERTxcvbn"
+                    # user_ref_id = token_text.encode("ascii")
+                    
+                    # hashed_user_ref_id = (base64.b64encode(user_ref_id)).decode("ascii")
+                    
+                    # invite_url = inviteBaseurl()
+                    # share_link = f"{invite_url}view/{hashed_user_ref_id}"
                     
                     nuggets_list.append({"nugget_id":nuggets.id,
                                         "content": nuggets.nuggets_master.content,
@@ -5708,7 +5802,8 @@ async def listnuggets(
                                         'voted': 1 if voted else 0,
                                         'voted_option': voted.poll_option_id if voted else None,
                                         'total_vote':total_poll,
-                                        'saved': True if saved else False
+                                        'saved': True if saved else False,
+                                        # "share_link":share_link
                                         })
                 
                 return {
@@ -5915,9 +6010,9 @@ async def deletenugget(
                         )
                         db.commit()
 
-                        return {"status": 1, "msg": "Nugget Deleted"}
+                        return {"status": 1, "msg": "Successfully Deleted."}
                     else:
-                        return {"status": 1, "msg": "Nugget Deleted"}
+                        return {"status": 1, "msg": "Successfully Deleted."}
 
                 else:
                     return {"status": 0, "msg": "Unable to delete"}
@@ -6038,7 +6133,10 @@ async def nuggetcommentlist(
                                     ).first()
                                     if user_like:
                                         ilike = True
-                                        
+                                
+                                get_account_status=db.query(VerifyAccounts).filter(VerifyAccounts.user_id == reply.user_id,
+                                                    VerifyAccounts.verify_status != -1).first()
+        
                                 total_likes_count = likes.count()
                                 replyarray.append(
                                     {
@@ -6053,12 +6151,19 @@ async def nuggetcommentlist(
                                         "commented_date": reply.created_date,
                                         "liked": ilike,
                                         "like_count": total_likes_count,
+                                        "account_verify_status":1 if get_account_status and get_account_status.verify_status == 1 else 0,# 0 -Request not send , 1- Pending ,2 - Verified
+
                                     }
                                 )
+
+                        get_account_status=db.query(VerifyAccounts).filter(VerifyAccounts.user_id == comment["NuggetsComments"].user_id,
+                                                    VerifyAccounts.verify_status != -1).first()
+        
                         result_list.append(
                             {
                                 "comment_id": comment["NuggetsComments"].id,
                                 "user_id": comment["NuggetsComments"].user_id,
+                                "account_verify_status":1 if get_account_status and get_account_status.verify_status == 1 else 0,# 0 -Request not send , 1- Pending ,2 - Verified
                                 "editable": True
                                 if comment["NuggetsComments"].user_id == login_user_id
                                 else False,
@@ -6224,7 +6329,7 @@ async def editnuggetcomment(
             "status": -1,
             "msg": "Sorry! your login session expired. please login again.",
         }
-    elif comment == None or comment.strip() == "":
+    elif not comment or comment.strip() == "":
         return {"status": 0, "msg": "Comment is missing"}
     elif comment_id == None or not comment_id.isnumeric():
         return {"status": 0, "msg": "Comment_id is missing"}
@@ -6237,8 +6342,7 @@ async def editnuggetcomment(
                 "msg": "Sorry! your login session expired. please login again.",
             }
         else:
-            status = 0
-            msg = "Invalid nugget id"
+            
             get_token_details = (
                 db.query(ApiTokens).filter(ApiTokens.token == access_token).first()
             )
@@ -6259,16 +6363,19 @@ async def editnuggetcomment(
                 .first()
             )
             if check_nugget_comment:
-                check_nugget_comment.content = detect_and_remove_offensive(comment) if comment else None
+                content=detect_and_remove_offensive(comment) if comment else None
+                
+                check_nugget_comment.content = content
                 check_nugget_comment.modified_date = datetime.datetime.utcnow()
                 db.commit()
                 if check_nugget_comment:
-                    status = 1
-                    msg = "Success"
+                    return {"status":1,"msg":"Success","edited_comment":{"comment_id":comment_id,
+                                                                        "comment":content}}
                 else:
-                    msg = "failed to add comment"
+                    return {"status": 0, "msg": "Failed to add comment"}
+            else:
+                return {"status": 0, "msg": "Invalid nugget id"}
 
-            return {"status": status, "msg": msg}
 
 
 # 32. Delete Nuggets Comments
@@ -6960,9 +7067,11 @@ async def editnugget(
                                                 #     share_type,
                                                 #     share_with,
                                                 # )
+                                                os.remove(uploaded_file_path)
+
                                                 return {
                                                     "status": 0,
-                                                    "msg": "Duration must be below five minutes"
+                                                    "msg": "Edited nugget can only contain a video of a maximum duration of 5 minutes."
                                                 }
 
                                         elif type == "audio":
@@ -7139,7 +7248,7 @@ async def editnugget(
                             )
                             return {
                                 "status": 1,
-                                "msg": "Nugget updated",
+                                "msg": "Nugget Updated Successfully.",
                                 "nugget_detail": nugget_detail,
                             }
                         else:
@@ -7550,7 +7659,7 @@ async def addevent(
 
     if event_title == None or event_title.strip() == "":
         return {"status": 0, "msg": "Event title cant be blank."}
-    elif event_type == None and not event_type.isnumeric():
+    elif not event_type or not event_type.isnumeric():
         return {"status": 0, "msg": "Event type cant be blank."}
     elif event_start_date == None:
         return {"status": 0, "msg": "Event start date cant be blank."}
@@ -7591,9 +7700,9 @@ async def addevent(
 
     else:
         event_duration = datetime.datetime.strptime(event_duration, "%H:%M").time()
-        min_duration = datetime.datetime.strptime("10:00", "%H:%M").time()
-        if event_duration > min_duration:
-            return {"status": 0, "msg": "Event duration Max Allowed hours is 10"}
+        # min_duration = datetime.datetime.strptime("10:00", "%H:%M").time()
+        # if event_duration > min_duration:
+        #     return {"status": 0, "msg": "Event duration Max Allowed hours is 10"}
 
         event_participants = int(event_participants)
         if event_participants < 2:
@@ -7702,7 +7811,7 @@ async def addevent(
 
                 # Combine the datetime objects
                 datetime_str = datetime.datetime.combine(date_obj, time_obj)
-
+                print(datetime_str)
                 new_event = Events(
                     title= detect_and_remove_offensive(event_title),
                     ref_id=reference_id,
@@ -7998,7 +8107,7 @@ async def addevent(
 
                     return {
                         "status": 1,
-                        "msg": "Event saved successfully !",
+                        "msg": "Event Created Successfully !",
                         "ref_id": reference_id,
                         "event_detail": event,
                     }
@@ -8052,7 +8161,7 @@ async def listevents(
             )
 
             login_user_id = get_token_details.user_id
-
+            
             get_user_setting = (
                 db.query(UserSettings)
                 .filter(UserSettings.user_id == login_user_id)
@@ -8130,6 +8239,7 @@ async def listevents(
                     event_list = event_list.filter(
                         Events.created_by == user_id, Events.event_type_id == 1
                     )
+                    
 
             else:
                 my_followers = []  # Selected Connections id's
@@ -8358,6 +8468,9 @@ async def listevents(
                 event_list = event_list.filter(
                     Events.start_date_time < datetime.datetime.utcnow()
                 )
+                if user_id:
+                    event_list=event_list.filter(Events.created_by == user_id)
+
 
             elif event_type == 5:
                 event_list = event_list
@@ -8370,7 +8483,7 @@ async def listevents(
                     ))
                 
                 
-            event_list = event_list.filter(Events.status == 1).order_by(Events.start_date_time.desc())
+            event_list = event_list.filter(Events.status == 1).order_by(Events.start_date_time.asc())
 
             if type_filter:
                 event_list = event_list.filter(Events.type.in_([type_filter]))
@@ -8382,7 +8495,7 @@ async def listevents(
             if get_row_count < 1:
                 return {
                     "status": 1,
-                    "msg": "No Result found",
+                    "msg": "No new or future events found",
                     "events_count": 0,
                     "total_pages": 1,
                     "current_page_no": 1,
@@ -8559,7 +8672,7 @@ async def listevents(
                     
                 return {
                     "status": 1,
-                    ",msg": "Success",
+                    "msg": "Success",
                     "events_count": get_row_count,
                     "total_pages": total_pages,
                     "current_page_no": current_page_no,
@@ -8747,9 +8860,9 @@ async def editevent(
         return {"status": 0, "msg": "Invalid Time format"}
     else:
         event_duration = datetime.datetime.strptime(event_duration, "%H:%M").time()
-        min_duration = datetime.datetime.strptime("10:00", "%H:%M").time()
-        if event_duration > min_duration:
-            return {"status": 0, "msg": "Event duration Max Allowed hours is 10"}
+        # min_duration = datetime.datetime.strptime("10:00", "%H:%M").time()
+        # if event_duration > min_duration:
+        #     return {"status": 0, "msg": "Event duration Max Allowed hours is 10"}
 
         event_type = int(event_type) if event_type else None
         access_token = checkToken(db, token)
@@ -9373,32 +9486,25 @@ async def uploadchatattachment(
             get_token_details = (
                 db.query(ApiTokens.user_id).filter(ApiTokens.token == access_token).first()
             )
-            login_user_id = get_token_details.user_id
 
-            readed_file = await chatattachment.read()
-            file_size = len(readed_file)
             file_ext = os.path.splitext(chatattachment.filename)[1]
 
-            if file_size > 100000000:
-                return {"status": 0, "msg": "Max 100MB allowed"}
+            uploaded_file_path = await file_upload(
+                chatattachment, file_ext, compress=None
+            )
+            s3_file_path = f"chat/attachment_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
 
+            result = upload_to_s3(uploaded_file_path, s3_file_path)
+            if result["status"] == 1:
+                return {
+                    "status": 1,
+                    "msg": "Success",
+                    "filepath": result["url"],
+                    "refid": refid,
+                    "file_type": file_ext.replace(".", ""),
+                }
             else:
-                uploaded_file_path = await read_file_upload(
-                    readed_file, file_ext, compress=None
-                )
-                s3_file_path = f"chat/attachment_{random.randint(1111,9999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-
-                result = upload_to_s3(uploaded_file_path, s3_file_path)
-                if result["status"] == 1:
-                    return {
-                        "status": 1,
-                        "msg": "Success",
-                        "filepath": result["url"],
-                        "refid": refid,
-                        "file_type": file_ext.replace(".", ""),
-                    }
-                else:
-                    return {"status": 0, "msg": "Not able to upload"}
+                return {"status": 0, "msg": "Not able to upload"}
 
 
 # 47. List Notifications
@@ -9777,10 +9883,11 @@ async def listnotifications(
                                 else None,
                             }
                         )
-
+                # Event Notification
+                event_type=[9,10,13,14]
                 total_unread_count = (
                     db.query(Notification)
-                    .filter_by(status=1, is_read=0, user_id=login_user_id)
+                    .filter_by(status=1, is_read=0, user_id=login_user_id).filter(Notification.notification_type.not_in(event_type))
                     .count()
                 )
 
@@ -10031,7 +10138,7 @@ async def getothersprofile(
         return {"status": 0, "msg": "User ID missing"}
 
     else:
-        access_token = checkToken(db, token)
+        access_token = checkToken(db, token) if token != "RAWCAST" else True
 
         if checkAuthCode(auth_code, token) == False:
             return {"status": 0, "msg": "Authentication failed!"}
@@ -10137,6 +10244,13 @@ async def getothersprofile(
                             .first()
                         )
 
+                        # Generate Profile URL
+                        token_text=f"{get_user.id}rawcaster@!@#$QWERTxcvbn"
+                        hashed_user_ref_id=generateLink(token_text)
+                        
+                        invite_url = inviteBaseurl()
+                        join_link = f"{invite_url}viewprofile/{hashed_user_ref_id}"
+
                         result_list = {
                             "user_id": user_id,
                             "user_ref_id": get_user.user_ref_id
@@ -10173,9 +10287,10 @@ async def getothersprofile(
                             )
                             if get_user.geo_location
                             else "",
-                            "bio_data": ProfilePreference(
-                                db, login_user_id, get_user.id, field, get_user.bio_data
-                            ),
+                            # "bio_data": ProfilePreference(
+                            #     db, login_user_id, get_user.id, field, get_user.bio_data
+                            # ),
+                            "bio_data":get_user.bio_data if get_user.bio_data else "",
                             "profile_image": get_user.profile_img
                             if get_user.profile_img
                             else defaultimage("profile_img"),
@@ -10269,6 +10384,10 @@ async def getothersprofile(
                             "chime_user_id": get_user.chime_user_id
                             if get_user.chime_user_id
                             else None,
+                            "profile_url":join_link,
+                            "influencer_category": get_user.influencer_category
+                                if get_user.influencer_category
+                                else "",
                         }
 
                         return {"status": 1, "msg": "Success", "profile": result_list}
@@ -10534,6 +10653,19 @@ async def blockunblockuser(
                         db.query(FriendGroupMembers).filter_by(id=frnds.id).delete()
                     )
                     db.commit()
+                
+                # Unfolow User
+                del_follow_user = (
+                        db.query(FollowUser)
+                        .filter(
+                            FollowUser.follower_userid == login_user_id,
+                            FollowUser.following_userid == user_id,
+                        )
+                        .delete()
+                    )
+                db.commit()
+                
+                return {"status":1,"msg":"Successfully blocked."}
 
             else:
                 get_friend_requests = (
@@ -10555,7 +10687,7 @@ async def blockunblockuser(
                     )
                     db.commit()
 
-            return {"status": 1, "msg": "Success"}
+                return {"status": 1, "msg": "Successfully unblocked."}
 
 
 # 54. Get User Settings
@@ -10769,13 +10901,11 @@ async def getusersettings(db: Session = Depends(deps.get_db), token: str = Form(
                         UserProfileDisplayGroup.user_id == login_user_id,
                         UserProfileDisplayGroup.profile_id == "public_event_display",
                     )
-                    .all()
-                )
+                    .all())
+                
                 if online_group_list:
-                    list = []
-                    for gp_list in online_group_list:
-                        list.append(gp_list.groupid)
-                    result_list.update({"event_display_list": list})
+                    list.append(gp_list.groupid)
+                result_list.update({"event_display_list": list})
             else:
                 result_list.update({"event_display_list": []})
 
@@ -10798,7 +10928,7 @@ async def getusersettings(db: Session = Depends(deps.get_db), token: str = Form(
                         "title": user_default_melody.title,
                     }
                 )
-
+           
             result_list.update(
                 {
                     "event_type": get_user_settings.default_event_type,
@@ -10849,17 +10979,17 @@ async def getusersettings(db: Session = Depends(deps.get_db), token: str = Form(
                     else "",
                     "read_out_language_id": get_user_settings.read_out_language_id
                     if get_user_settings.read_out_language_id
-                    else 3,
+                    else 27,
                     "read_out_language": get_user_settings.read_out_language.language
                     if get_user_settings.read_out_language_id
-                    else "",
+                    else "English",
                     "read_out_accent_id":get_user_settings.read_out_accent_id 
                     if get_user_settings.read_out_accent_id 
-                    else None,
+                    else 1,
                     "read_out_accent_name":get_user_settings.read_out_accent.accent 
                     if get_user_settings.read_out_accent_id 
-                    else "",
-                    "opt_in":1 if get_user_settings.opt_in else 0
+                    else "United States",
+                    "opt_in":1 if get_user_settings.opt_in else 0,
                     
                 }
             )
@@ -11857,8 +11987,11 @@ async def globalsearchevents(
                 limit, offset, total_pages = get_pagination(
                     get_row_count, current_page_no, default_page_size
                 )
-                
-                event_list=criteria.order_by(Events.start_date_time.desc()).limit(limit).offset(offset).all()
+                if search_key:
+                    event_list=criteria.order_by(Events.start_date_time.desc()).limit(limit).offset(offset).all()
+                else:
+                    event_list=criteria.order_by(Events.start_date_time.asc()).limit(limit).offset(offset).all()
+
                 result_list = []
                 if event_list:
                     waiting_room = 0
@@ -13139,7 +13272,7 @@ async def followandunfollow(
                                     "ChimeAppInstanceUserArn"
                                 ]
                                 # Update User Chime ID
-                                get_user=db.query(User).filter(User.id == add_frnd_group.user_id).update({"chime_user_id":user_arn})
+                                update_chime_id=db.query(User).filter(User.id == add_frnd_group.user_id).update({"chime_user_id":user_arn})
                                 member_id=user_arn
                         else:
                             member_id = (
@@ -13147,14 +13280,13 @@ async def followandunfollow(
                             if add_frnd_group.user.chime_user_id
                             else None
                         )
-                             
+                        
                         try:
                             addmembers(channel_arn, chime_bearer, member_id)
                         except Exception as e:
                             print(f"Follow:{e}")
 
-                        get_influence_count = croninfluencemember(db, get_user.id)
-
+                        get_influence_count = upgradeMember(db, get_user.id)
                         return {
                             "status": 1,
                             "msg": f"Now you are fan of {add_follow_user.user2.display_name}",
@@ -13199,11 +13331,9 @@ async def followandunfollow(
                             print(f"UnFollow:{e}")
                             
                         delFriendGroups=get_friend_group_member.delete()
-                        
-                        db.commit()  # Remove member in Friend group member table
+                        db.commit()
 
                     msg = f"{follow_user.user2.display_name if follow_user else ''} not influencing you"
-                    get_influence_count = croninfluencemember(db, get_user.id)
                     # notification_type=15
                     # add_notification=Insertnotification(db,follow_userid,login_user_id,notification_type,add_frnd_group.id)
 
@@ -13216,6 +13346,9 @@ async def followandunfollow(
                         .delete()
                     )
                     db.commit()
+                    
+                    # Membership Update
+                    get_influence_count = upgradeMember(db, get_user.id)
 
                     return {"status": 1, "msg": msg}
 
@@ -13252,7 +13385,7 @@ async def getfollowlist(
         return {"status": 0, "msg": "Invalid page Number"}
     else:
         type = int(type) if type else None
-        access_token = checkToken(db, token)
+        access_token = checkToken(db, token) if token != "RAWCAST" else True
 
         if access_token == False:
             return {
@@ -13547,6 +13680,7 @@ async def addnuggetview(
                 nugget_id = int(nugget_id) if int(nugget_id) > 0 else ""
 
                 access_check = NuggetAccessCheck(db, login_user_id, nugget_id)
+                
                 if not access_check:
                     return {"status": 0, "msg": "Unauthorized access"}
 
@@ -13625,7 +13759,7 @@ async def getreferrallist(
                     "status": 1,
                     "msg": "No Result found",
                     "referral_count": referral_count,
-                    "referral_needed_count": referral_need_count,
+                    "referral_needed_count": referral_need_count if referral_need_count > 0 else 0,
                     "current_page_no": 1,
                 }
             else:
@@ -13665,7 +13799,7 @@ async def getreferrallist(
                     "status": 1,
                     "msg": "Success",
                     "referral_count": referral_count,
-                    "referral_needed_count": referral_need_count,
+                    "referral_needed_count": referral_need_count if referral_need_count > 0 else 0,
                     "total_pages": total_pages,
                     "current_page_no": current_page_no,
                     "referral_list": result_list,
@@ -13822,9 +13956,11 @@ async def addliveevent(
                     .first()
                 )
 
-                duration = userstatus.max_event_duration * 3600
+                max_event_duration = userstatus.max_event_duration
+                duration= timedelta(minutes=int(max_event_duration[:2]), seconds=int(max_event_duration[3:]))
+
                 duration = (
-                    datetime.datetime.min + timedelta(seconds=duration)
+                    datetime.datetime.min + duration
                 ).strftime("%H:%M:%S")
 
                 reference_id = f"RC{str(random.randint(1, 499))}{str(int(datetime.datetime.utcnow().timestamp()))}"
@@ -13881,18 +14017,17 @@ async def addliveevent(
                     if event_banner:
                         file_name = event_banner.filename
                         file_temp = event_banner.content_type
-                        file_read = await event_banner.read()
-                        file_size = len(file_read)
+                      
                         file_ext = os.path.splitext(event_banner.filename)[1]
 
-                        type = "image"
+                        file_type = "image"
                         if "video" in file_temp:
-                            type = "video"
+                            file_type = "video"
 
-                        if file_size > 1024 and type == "image" and file_ext != ".gif":
+                        if file_type == "image" and file_ext != ".gif":
                             s3_path = f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                            uploaded_file_path = await read_file_upload(
-                                file_read, file_ext, compress=1
+                            uploaded_file_path = await file_upload(
+                                event_banner, file_ext, compress=1
                             )
 
                             result = upload_to_s3(uploaded_file_path, s3_path)
@@ -13904,8 +14039,8 @@ async def addliveevent(
                                 return result
                         else:
                             s3_path = f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
-                            uploaded_file_path = await read_file_upload(
-                                file_read, file_ext, compress=None
+                            uploaded_file_path = await file_upload(
+                                event_banner, file_ext, compress=None
                             )
 
                             result = upload_to_s3(uploaded_file_path, s3_path)
@@ -14027,7 +14162,7 @@ async def addliveevent(
 
                     return {
                         "status": 1,
-                        "msg": "Event saved successfully !",
+                        "msg": "Event Created Successfully !",
                         "ref_id": reference_id,
                         "event_detail": event,
                     }
@@ -14210,22 +14345,22 @@ async def editliveevent(
 
                 # Upload Banner Image
                 if event_banner:
-                    file_name = event_banner.filename
                     file_temp = event_banner.content_type
-                    file_read = await event_banner.read()
-                    file_size = len(file_read)
+        
                     file_ext = os.path.splitext(event_banner.filename)[1]
 
-                    type = "image"
-                    if "video" in file_temp:
-                        type = "video"
+                     # Compress Image
+                    compress = 1
+                    uploaded_file_path = await file_upload(
+                        event_banner, file_ext, compress
+                    )
 
-                    if file_size > 1024 and type == "image" and file_ext != ".gif":
-                        # Compress Image
-                        compress = 1
-                        uploaded_file_path = await read_file_upload(
-                            file_read, file_ext, compress
-                        )
+                    file_type = "image"
+                    if "video" in file_temp:
+                        file_type = "video"
+
+                    if file_type == "image" and file_ext != ".gif":
+                       
 
                         s3_path = f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                         # Upload to S3
@@ -14237,10 +14372,6 @@ async def editliveevent(
                         else:
                             return result
                     else:
-                        compress = None
-                        uploaded_file_path = await read_file_upload(
-                            file_read, file_ext, compress
-                        )
 
                         s3_path = f"events/image_{random.randint(11111,99999)}{int(datetime.datetime.utcnow().timestamp())}{file_ext}"
                         result = upload_to_s3(uploaded_file_path, s3_path)
@@ -14478,13 +14609,13 @@ async def addgoliveevent(
                     event = get_event_detail(db, new_event.id, login_user_id)
                     return {
                         "status": 1,
-                        ",msg": "Go Live event saved successfully !",
+                        "msg": "Go Live event created successfully !",
                         "ref_id": reference_id,
                         "event_detail": event,
                     }
 
                 else:
-                    return {"status": 0, ",msg": "Go Live event cant be created."}
+                    return {"status": 0, "msg": "Go Live event cant be created."}
 
 
 # 77 Enable golive event
@@ -14634,11 +14765,13 @@ async def getinfluencercategory(
                         FollowUser.follower_userid == login_user_id
                     ).all()
                     user_ids=set([follower.following_userid for follower in get_followers])
-                    
+                
                     # Get Category
-                    get_category=db.query(User.influencer_category).filter(User.id != login_user_id,User.id.in_(user_ids),User.status == 1,User.influencer_category != None).all()
-                    category_ids=set([category.influencer_category for category in get_category])
-                    influencer_category_ids= [int(item) for sublist in category_ids for item in sublist.split(',')]
+                    get_category=db.query(User.influencer_category).filter(User.id != login_user_id,User.id.in_(user_ids),User.status == 1,and_(User.influencer_category != None,User.influencer_category != "")).all()
+                   
+                    category_ids=set([category.influencer_category for category in get_category]) if get_category else None
+                    
+                    influencer_category_ids= ([int(item) for sublist in category_ids for item in sublist.split(',')]) if category_ids else []
 
                     for category in GetInfluencerCategory:
                         result_list.append(
@@ -14689,6 +14822,7 @@ async def socialmedialogin(
     password: str = Form(None),
     login_from: str = Form(None),
     signup_social_ref_id: str = Form(None),
+    country_id:str=Form(None)
 ):
     if auth_code.strip() == "" or auth_code.strip() == None:
         return {"status": 0, "msg": "Auth Code is missing"}
@@ -14804,6 +14938,8 @@ async def socialmedialogin(
 
             if check_email_id:
                 email_id=email_id if email_id else check_email_id.email_id
+                
+
                 reply = await logins(
                     db,
                     email_id,
@@ -14818,10 +14954,11 @@ async def socialmedialogin(
                     user_ip
 
                 )
-            
                 return reply
 
             if check_phone:
+                mobile_no=mobile_no if mobile_no else check_phone.mobile_no
+
                 reply = await logins(
                     db,
                     email_id,
@@ -14839,12 +14976,14 @@ async def socialmedialogin(
                 return reply
 
             else:
-                userIP = request.client.host
+                # userIP = request.client.host
+                userIP=get_ip()
+
                 
                 display_name = (
-                    f"{first_name.strip()} {last_name.strip()}"
+                    f'{first_name.strip() if first_name else ""} {last_name.strip() if last_name else ""}'
                     if last_name
-                    else first_name.strip()
+                    else (first_name.strip() if first_name else "")
                 )
                 last_name = last_name.strip() if last_name else None
                 
@@ -14857,7 +14996,7 @@ async def socialmedialogin(
                         latitude = Location_details["latitude"]
                         longitude = Location_details["longitude"]
 
-                country_id = None
+                # country_id = None
                 if mobile_no:
                     mobile_check = CheckMobileNumber(db, mobile_no, geo_location)
                     if not mobile_check:
@@ -14868,7 +15007,7 @@ async def socialmedialogin(
                     else:
                         if mobile_check["status"] and mobile_check["status"] == 1:
                             country_code = mobile_check["country_code"]
-                            country_id = mobile_check["country_id"]
+                            # country_id = mobile_check["country_id"]
                             mobile_no = mobile_check["mobile_no"]
                         else:
                             return mobile_check
@@ -14929,7 +15068,7 @@ async def socialmedialogin(
                         nuggets="000",
                         events="000",
                         status=1,
-                        read_out_language_id=27,
+                        read_out_language_id=27, # Default Language
                         read_out_accent_id=1
                     )
                     db.add(user_settings_model)
@@ -15071,7 +15210,103 @@ async def socialmedialogin(
                                             )
                                         except Exception as e:
                                             print(f"Referrer:{e}")
+                        
+                        if len(referrer_ref_id) == 3:
+                            group_login=1
+                            referred_user = (
+                                db.query(User)
+                                .filter(
+                                    User.user_ref_id == referrer_ref_id[0],
+                                    User.status == 1,
+                                )
+                                .first()
+                            )
+                            if referred_user:
+                                referred_id = referred_user.id
+                                # update referrer id
+                                update_referrer = (
+                                    db.query(User)
+                                    .filter(User.id == model.id)
+                                    .update(
+                                        {
+                                            "referrer_id": referred_user.id,
+                                            "invited_date": referrer_ref_id[1],
+                                        }
+                                    )
+                                )
+                                db.commit()
 
+                                ref_friend = MyFriends(
+                                    sender_id=referred_user.id,
+                                    receiver_id=model.id,
+                                    request_date=datetime.datetime.utcnow(),
+                                    request_status=1,
+                                    status_date=None,
+                                    status=1,
+                                )
+                                db.add(ref_friend)
+                                db.commit()
+                                # Add Friend Group
+                                group_id=referrer_ref_id[2]
+
+                                get_friend_group = (
+                                    db.query(FriendGroups)
+                                    .filter(
+                                        FriendGroups.id == group_id
+                                    )
+                                    .first()
+                                )
+
+                                if get_friend_group:
+                                    group_name=get_friend_group.group_name
+
+                                    add_follow_user = FollowUser(
+                                        follower_userid=model.id,
+                                        following_userid=referred_user.id,
+                                        created_date=datetime.datetime.utcnow(),
+                                    )
+                                    db.add(add_follow_user)
+                                    db.commit()
+
+                                    # Check FriendGroupMembers
+                                    friend_group_member = (
+                                        db.query(FriendGroupMembers)
+                                        .filter(
+                                            FriendGroupMembers.group_id
+                                            == get_friend_group.id,
+                                            FriendGroupMembers.user_id
+                                            == referred_user.id,
+                                        )
+                                        .all()
+                                    )
+
+                                    if not friend_group_member:
+                                        add_friend_group_member = FriendGroupMembers(
+                                            group_id=get_friend_group.id,
+                                            user_id=model.id,
+                                            added_date=datetime.datetime.utcnow(),
+                                            added_by=referred_user.id,
+                                            is_admin=0,
+                                            disable_notification=1,
+                                            status=1,
+                                        )
+                                        db.add(add_friend_group_member)
+                                        db.commit()
+
+                                        # Add Members in Channel
+                                        channel_arn = channel_arn
+                                        chime_bearer = user_arn
+                                        member_id = (
+                                            list(referred_user.chime_user_id)
+                                            if referred_user.chime_user_id
+                                            else None
+                                        )
+                                        try:
+                                            addmembers(
+                                                channel_arn, chime_bearer, member_id
+                                            )
+                                        except Exception as e:
+                                            print(f"Referrer:{e}")
                     # Referral Auto Add Friend Ends
                     rawcaster_support_id = GetRawcasterUserID(db, 2)  # Type = 2
                     if rawcaster_support_id and referred_id != rawcaster_support_id:
@@ -15187,7 +15422,7 @@ async def influencerlist(
                 isouter=True,
             )
             criteria = criteria.filter(User.id != login_user_id, User.status == 1)
-            criteria = criteria.filter(FollowUser.id == None)
+            criteria = criteria.filter(FollowUser.id == None,UserStatusMaster.type == 2) # type 2 means influencer
 
             # Omit blocked users
             get_all_blocked_users = get_friend_requests(
@@ -15517,7 +15752,7 @@ async def influencerfollow(
                             failed = failed + 1
 
                 if total == success:
-                    return {"status": 1, "msg": "Success"}
+                    return {"status": 1, "msg": "Followed Successfully"}
                 else:
                     return {"status": 0, "msg": reason}
 
@@ -15616,7 +15851,6 @@ async def pollvote(
 
 # 83.Tags List
 
-
 @router.post("/tagslist")
 async def tagslist(
     db: Session = Depends(deps.get_db),
@@ -15659,7 +15893,10 @@ async def tagslist(
                         NuggetHashTags.hash_tag,
                         NuggetHashTags.country_id,
                         func.count(Nuggets.id).label("total_nuggets"),
-                    )
+                        Country.name.label("country_name")
+                    ).join(NuggetsMaster,NuggetsMaster.id == NuggetHashTags.nugget_master_id,isouter=True)\
+                    .join(Nuggets,NuggetHashTags.nugget_id == Nuggets.id,isouter=True)\
+                    .join(Country,Country.id == NuggetHashTags.country_id,isouter=True)\
                     .filter(
                         NuggetHashTags.nugget_master_id == NuggetsMaster.id,
                         NuggetHashTags.nugget_id == Nuggets.id,
@@ -15690,7 +15927,7 @@ async def tagslist(
                     limit, offset, total_pages = get_pagination(
                         get_nuggets_count, current_page_no, default_page_size
                     )
-                    get_nuggets = get_nuggets.order_by(NuggetHashTags.hash_tag.asc())
+                    get_nuggets = get_nuggets.order_by(desc('total_nuggets'))
                     get_nuggets = get_nuggets.limit(limit).offset(offset)
 
                     result_list = []
@@ -15719,6 +15956,7 @@ async def tagslist(
                         )
 
                         trends = []
+                       
                         for i in range(25):
                             if nuggettrend:
                                 for trend in nuggettrend:
@@ -15738,7 +15976,9 @@ async def tagslist(
                             {
                                 "tag": nug.hash_tag,
                                 "nugget_count": nug.total_nuggets,
-                                "country": nug.country_id,
+                                "country": ((nug.country_name if nug.country_name else None) 
+                                            if nug.country_id else None),
+                                "country_id":nug.country_id,
                                 "trends": trends,
                             }
                         )
@@ -15805,12 +16045,12 @@ async def saveandunsavenugget(
             check_nuggets = db.query(Nuggets).filter(Nuggets.id == nugget_id).first()
             if check_nuggets:
                 get_saved_nugget = (
-                    db.query(NuggetsSave)
-                    .filter(
-                        NuggetsSave.user_id == login_user_id, NuggetsSave.status == 1
-                    )
+                    db.query(NuggetsSave).join(Nuggets,Nuggets.id == NuggetsSave.nugget_id)
+                    .join(NuggetsMaster,Nuggets.nuggets_id == NuggetsMaster.id,isouter=True)
+                    .filter(NuggetsSave.user_id == login_user_id, NuggetsSave.status == 1,
+                            Nuggets.nugget_status == 1,NuggetsMaster.status == 1)
                     .count()
-                )
+                    )
 
                 if save == 1:  # Save
                     checkprevioussave = (
@@ -15890,7 +16130,7 @@ async def saveandunsavenugget(
 
 
 @router.post("/exitfromgroup")
-async def saveandunsavenugget(
+async def exitfromgroup(
     db: Session = Depends(deps.get_db),
     token: str = Form(None),
     group_id: str = Form(None),
@@ -16084,6 +16324,9 @@ async def getUrlMetaData(
             for site_url in metaDataUrl:
                 try:
                     # Send a GET request to the URL
+                    if not site_url.startswith('http://') and not site_url.startswith('https://'):
+                        site_url = 'https://' + site_url
+
                     response = requests.get(site_url)
 
                     # Parse the HTML content of the page using BeautifulSoup
@@ -16102,7 +16345,7 @@ async def getUrlMetaData(
                             "open_graph_title": metadata['og_title'],
                             "open_graph_description": metadata['og_description'],
                             "open_graph_image":metadata['og_image']})
-                    
+                        
                     
                 except Exception as e:
                     print(f"Error: {e}")
@@ -16169,14 +16412,3 @@ async def chatEnableDisable(
                 
             else:
                 return {"status": 0, "msg": "Invalid Group Id"}
-
-
-            
-
-# GEt Country
-@router.post("/getCountry")
-async def getcountry(
-    db: Session = Depends(deps.get_db),
-):
-    s=CheckMobileNumber(db,"8903257051","Coimbatore, Tamil Nadu, India.")
-    return s

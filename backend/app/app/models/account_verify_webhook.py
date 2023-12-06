@@ -7,11 +7,14 @@ from app.db.base_class import Base
 class AccountVerifyWebhook(Base):
     __tablename__ = "account_verify_webhook"
     id = Column(Integer, primary_key=True)
+    scan_ref=Column(String(255))
+    client_id=Column(String(255))
+    verify_status=Column(String(100))
     request = Column(TEXT)
     response=Column(TEXT)
     created_at = Column(DateTime)
+    verify_seen_status=Column(TINYINT,default=0,comment="1-seen,0-unseen")
     status = Column(TINYINT, comment="0->Inactive, 1->Active,-1-delete")
 
 
 
-    # CREATE TABLE `rawcaster`.`account_verify_webhook` ( `id` INT NOT NULL AUTO_INCREMENT , `request` TEXT NULL , `response` TEXT NULL , `created_at` DATETIME NULL , `status` TINYINT NULL COMMENT '0->Inactive, 1->Active,-1-delete' , PRIMARY KEY (`id`)) ENGINE = InnoDB; 
