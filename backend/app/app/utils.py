@@ -2483,6 +2483,11 @@ def ChangeReferralExpiryDate(db, referrerid):
         db.commit()
 
 
+def removeZeroFromNumber(mobile_no):
+    mobile_no=mobile_no.lstrip('0')
+    return mobile_no
+    
+
 def checkToken(db, access_token):
     try:
         access_token = access_token.strip()
