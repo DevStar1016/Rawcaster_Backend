@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user
+  namespace: prod
+  labels:
+    app: user
+  # namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: user
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: user
+    spec:
+      containers:
+        - name: user
+          image: 562114208112.dkr.ecr.us-east-1.amazonaws.com/rawcaster-python-api-prod:ai_and_chime
+          imagePullPolicy: Always
+          envFrom:
+          - secretRef:
+              name: rawcaster-secret-env
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1024Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    name: user
+  name: user
+  namespace: prod
+spec:
+  type: NodePort
+  ports:
+    - name: user
+      port: 80
+      targetPort: 80
+  selector:
+    app: user
