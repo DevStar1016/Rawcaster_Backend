@@ -43,14 +43,12 @@ base_domain_url = ""
 
 base_url_segment = "/rawcaster"
 base_upload_folder = "local_uploads"
-# Dev
-# data_base =credentials['db_connection']
 
-# Local
-data_base = "mysql+pymysql://maemysqluser:%s@192.168.1.109/rawcaster" % quote("MaeNewMysql2@2@")
+data_base = "mysql+pymysql://maemysqluser:%s@192.168.1.109/rawcaster_production" % quote("MaeNewMysql2@2@")
 
 api_doc_path = "/docs"
 
+# AI - ChatGPT
 open_ai_key=credentials['open_ai_key']
 
 # SMS Credentials
@@ -62,12 +60,8 @@ email_username=credentials['email_username']
 email_password=credentials['email_password']
 
 # ID Verification 
-idenfy_api_key="bpCwxSYDCuo"
-idenfy_secret_key='s7eXCWA0dOEqLuiaeqvu'
-
-#  Production
-# idenfy_api_key="VZKR14voA2J"
-# idenfy_secret_key="2j0Aps2XTgmgr6Olvznh"
+idenfy_api_key=credentials['idenfy_api_key']
+idenfy_secret_key=credentials['idenfy_secret_key']
 
 
 class Settings(BaseSettings):

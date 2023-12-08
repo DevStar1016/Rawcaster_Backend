@@ -13,6 +13,7 @@ import json
 from pydub import AudioSegment
 import googletrans
 from requests.auth import HTTPBasicAuth
+import subprocess
 
 router = APIRouter()
 
@@ -1672,14 +1673,12 @@ def download_video_from_url(url, download_path):
     return 1
 
 
-import subprocess
-
 
 @router.post("/script_split_nugget_attachment")
 def split_nugget_attachment(
     db: Session = Depends(deps.get_db)
 ):
-    getNuggetAttachment=db.query(NuggetsAttachment).filter(NuggetsAttachment.media_type == "video",
+    getNuggetAttachment=db.query(NuggetsAttachment).filter(NuggetsAttachment.media_type == "video",NuggetsAttachment.id == 2597,
                                                            NuggetsAttachment.status == 1).order_by(NuggetsAttachment.id.desc()).all()
     
     for nug_att in getNuggetAttachment:
@@ -1810,8 +1809,9 @@ def split_nugget_attachment(
                                 nuggets_id=getNuggetMaster.nuggets_id if row == 0 else add_nuggets_master.id,
                                 user_id=getNuggetMaster.user_id,
                                 type=1,
+                                total_view_count=getNuggetMaster.total_view_count,
                                 share_type=getNuggetMaster.share_type,
-                                created_date=getNuggetMaster.created_date,
+                                created_date=getNuggetMaster.created_date + timedelta(seconds=5 + row) ,
                             )
                             db.add(add_nuggets)
                             db.commit()
