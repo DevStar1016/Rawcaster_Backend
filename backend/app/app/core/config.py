@@ -3,11 +3,21 @@ from pydantic import AnyHttpUrl, BaseSettings, validator
 from fastapi import Query
 from fastapi_pagination.default import Page as BasePage, Params as BaseParams
 import pytz
+from urllib.parse import quote
 import boto3
 import json
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
+
+secret_manager_key = os.getenv("AWS_SECRET_MANAGER_KEY")
 # AWS Credentials
+                # ---------- Old
+# access_key = "AKIAYFYE6EFYG6RJOPMF"
+# access_secret = "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"
 
+                # ---------  New
 access_key='AKIAYFYE6EFYMSZ77V3H'
 access_secret='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'
 bucket_name = "rawcaster"
@@ -17,7 +27,7 @@ client = boto3.client('secretsmanager',  aws_access_key_id=access_key,
             aws_secret_access_key=access_secret,
             region_name="us-east-1")
 
-get_secret_value_response = client.get_secret_value(SecretId='prod_rawcaster_credentials')
+get_secret_value_response = client.get_secret_value(SecretId=secret_manager_key)
 credentials =json.loads(get_secret_value_response['SecretString'])
 
 
@@ -39,8 +49,7 @@ base_domain_url = ""
 base_url_segment = "/rawcaster"
 base_upload_folder = "local_uploads"
 
-# Dev DB Connection Details
-data_base =credentials['db_connection']
+data_base = "mysql+pymysql://maemysqluser:%s@192.168.1.109/rawcaster_production" % quote("MaeNewMysql2@2@")
 
 api_doc_path = "/docs"
 
