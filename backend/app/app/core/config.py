@@ -6,9 +6,9 @@ import pytz
 from urllib.parse import quote
 import boto3
 import json
-import env
 
-secret_manager_key=env.AWS_SECRET_MANAGER_KEY
+
+secret_manager_key="dev_rawcaster_credentials"
 # AWS Credentials
                 # ---------- Old
 # access_key = "AKIAYFYE6EFYG6RJOPMF"
