@@ -6,7 +6,12 @@ import pytz
 from urllib.parse import quote
 import boto3
 import json
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
+
+secret_manager_key = os.getenv("AWS_SECRET_MANAGER_KEY")
 # AWS Credentials
                 # ---------- Old
 # access_key = "AKIAYFYE6EFYG6RJOPMF"
@@ -22,7 +27,7 @@ client = boto3.client('secretsmanager',  aws_access_key_id=access_key,
             aws_secret_access_key=access_secret,
             region_name="us-east-1")
 
-get_secret_value_response = client.get_secret_value(SecretId='dev_rawcaster_credentials')
+get_secret_value_response = client.get_secret_value(SecretId=secret_manager_key)
 credentials =json.loads(get_secret_value_response['SecretString'])
 
 
