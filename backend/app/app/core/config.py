@@ -12,6 +12,7 @@ import os
 load_dotenv()
 
 secret_manager_key = os.getenv("AWS_SECRET_MANAGER_KEY")
+print(secret_manager_key)
 # AWS Credentials
                 # ---------- Old
 # access_key = "AKIAYFYE6EFYG6RJOPMF"
