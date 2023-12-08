@@ -17,7 +17,7 @@ client = boto3.client('secretsmanager',  aws_access_key_id=access_key,
             aws_secret_access_key=access_secret,
             region_name="us-east-1")
 
-get_secret_value_response = client.get_secret_value(SecretId='dev_rawcaster_credentials')
+get_secret_value_response = client.get_secret_value(SecretId='prod_rawcaster_credentials')
 credentials =json.loads(get_secret_value_response['SecretString'])
 
 
