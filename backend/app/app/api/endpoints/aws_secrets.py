@@ -26,11 +26,12 @@ client = boto3.client('secretsmanager',  aws_access_key_id=access_key,
 @router.post("/createsecret")
 async def createsecret(db:Session=Depends(deps.get_db)):
     # Create the secret name
-    secret_name = "dev_rawcaster_credentials"
+    secret_name = "prod_rawcaster_credentials"
 
     # Create the secret value
     secret_value = """
-    {
+   {
+   
     }
     """
     # Create the secret
@@ -42,7 +43,7 @@ async def createsecret(db:Session=Depends(deps.get_db)):
 @router.post("/get_secret")
 async def get_secret(db:Session=Depends(deps.get_db),secret_name:str=Form(None)):
      
-    get_secret_value_response = client.get_secret_value(SecretId='rawcaster_dev_credentials')
+    get_secret_value_response = client.get_secret_value(SecretId='prod_rawcaster_credentials')
     
     data=get_secret_value_response['SecretString']
     return data

@@ -3,16 +3,11 @@ from pydantic import AnyHttpUrl, BaseSettings, validator
 from fastapi import Query
 from fastapi_pagination.default import Page as BasePage, Params as BaseParams
 import pytz
-from urllib.parse import quote
 import boto3
 import json
 
 # AWS Credentials
-                # ---------- Old
-# access_key = "AKIAYFYE6EFYG6RJOPMF"
-# access_secret = "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"
 
-                # ---------  New
 access_key='AKIAYFYE6EFYMSZ77V3H'
 access_secret='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'
 bucket_name = "rawcaster"
@@ -45,16 +40,11 @@ base_url_segment = "/rawcaster"
 base_upload_folder = "local_uploads"
 
 # Dev DB Connection Details
-# data_base =credentials['db_connection']
-
-# Production Database
-data_base="mysql+pymysql://admin:Rawcaster1234@rawcasterprodrds-mysqlauroradb-pjt8ng5cdklx.cluster-c3xecvdvxfvf.us-east-1.rds.amazonaws.com/rawcasterproddb"
-
-# data_base ='mysql+pymysql://mdbuser:%s@rawcasterprodrds-mysqlauroradb-pjt8ng5cdklx.cluster-c3xecvdvxfvf.us-east-1.rds.amazonaws.com/rawcaster_production' % quote('M@estr0123!')
-
+data_base =credentials['db_connection']
 
 api_doc_path = "/docs"
 
+# AI - ChatGPT
 open_ai_key=credentials['open_ai_key']
 
 # SMS Credentials
@@ -66,12 +56,8 @@ email_username=credentials['email_username']
 email_password=credentials['email_password']
 
 # ID Verification 
-# idenfy_api_key="bpCwxSYDCuo"
-# idenfy_secret_key='s7eXCWA0dOEqLuiaeqvu'
-
-#  Production
-idenfy_api_key="VZKR14voA2J"
-idenfy_secret_key="2j0Aps2XTgmgr6Olvznh"
+idenfy_api_key=credentials['idenfy_api_key']
+idenfy_secret_key=credentials['idenfy_secret_key']
 
 
 class Settings(BaseSettings):

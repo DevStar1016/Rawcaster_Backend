@@ -251,7 +251,7 @@ async def signup(
                     gender=gender if gender != None else None,
                     dob=dob,
                     country_code=country_code,
-                    mobile_no=mobile_no,
+                    mobile_no=removeZeroFromNumber(mobile_no) if mobile_no else None,
                     cover_image=defaultimage("cover_img"),
                     is_mobile_no_verified=0,
                     country_id=country_id,
@@ -1097,6 +1097,8 @@ async def forgotpassword(
         if checkAuthCode(auth_code, auth_text) == False:
             return {"status": 0, "msg": "Authentication failed!"}
         else:
+            if username.isnumeric():
+                username= removeZeroFromNumber(username) if username else None,
            
             get_user = (
                 db.query(User.id,User.status,User.country_code,User.mobile_no,User.email_id)
@@ -1781,6 +1783,10 @@ async def updatemyprofile(
             if checkAuthCode(auth_code, auth_text) == False:
                 return {"status": 0, "msg": "Authentication failed!"}
             else:
+
+                if mobile_no:
+                    mobile_no=removeZeroFromNumber(mobile_no) if mobile_no else None
+
                 get_token_details = (
                     db.query(ApiTokens.user_id).filter(ApiTokens.token == access_token).first()
                 )
@@ -15022,7 +15028,7 @@ async def socialmedialogin(
                     gender=gender,
                     dob=dob,
                     country_code=country_code,
-                    mobile_no=mobile_no,
+                    mobile_no=removeZeroFromNumber(mobile_no) if mobile_no else None,
                     is_mobile_no_verified=0, # 0->No, 1->Yes
                     country_id=country_id,
                     user_code=None,
@@ -15600,9 +15606,10 @@ async def influencerfollow(
                             FollowUser.follower_userid == login_user_id,
                         ),
                         isouter=True,
-                    )
+                    ).join(UserStatusMaster,UserStatusMaster.id == User.user_status_id,isouter=True)
+
                     criteria = criteria.filter(
-                        User.id != login_user_id, User.status == 1
+                        User.id != login_user_id, User.status == 1,UserStatusMaster.type == 2
                     )
                     criteria = criteria.filter(FollowUser.id == None)
 
