@@ -42,7 +42,6 @@ base_upload_folder = "local_uploads"
 # Dev DB Connection Details
 data_base =credentials['db_connection']
 
-
 api_doc_path = "/docs"
 
 # AI - ChatGPT
