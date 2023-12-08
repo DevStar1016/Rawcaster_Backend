@@ -9,10 +9,11 @@ import json
 from dotenv import load_dotenv
 import os
 
-load_dotenv()
+# load_dotenv()
 
-secret_manager_key = os.getenv("AWS_SECRET_MANAGER_KEY")
-print(secret_manager_key)
+# secret_manager_key = os.getenv("AWS_SECRET_MANAGER_KEY")
+# print(secret_manager_key)
+secret_manager_key="prod_rawcaster_credentials"
 # AWS Credentials
                 # ---------- Old
 # access_key = "AKIAYFYE6EFYG6RJOPMF"
