@@ -593,7 +593,7 @@ async def send_message(
             return {"status": 0, "msg": "Failed to send channel message"}
     except Exception as e:
         print(e)
-        return {"status":0,"msg":"Something went wrong"}
+        return {"status":0,"msg":"Something went wrong"} 
 
 
 # @router.post("/delete")  # Working
