@@ -50,7 +50,7 @@ base_domain_url = ""
 base_url_segment = "/rawcaster"
 base_upload_folder = "local_uploads"
 
-data_base = "mysql+pymysql://maemysqluser:%s@192.168.1.109/rawcaster_production" % quote("MaeNewMysql2@2@")
+data_base = credentials['db_connection']
 
 api_doc_path = "/docs"
 
