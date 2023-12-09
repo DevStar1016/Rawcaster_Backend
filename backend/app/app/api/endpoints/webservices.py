@@ -13457,7 +13457,7 @@ async def getfollowlist(
                 )
             if location:
                 get_user = (
-                    db.query(User).filter(User.id != login_user_id,User.geo_location.ilike(location + "%")).all()
+                    db.query(User).filter(User.id != login_user_id,User.geo_location.ilike("%"+location+"%")).all()
                 )
                 user_location_ids = {usr.id for usr in get_user}
                 if type == 1:
