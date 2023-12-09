@@ -3154,7 +3154,15 @@ async def listallfriends(
                 if get_all_friends:
                     for frnds in get_all_friends:
                         my_friends_ids.append(frnds.id)
-
+            
+            # sender = aliased(User)
+            # receiver = aliased(User)
+            # # Perform the left joins
+            # get_my_friends =db.query(MyFriends)
+            
+            # get_my_friends = get_my_friends.join(sender, MyFriends.sender_id == sender.id)\
+            #             .join(receiver, MyFriends.receiver_id == receiver.id) .filter(MyFriends.status == 1, MyFriends.request_status == 1)
+    
             get_my_friends = (
                 db.query(MyFriends)
                 .filter(
@@ -3209,8 +3217,9 @@ async def listallfriends(
                     )
 
             if location:
+                
                 get_user = (
-                    db.query(User.id).filter(User.geo_location.ilike(location + "%")).all()
+                    db.query(User.id).filter(User.id != login_user_id,User.geo_location.ilike("%"+location+"%")).all()
                 )
                 user_location_ids = {usr.id for usr in get_user}
 
@@ -3225,17 +3234,17 @@ async def listallfriends(
                 if not gender.isnumeric():
                     return {"status": 0, "msg": "Invalid Gender type"}
                 else:
-                    get_my_friends=get_my_friends.filter(User.gender == gender)
+                    # get_my_friends=get_my_friends.filter(User.gender == gender)
 
-                    # get_user_gender = db.query(User.id).filter(User.gender == gender).all()
-                    # get_user_ids = [usr.id for usr in get_user_gender]
+                    get_user_gender = db.query(User.id).filter(User.gender == gender).all()
+                    get_user_ids = [usr.id for usr in get_user_gender]
 
-                    # get_my_friends = get_my_friends.filter(
-                    #     or_(
-                    #         MyFriends.sender_id.in_(get_user_ids),
-                    #         MyFriends.receiver_id.in_(get_user_ids),
-                    #     )
-                    # )
+                    get_my_friends = get_my_friends.filter(
+                        or_(
+                            MyFriends.sender_id.in_(get_user_ids),
+                            MyFriends.receiver_id.in_(get_user_ids),
+                        )
+                    )
 
             get_my_friends_count = get_my_friends.count()
 
@@ -3334,7 +3343,8 @@ async def listallfriends(
                                 "channel_arn":friend_requests.channel_arn 
                                 if friend_requests.channel_arn 
                                 else "",
-                                
+                                "geo_location":friend_requests.user2.geo_location 
+                                        if friend_requests.user2.geo_location else "",
                                 "email_id": friend_requests.user2.email_id
                                 if friend_requests.receiver_id
                                 else "",
@@ -3417,6 +3427,8 @@ async def listallfriends(
                                 "user_ref_id": friend_requests.user1.user_ref_id
                                 if friend_requests.sender_id
                                 else "",
+                                "geo_location":friend_requests.user1.geo_location 
+                                        if friend_requests.user1.geo_location else "",
                                 "channel_arn":friend_requests.channel_arn 
                                 if friend_requests.channel_arn 
                                 else "",
@@ -13445,7 +13457,7 @@ async def getfollowlist(
                 )
             if location:
                 get_user = (
-                    db.query(User).filter(User.geo_location.ilike(location + "%")).all()
+                    db.query(User).filter(User.id != login_user_id,User.geo_location.ilike(location + "%")).all()
                 )
                 user_location_ids = {usr.id for usr in get_user}
                 if type == 1:
