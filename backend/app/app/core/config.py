@@ -6,8 +6,6 @@ import pytz
 from urllib.parse import quote
 import boto3
 import json
-from dotenv import load_dotenv
-import os
 
 # load_dotenv()
 
