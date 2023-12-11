@@ -3081,6 +3081,8 @@ async def listallfriendgroups(
                 }
 
 
+
+
 # 19 List all Friends
 @router.post("/listallfriends")
 async def listallfriends(
@@ -3154,340 +3156,162 @@ async def listallfriends(
                 if get_all_friends:
                     for frnds in get_all_friends:
                         my_friends_ids.append(frnds.id)
-            
-            # sender = aliased(User)
-            # receiver = aliased(User)
-            # # Perform the left joins
-            # get_my_friends =db.query(MyFriends)
-            
-            # get_my_friends = get_my_friends.join(sender, MyFriends.sender_id == sender.id)\
-            #             .join(receiver, MyFriends.receiver_id == receiver.id) .filter(MyFriends.status == 1, MyFriends.request_status == 1)
-    
-            get_my_friends = (
-                db.query(MyFriends)
-                .filter(
-                    or_(
+
+                # Now, you can use the join with the onclause
+                get_my_friends = (db.query(User.id,
+                                        User.user_ref_id,
+                                        User.geo_location,
+                                        User.email_id,
+                                        User.first_name,
+                                        User.last_name,
+                                        User.display_name,
+                                        User.profile_img,
+                                        User.last_seen,
+                                        User.chime_user_id,
+                                        MyFriends.channel_arn,
+                                        MyFriends.sender_id,
+                                        User.app_online,
+                                        User.gender,
+                                        User.web_online,
+                                        MyFriends.receiver_id,
+                                        MyFriends.id.label("friend_request_id")
+                                    ).outerjoin(MyFriends,(MyFriends.sender_id == User.id or MyFriends.receiver_id == User.id))
+                        .filter( or_(
                         MyFriends.sender_id == login_user_id,
                         MyFriends.receiver_id == login_user_id,
-                    )
-                )
-                .filter(MyFriends.status == 1, MyFriends.request_status == 1)
-            )
-            # get_my_friends=db.query(MyFriends).filter(or_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == login_user_id,MyFriends.sender_id.in_(followers),MyFriends.receiver_id.in_(followers))).filter(MyFriends.status == 1,MyFriends.request_status == 1)
-
-            if search_key:
-                get_user = (
-                    db.query(User)
-                    .filter(
-                        or_(
+                    ),MyFriends.status == 1, MyFriends.request_status == 1,
+                    User.status == 1,User.id != login_user_id))
+            
+                if search_key:
+                    get_my_friends=get_my_friends.filter( or_(
                             User.email_id.ilike(search_key),
                             User.display_name.ilike(search_key),
                             User.first_name.ilike(search_key),
                             User.last_name.ilike(search_key),
-                        )
-                    )
-                    .all()
-                )
-                user_ids = {usr.id for usr in get_user}
-
-                get_my_friends = get_my_friends.filter(
-                    or_(
-                        MyFriends.sender_id.in_(user_ids),
-                        MyFriends.receiver_id.in_(user_ids),
-                    )
-                )
-
-            if age:
-                if not age.isnumeric():
-                    return {"status": 0, "msg": "Invalid Age"}
-                else:
-                    current_year = datetime.datetime.utcnow().year
-                    get_user = (
-                        db.query(User)
-                        .filter(current_year - extract("year", User.dob) == age)
-                        .all()
-                    )
-                    user_ages = {usr.id for usr in get_user}
-
-                    get_my_friends = get_my_friends.filter(
-                        or_(
-                            MyFriends.sender_id.in_(user_ages),
-                            MyFriends.receiver_id.in_(user_ages),
-                        )
-                    )
-
-            if location:
+                        ))
+                if age:
+                    if not age.isnumeric():
+                        return {"status": 0, "msg": "Invalid Age"}
+                    else:
+                        current_year = datetime.datetime.utcnow().year
+                        
+                        get_my_friends =get_my_friends.filter(current_year - extract("year", User.dob) == age)
                 
-                get_user = (
-                    db.query(User.id).filter(User.id != login_user_id,User.geo_location.ilike("%"+location+"%")).all()
-                )
-                user_location_ids = {usr.id for usr in get_user}
+                if location:
+                    get_my_friends=get_my_friends.filter(User.geo_location.like("%"+ location +"%"))
+                
+                if gender:
+                    if not gender.isnumeric():
+                        return {"status": 0, "msg": "Invalid Gender type"}
+                    else:
+                        get_my_friends=get_my_friends.filter(User.gender == gender)
 
-                get_my_friends = get_my_friends.filter(
-                    or_(
-                        MyFriends.sender_id.in_(user_location_ids),
-                        MyFriends.receiver_id.in_(user_location_ids),
-                    )
-                )
+                get_my_friends_count = get_my_friends.count()
+                
+                if get_my_friends_count < 1:
+                    return {"status": 0, "msg": "No Result found"}
 
-            if gender:
-                if not gender.isnumeric():
-                    return {"status": 0, "msg": "Invalid Gender type"}
                 else:
-                    # get_my_friends=get_my_friends.filter(User.gender == gender)
+                    friend_login_from_app = 0
+                    friend_login_from_web = 0
+                    friend_login_from = 0
+                    default_page_size = 1000
 
-                    get_user_gender = db.query(User.id).filter(User.gender == gender).all()
-                    get_user_ids = [usr.id for usr in get_user_gender]
+                    get_my_friends = get_my_friends.all()
+                    # return get_my_friends
+                    friendid = 0
+                    request_frnds = []
 
-                    get_my_friends = get_my_friends.filter(
-                        or_(
-                            MyFriends.sender_id.in_(get_user_ids),
-                            MyFriends.receiver_id.in_(get_user_ids),
-                        )
-                    )
-
-            get_my_friends_count = get_my_friends.count()
-
-            if get_my_friends_count < 1:
-                return {"status": 0, "msg": "No Result found"}
-
-            else:
-                friend_login_from_app = 0
-                friend_login_from_web = 0
-                friend_login_from = 0
-                default_page_size = 1000
-
-                get_my_friends = get_my_friends.all()
-
-                friendid = 0
-                request_frnds = []
-
-                for friend_requests in get_my_friends:
-                    
-                    get_follow_user_id = (
-                        db.query(FollowUser)
-                        .filter(
-                            or_(
-                                FollowUser.following_userid
-                                == friend_requests.sender_id,
-                                FollowUser.following_userid
-                                == friend_requests.receiver_id,
-                            ),
-                            FollowUser.follower_userid == login_user_id,
-                        )
-                        .first()
-                    )
-                    # get My friends (Login User Friends)
-                    my_frind = get_friend_requests(db, current_user_id, None, None, 1)
-                    my_friends = my_frind["accepted"] + my_frind["pending"]
-
-                    get_last_msg = (
-                        db.query(FriendsChat)
-                        .filter(
-                            FriendsChat.sent_type == 1,
-                            or_(
-                                and_(
-                                    FriendsChat.sender_id == friend_requests.sender_id,
-                                    FriendsChat.receiver_id
-                                    == friend_requests.receiver_id,
-                                ),
-                                and_(
-                                    FriendsChat.sender_id
-                                    == friend_requests.receiver_id,
-                                    FriendsChat.receiver_id
+                    for friend_requests in get_my_friends:
+                        
+                        get_follow_user_id = (
+                            db.query(FollowUser)
+                            .filter(
+                                or_(
+                                    FollowUser.following_userid
                                     == friend_requests.sender_id,
+                                    FollowUser.following_userid
+                                    == friend_requests.receiver_id,
                                 ),
-                            ),
-                            or_(
-                                and_(
-                                    FriendsChat.sender_id == login_user_id,
-                                    FriendsChat.sender_delete == None,
-                                ),
-                                and_(
-                                    FriendsChat.receiver_id == login_user_id,
-                                    FriendsChat.receiver_delete == None,
-                                ),
-                            ),
+                                FollowUser.follower_userid == login_user_id,
+                            )
+                            .first()
                         )
-                        .order_by(FriendsChat.sent_datetime.desc())
-                        .first()
-                    )
+                        # get My friends (Login User Friends)
+                        my_frind = get_friend_requests(db, current_user_id, None, None, 1)
+                        my_friends = my_frind["accepted"] + my_frind["pending"]
 
-                    if friend_requests.sender_id == login_user_id:
-                        friendid = friend_requests.receiver_id
-
-                        check_user = db.query(User).filter(User.id == friendid).first()
-                        online = 0
-                        if check_user:
-                            app_online = friend_requests.user2.app_online
-                            web_online = friend_requests.user2.web_online
-
-                            online = 1 if web_online or app_online else 0
-                        friend_status = 0
-
+                        online=1 if friend_requests.app_online or friend_requests.web_online else 0
+                        friend_status=0
                         if friend_requests.receiver_id in my_friends:
                             friend_status = 1
+
                         status_type = "online_status"
+                     
                         request_frnds.append(
                             {
-                                "friend_request_id": friend_requests.id
-                                if friend_requests.id
+                                "friend_request_id": friend_requests.friend_request_id
+                                if friend_requests.friend_request_id
                                 else "",
-                                "user_id": friend_requests.user2.id
-                                if friend_requests.receiver_id
+                                "user_id": friend_requests.id 
+                                if friend_requests.id else "",
+                                "user_ref_id": friend_requests.user_ref_id
+                                if friend_requests.user_ref_id
                                 else "",
-                                "user_ref_id": friend_requests.user2.user_ref_id
-                                if friend_requests.receiver_id
-                                else "",
-                                
+                                "geo_location":friend_requests.geo_location 
+                                        if friend_requests.geo_location else "",
                                 "channel_arn":friend_requests.channel_arn 
                                 if friend_requests.channel_arn 
                                 else "",
-                                "geo_location":friend_requests.user2.geo_location 
-                                        if friend_requests.user2.geo_location else "",
-                                "email_id": friend_requests.user2.email_id
-                                if friend_requests.receiver_id
+                                "email_id": friend_requests.email_id
+                                if friend_requests.email_id
                                 else "",
-                                "first_name": friend_requests.user2.first_name
-                                if friend_requests.receiver_id
+                                "first_name": friend_requests.first_name
+                                if friend_requests.first_name
                                 else "",
-                                "last_name": friend_requests.user2.last_name
-                                if friend_requests.receiver_id
+                                "last_name": friend_requests.last_name
+                                if friend_requests.last_name
                                 else "",
-                                "display_name": friend_requests.user2.display_name
-                                if friend_requests.receiver_id
+                                "display_name": friend_requests.display_name
+                                if friend_requests.display_name
                                 else "",
-                                "gender": friend_requests.user2.gender
-                                if friend_requests.receiver_id
+                                "gender": friend_requests.gender
+                                if friend_requests.gender
                                 else "",
-                                "profile_img": friend_requests.user2.profile_img
-                                if friend_requests.receiver_id
+                                "profile_img": friend_requests.profile_img
+                                if friend_requests.profile_img
                                 else "",
                                 "online": ProfilePreference(
                                     db,
                                     login_user_id,
-                                    friend_requests.receiver_id,
+                                    friend_requests.id,
                                     status_type,
                                     online,
                                 ),
-                                "last_seen": (
-                                    friend_requests.user2.last_seen
-                                    if friend_requests.user2.last_seen
-                                    else ""
-                                )
-                                if friend_requests.receiver_id
+                                "last_seen": friend_requests.last_seen
+                                if friend_requests.last_seen
                                 else "",
                                 "typing": 0,
                                 "unreadmsg": 0,
                                 "follow": True if get_follow_user_id else False,
-                                "last_msg": get_last_msg.message
-                                if get_last_msg
-                                else "",
-                                "last_msg_datetime": (
-                                    get_last_msg.sent_datetime
-                                    if get_last_msg.sent_datetime
-                                    else ""
-                                )
-                                if get_last_msg
-                                else None,
+                                "last_msg": "",
+                                "last_msg_datetime": None,
                                 "login_from": friend_login_from,  #  1 - WEB, 2 - APP
-                                "login_from_app": friend_requests.user2.app_online
-                                if friend_requests.receiver_id
+                                "login_from_app": friend_requests.app_online
+                                if friend_requests.app_online
                                 else "",  # 1 - true, 0 - False
-                                "login_from_web": friend_requests.user2.web_online
-                                if friend_requests.receiver_id
+                                "login_from_web": friend_requests.web_online
+                                if friend_requests.web_online
                                 else "",  # 1 - true, 0 - False
                                 "friend_status": friend_status,
-                                "chime_user_id": friend_requests.user2.chime_user_id
-                                if friend_requests.user2.chime_user_id
+                                "chime_user_id": friend_requests.chime_user_id
+                                if friend_requests.chime_user_id
                                 else None,
                             }
                         )
-                    else:
-                        friendid = friend_requests.sender_id
-                        friend_status = 0
-                        if friendid in my_friends:
-                            friend_status = 1
+                        
 
-                        online = (
-                            1
-                            if friend_requests.user1.app_online == 1
-                            or friend_requests.user1.web_online == 1
-                            else 0
-                        )
-                        status_type = "online_status"
-                        request_frnds.append(
-                            {
-                                "friend_request_id": friend_requests.id
-                                if friend_requests.id
-                                else "",
-                                "user_id": friend_requests.user1.id
-                                if friend_requests.sender_id
-                                else "",
-                                "user_ref_id": friend_requests.user1.user_ref_id
-                                if friend_requests.sender_id
-                                else "",
-                                "geo_location":friend_requests.user1.geo_location 
-                                        if friend_requests.user1.geo_location else "",
-                                "channel_arn":friend_requests.channel_arn 
-                                if friend_requests.channel_arn 
-                                else "",
-                                "email_id": friend_requests.user1.email_id
-                                if friend_requests.sender_id
-                                else "",
-                                "first_name": friend_requests.user1.first_name
-                                if friend_requests.sender_id
-                                else "",
-                                "last_name": friend_requests.user1.last_name
-                                if friend_requests.sender_id
-                                else "",
-                                "display_name": friend_requests.user1.display_name
-                                if friend_requests.sender_id
-                                else "",
-                                "gender": friend_requests.user1.gender
-                                if friend_requests.sender_id
-                                else "",
-                                "profile_img": friend_requests.user1.profile_img
-                                if friend_requests.sender_id
-                                else "",
-                                "online": ProfilePreference(
-                                    db,
-                                    login_user_id,
-                                    friend_requests.user1.id,
-                                    status_type,
-                                    online,
-                                ),
-                                "last_seen": friend_requests.user1.last_seen
-                                if friend_requests.sender_id
-                                else "",
-                                "typing": 0,
-                                "unreadmsg": 0,
-                                "follow": True if get_follow_user_id else False,
-                                "last_msg": get_last_msg.message
-                                if get_last_msg
-                                else "",
-                                "last_msg_datetime": (
-                                    get_last_msg.sent_datetime
-                                    if get_last_msg.sent_datetime
-                                    else ""
-                                )
-                                if get_last_msg
-                                else None,
-                                "login_from": friend_login_from,  #  1 - WEB, 2 - APP
-                                "login_from_app": friend_requests.user1.app_online
-                                if friend_requests.sender_id
-                                else "",  # 1 - true, 0 - False
-                                "login_from_web": friend_requests.user1.web_online
-                                if friend_requests.sender_id
-                                else "",  # 1 - true, 0 - False
-                                "friend_status": friend_status,
-                                "chime_user_id": friend_requests.user1.chime_user_id
-                                if friend_requests.user1.chime_user_id
-                                else None,
-                            }
-                        )
-
-                return {
+                    return {
                     "status": 1,
                     "msg": "Success",
                     "friends_count": get_my_friends_count,
@@ -3495,6 +3319,432 @@ async def listallfriends(
                     "current_page_no": 1,
                     "friends_list": request_frnds,
                 }
+
+
+
+                   
+
+# # 19 List all Friends
+# @router.post("/oldlistallfriends")
+# async def oldlistallfriends(
+#     db: Session = Depends(deps.get_db),
+#     token: str = Form(None),
+#     search_key: str = Form(None),
+#     group_ids: str = Form(None, description="Like ['12','13','14']"),
+#     nongrouped: str = Form(None, description="Send 1"),
+#     friends_count: str = Form(None),
+#     allfriends: str = Form(None, description="send 1"),
+#     age: str = Form(None),
+#     gender: str = Form(None),
+#     location: str = Form(None),
+#     user_id: str = Form(None),
+#     page_number: str = Form(default=1, description="send 1 for initial request"),
+# ):
+#     if token == None or token.strip() == "":
+#         return {
+#             "status": -1,
+#             "msg": "Sorry! your login session expired. please login again.",
+#         }
+
+#     elif nongrouped and not nongrouped.isnumeric():
+#         return {"status": 0, "msg": "Invalid nongrouped flag"}
+#     elif not allfriends:
+#         return {"status": 0, "msg": "Invalid allfriends flag"}
+
+#     else:
+#         user_id = int(user_id) if user_id else None
+#         allfriends = int(allfriends) if allfriends else None
+#         nongrouped = int(nongrouped) if nongrouped else None
+
+#         access_token = checkToken(db, token) if token != "RAWCAST" else True
+#         if access_token == False:
+#             return {
+#                 "status": -1,
+#                 "msg": "Sorry! your login session expired. please login again.",
+#             }
+
+#         else:
+#             login_from = 1
+#             get_token_details = (
+#                 db.query(ApiTokens.user_id,ApiTokens.device_type).filter(ApiTokens.token == access_token).first()
+#             )
+#             current_user_id = get_token_details.user_id
+#             login_user_id = (
+#                 (get_token_details.user_id if get_token_details else None)
+#                 if not user_id
+#                 else user_id
+#             )
+
+#             login_from = get_token_details.device_type
+
+#             my_friends_ids = []
+
+#             # Step 1) Get all active friends of logged in user (if requested for all friends list)
+#             if allfriends == 1:
+#                 get_all_friends = (
+#                     db.query(MyFriends)
+#                     .filter(
+#                         MyFriends.status == 1,
+#                         MyFriends.request_status == 1,
+#                         or_(
+#                             MyFriends.sender_id == login_user_id,
+#                             MyFriends.receiver_id == login_user_id,
+#                         ),
+#                     )
+#                     .all()
+#                 )
+
+#                 if get_all_friends:
+#                     for frnds in get_all_friends:
+#                         my_friends_ids.append(frnds.id)
+            
+#             # sender = aliased(User)
+#             # receiver = aliased(User)
+#             # # Perform the left joins
+#             # get_my_friends =db.query(MyFriends)
+            
+#             # get_my_friends = get_my_friends.join(sender, MyFriends.sender_id == sender.id)\
+#             #             .join(receiver, MyFriends.receiver_id == receiver.id) .filter(MyFriends.status == 1, MyFriends.request_status == 1)
+    
+#             get_my_friends = (
+#                 db.query(MyFriends)
+#                 .filter(
+#                     or_(
+#                         MyFriends.sender_id == login_user_id,
+#                         MyFriends.receiver_id == login_user_id,
+#                     )
+#                 )
+#                 .filter(MyFriends.status == 1, MyFriends.request_status == 1)
+#             )
+#             # get_my_friends=db.query(MyFriends).filter(or_(MyFriends.sender_id == login_user_id,MyFriends.receiver_id == login_user_id,MyFriends.sender_id.in_(followers),MyFriends.receiver_id.in_(followers))).filter(MyFriends.status == 1,MyFriends.request_status == 1)
+
+#             if search_key:
+#                 get_user = (
+#                     db.query(User)
+#                     .filter(
+#                         or_(
+#                             User.email_id.ilike(search_key),
+#                             User.display_name.ilike(search_key),
+#                             User.first_name.ilike(search_key),
+#                             User.last_name.ilike(search_key),
+#                         )
+#                     )
+#                     .all()
+#                 )
+#                 user_ids = {usr.id for usr in get_user}
+
+#                 get_my_friends = get_my_friends.filter(
+#                     or_(
+#                         MyFriends.sender_id.in_(user_ids),
+#                         MyFriends.receiver_id.in_(user_ids),
+#                     )
+#                 )
+
+#             if age:
+#                 if not age.isnumeric():
+#                     return {"status": 0, "msg": "Invalid Age"}
+#                 else:
+#                     current_year = datetime.datetime.utcnow().year
+#                     get_user = (
+#                         db.query(User)
+#                         .filter(current_year - extract("year", User.dob) == age)
+#                         .all()
+#                     )
+#                     user_ages = {usr.id for usr in get_user}
+
+#                     get_my_friends = get_my_friends.filter(
+#                         or_(
+#                             MyFriends.sender_id.in_(user_ages),
+#                             MyFriends.receiver_id.in_(user_ages),
+#                         )
+#                     )
+
+#             if location:
+                
+#                 get_user = (
+#                     db.query(User.id).filter(User.id != login_user_id,User.geo_location.ilike("%"+location+"%")).all()
+#                 )
+#                 user_location_ids = {usr.id for usr in get_user}
+
+#                 get_my_friends = get_my_friends.filter(
+#                     or_(
+#                         MyFriends.sender_id.in_(user_location_ids),
+#                         MyFriends.receiver_id.in_(user_location_ids),
+#                     )
+#                 )
+
+#             if gender:
+#                 if not gender.isnumeric():
+#                     return {"status": 0, "msg": "Invalid Gender type"}
+#                 else:
+#                     get_my_friends=get_my_friends.filter(User.gender == gender)
+                    
+#                     # gender = int(gender) if gender else None
+#                     # get_user_gender = (
+#                     #     db.query(User)
+#                     #     .filter(User.gender == gender)
+#                     #     .all()
+#                     # )
+#                     # get_user_ids = [usr.id for usr in get_user_gender]
+                
+#                     # get_my_friends = get_my_friends.filter(
+#                     #     and_(
+#                     #        or_(MyFriends.sender_id.in_(get_user_ids),
+#                     #         MyFriends.receiver_id.in_(get_user_ids)),
+#                     #         or_(MyFriends.sender_id.in_(get_user_ids),
+#                     #         MyFriends.receiver_id.in_(get_user_ids))
+#                     #         )
+#                     # )
+
+#             get_my_friends_count = get_my_friends.count()
+
+#             if get_my_friends_count < 1:
+#                 return {"status": 0, "msg": "No Result found"}
+
+#             else:
+#                 friend_login_from_app = 0
+#                 friend_login_from_web = 0
+#                 friend_login_from = 0
+#                 default_page_size = 1000
+
+#                 get_my_friends = get_my_friends.all()
+
+#                 friendid = 0
+#                 request_frnds = []
+
+#                 for friend_requests in get_my_friends:
+                    
+#                     get_follow_user_id = (
+#                         db.query(FollowUser)
+#                         .filter(
+#                             or_(
+#                                 FollowUser.following_userid
+#                                 == friend_requests.sender_id,
+#                                 FollowUser.following_userid
+#                                 == friend_requests.receiver_id,
+#                             ),
+#                             FollowUser.follower_userid == login_user_id,
+#                         )
+#                         .first()
+#                     )
+#                     # get My friends (Login User Friends)
+#                     my_frind = get_friend_requests(db, current_user_id, None, None, 1)
+#                     my_friends = my_frind["accepted"] + my_frind["pending"]
+
+#                     get_last_msg = (
+#                         db.query(FriendsChat)
+#                         .filter(
+#                             FriendsChat.sent_type == 1,
+#                             or_(
+#                                 and_(
+#                                     FriendsChat.sender_id == friend_requests.sender_id,
+#                                     FriendsChat.receiver_id
+#                                     == friend_requests.receiver_id,
+#                                 ),
+#                                 and_(
+#                                     FriendsChat.sender_id
+#                                     == friend_requests.receiver_id,
+#                                     FriendsChat.receiver_id
+#                                     == friend_requests.sender_id,
+#                                 ),
+#                             ),
+#                             or_(
+#                                 and_(
+#                                     FriendsChat.sender_id == login_user_id,
+#                                     FriendsChat.sender_delete == None,
+#                                 ),
+#                                 and_(
+#                                     FriendsChat.receiver_id == login_user_id,
+#                                     FriendsChat.receiver_delete == None,
+#                                 ),
+#                             ),
+#                         )
+#                         .order_by(FriendsChat.sent_datetime.desc())
+#                         .first()
+#                     )
+
+#                     if friend_requests.sender_id == login_user_id:
+#                         friendid = friend_requests.receiver_id
+
+#                         check_user = db.query(User).filter(User.id == friendid).first()
+#                         online = 0
+#                         if check_user:
+#                             app_online = friend_requests.user2.app_online
+#                             web_online = friend_requests.user2.web_online
+
+#                             online = 1 if web_online or app_online else 0
+#                         friend_status = 0
+
+#                         if friend_requests.receiver_id in my_friends:
+#                             friend_status = 1
+#                         status_type = "online_status"
+#                         request_frnds.append(
+#                             {
+#                                 "friend_request_id": friend_requests.id
+#                                 if friend_requests.id
+#                                 else "",
+#                                 "user_id": friend_requests.user2.id
+#                                 if friend_requests.receiver_id
+#                                 else "",
+#                                 "user_ref_id": friend_requests.user2.user_ref_id
+#                                 if friend_requests.receiver_id
+#                                 else "",
+                                
+#                                 "channel_arn":friend_requests.channel_arn 
+#                                 if friend_requests.channel_arn 
+#                                 else "",
+#                                 "geo_location":friend_requests.user2.geo_location 
+#                                         if friend_requests.user2.geo_location else "",
+#                                 "email_id": friend_requests.user2.email_id
+#                                 if friend_requests.receiver_id
+#                                 else "",
+#                                 "first_name": friend_requests.user2.first_name
+#                                 if friend_requests.receiver_id
+#                                 else "",
+#                                 "last_name": friend_requests.user2.last_name
+#                                 if friend_requests.receiver_id
+#                                 else "",
+#                                 "display_name": friend_requests.user2.display_name
+#                                 if friend_requests.receiver_id
+#                                 else "",
+#                                 "gender": friend_requests.user2.gender
+#                                 if friend_requests.receiver_id
+#                                 else "",
+#                                 "profile_img": friend_requests.user2.profile_img
+#                                 if friend_requests.receiver_id
+#                                 else "",
+#                                 "online": ProfilePreference(
+#                                     db,
+#                                     login_user_id,
+#                                     friend_requests.receiver_id,
+#                                     status_type,
+#                                     online,
+#                                 ),
+#                                 "last_seen": (
+#                                     friend_requests.user2.last_seen
+#                                     if friend_requests.user2.last_seen
+#                                     else ""
+#                                 )
+#                                 if friend_requests.receiver_id
+#                                 else "",
+#                                 "typing": 0,
+#                                 "unreadmsg": 0,
+#                                 "follow": True if get_follow_user_id else False,
+#                                 "last_msg": get_last_msg.message
+#                                 if get_last_msg
+#                                 else "",
+#                                 "last_msg_datetime": (
+#                                     get_last_msg.sent_datetime
+#                                     if get_last_msg.sent_datetime
+#                                     else ""
+#                                 )
+#                                 if get_last_msg
+#                                 else None,
+#                                 "login_from": friend_login_from,  #  1 - WEB, 2 - APP
+#                                 "login_from_app": friend_requests.user2.app_online
+#                                 if friend_requests.receiver_id
+#                                 else "",  # 1 - true, 0 - False
+#                                 "login_from_web": friend_requests.user2.web_online
+#                                 if friend_requests.receiver_id
+#                                 else "",  # 1 - true, 0 - False
+#                                 "friend_status": friend_status,
+#                                 "chime_user_id": friend_requests.user2.chime_user_id
+#                                 if friend_requests.user2.chime_user_id
+#                                 else None,
+#                             }
+#                         )
+#                     else:
+#                         friendid = friend_requests.sender_id
+#                         friend_status = 0
+#                         if friendid in my_friends:
+#                             friend_status = 1
+
+#                         online = (
+#                             1
+#                             if friend_requests.user1.app_online == 1
+#                             or friend_requests.user1.web_online == 1
+#                             else 0
+#                         )
+#                         status_type = "online_status"
+#                         request_frnds.append(
+#                             {
+#                                 "friend_request_id": friend_requests.id
+#                                 if friend_requests.id
+#                                 else "",
+#                                 "user_id": friend_requests.user1.id
+#                                 if friend_requests.sender_id
+#                                 else "",
+#                                 "user_ref_id": friend_requests.user1.user_ref_id
+#                                 if friend_requests.sender_id
+#                                 else "",
+#                                 "geo_location":friend_requests.user1.geo_location 
+#                                         if friend_requests.user1.geo_location else "",
+#                                 "channel_arn":friend_requests.channel_arn 
+#                                 if friend_requests.channel_arn 
+#                                 else "",
+#                                 "email_id": friend_requests.user1.email_id
+#                                 if friend_requests.sender_id
+#                                 else "",
+#                                 "first_name": friend_requests.user1.first_name
+#                                 if friend_requests.sender_id
+#                                 else "",
+#                                 "last_name": friend_requests.user1.last_name
+#                                 if friend_requests.sender_id
+#                                 else "",
+#                                 "display_name": friend_requests.user1.display_name
+#                                 if friend_requests.sender_id
+#                                 else "",
+#                                 "gender": friend_requests.user1.gender
+#                                 if friend_requests.sender_id
+#                                 else "",
+#                                 "profile_img": friend_requests.user1.profile_img
+#                                 if friend_requests.sender_id
+#                                 else "",
+#                                 "online": ProfilePreference(
+#                                     db,
+#                                     login_user_id,
+#                                     friend_requests.user1.id,
+#                                     status_type,
+#                                     online,
+#                                 ),
+#                                 "last_seen": friend_requests.user1.last_seen
+#                                 if friend_requests.sender_id
+#                                 else "",
+#                                 "typing": 0,
+#                                 "unreadmsg": 0,
+#                                 "follow": True if get_follow_user_id else False,
+#                                 "last_msg": get_last_msg.message
+#                                 if get_last_msg
+#                                 else "",
+#                                 "last_msg_datetime": (
+#                                     get_last_msg.sent_datetime
+#                                     if get_last_msg.sent_datetime
+#                                     else ""
+#                                 )
+#                                 if get_last_msg
+#                                 else None,
+#                                 "login_from": friend_login_from,  #  1 - WEB, 2 - APP
+#                                 "login_from_app": friend_requests.user1.app_online
+#                                 if friend_requests.sender_id
+#                                 else "",  # 1 - true, 0 - False
+#                                 "login_from_web": friend_requests.user1.web_online
+#                                 if friend_requests.sender_id
+#                                 else "",  # 1 - true, 0 - False
+#                                 "friend_status": friend_status,
+#                                 "chime_user_id": friend_requests.user1.chime_user_id
+#                                 if friend_requests.user1.chime_user_id
+#                                 else None,
+#                             }
+#                         )
+
+#                 return {
+#                     "status": 1,
+#                     "msg": "Success",
+#                     "friends_count": get_my_friends_count,
+#                     "total_pages": 1,
+#                     "current_page_no": 1,
+#                     "friends_list": request_frnds,
+#                 }
 
         #  ---------------------------- Working -----
 
