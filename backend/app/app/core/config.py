@@ -6,18 +6,10 @@ import pytz
 from urllib.parse import quote
 import boto3
 import json
+from .env_config import secret_manager_key
 
 # load_dotenv()
 
-# secret_manager_key = os.getenv("AWS_SECRET_MANAGER_KEY")
-# print(secret_manager_key)
-secret_manager_key="prod_rawcaster_credentials"
-# AWS Credentials
-                # ---------- Old
-# access_key = "AKIAYFYE6EFYG6RJOPMF"
-# access_secret = "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"
-
-                # ---------  New
 access_key='AKIAYFYE6EFYMSZ77V3H'
 access_secret='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'
 bucket_name = "rawcaster"
@@ -42,33 +34,33 @@ class Page(BasePage[T], Generic[T]):
 
 
 base_domain = "http://localhost"
-base_url = ""
+base_url = "https://dev.rawcaster.com/"
 base_dir = "/var/www/html"
-base_domain_url = ""
 
 base_url_segment = "/rawcaster"
 base_upload_folder = "local_uploads"
 
-data_base = credentials['db_connection']
+data_base = f"mysql+pymysql://{credentials['DB_USERNAME']}:{credentials['DB_PASSWORD']}@{credentials['DB_URL']}/{credentials['DB_NAME']}"
 
 api_doc_path = "/docs"
 
 # AI - ChatGPT
-open_ai_key=credentials['open_ai_key']
+open_ai_key=credentials['OPEN_AI_KEY']
 
 # SMS Credentials
-sms_access_key=credentials['sms_access_key']
-sms_secret_access_key=credentials['sms_secret_access_key']
+sms_access_key=credentials['SMS_ACCESS_KEY']
+sms_secret_access_key=credentials['SMS_SECRET_ACCESS_KEY']
 
 # Email Credentials
-email_username=credentials['email_username']
-email_password=credentials['email_password']
+email_username=credentials['EMAIL_USERNAME']
+email_password=credentials['EMAIL_PASSWORD']
 
 # ID Verification 
-idenfy_api_key=credentials['idenfy_api_key']
-idenfy_secret_key=credentials['idenfy_secret_key']
+idenfy_api_key=credentials['IDENFY_API_KEY']
+idenfy_secret_key=credentials['IDENFY_SECRET_KEY']
 
-
+# Base URL
+base_domain_url=credentials['BASE_URL']
 class Settings(BaseSettings):
     API_V1_STR: str = base_url_segment
     BASE_UPLOAD_FOLDER: str = base_upload_folder

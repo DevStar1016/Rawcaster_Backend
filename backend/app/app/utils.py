@@ -1181,8 +1181,7 @@ def CheckMobileNumber(db, mobile_no, geo_location):
 
 
 def inviteBaseurl():
-    return "https://prod.rawcaster.com/"
-    # return "https://dev.rawcaster.com/"
+    return config.base_domain_url
     # return 'https://rawcaster.com/'
 
 
