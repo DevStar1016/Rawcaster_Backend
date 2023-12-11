@@ -1678,7 +1678,7 @@ def download_video_from_url(url, download_path):
 def split_nugget_attachment(
     db: Session = Depends(deps.get_db)
 ):
-    getNuggetAttachment=db.query(NuggetsAttachment).filter(NuggetsAttachment.media_type == "video",NuggetsAttachment.id == 2597,
+    getNuggetAttachment=db.query(NuggetsAttachment).filter(NuggetsAttachment.media_type == "video",
                                                            NuggetsAttachment.status == 1).order_by(NuggetsAttachment.id.desc()).all()
     
     for nug_att in getNuggetAttachment:
